@@ -19,6 +19,9 @@ rules:
   - events
   - configmaps
   - secrets
+  - names
+  - nodes
+  - serviceaccounts
   verbs:
   - "*"
 - apiGroups:
@@ -30,17 +33,60 @@ rules:
   - statefulsets
   verbs:
   - "*"
+- apiGroups: ["batch", "extensions"]
+  resources: ["jobs"]
+  verbs:
+  - "*"
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: role-grantor
+rules:
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["rolebindings","clusterroles","clusterrolebindings"]
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/eviction
+  - services
+  - endpoints
+  - persistentvolumeclaims
+  - events
+  - configmaps
+  - secrets
+  - names
+  - nodes
+  - serviceaccounts
+  verbs:
+  - "*"
 
 ---
 
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: default-account-descheduler-operator
+  name: descheduler-cluster-role-binding 
 subjects:
 - kind: ServiceAccount
   name: default
 roleRef:
+  apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: descheduler-operator
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: default-account-descheduler-operator
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: kube-system
+roleRef:
   apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: role-grantor

@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"time"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -22,8 +23,12 @@ type Descheduler struct {
 }
 
 type DeschedulerSpec struct {
-	// Fill me
+	// BaseImage is the image to be used for descheduler
+	BaseImage string `json:"baseImage,omitempty"`
+	Time   time.Duration `json:"time,omitempty"`
 }
+
 type DeschedulerStatus struct {
-	// Fill me
+	// State of the descheduler if it is running, or inactive etc.
+	State string `json:"state"`
 }
