@@ -41,7 +41,6 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 			return fmt.Errorf("Descheduler prerequisites failed with %v", err)
 		}
 		// TODO: Add logic for creating service account, cluster role-binding and configmap.
-		// There is atleast one node which is heavily utilized, launch descheduler.
 
 		deschedulerJob := createDeschedulerJob()
 		/*if checkIfDeschedulerPodExists("kube-system") {
@@ -68,9 +67,31 @@ func checkPrereqs() error {
 	if err := checkClusterRoleBinding(); err != nil {
 		logrus.Errorf("Error while looking/creating cluster role binding: %v", err)
 	}
-	/*if err := checkConfigMap(); err != nil {
+	if err := checkConfigMap(); err != nil {
 		logrus.Errorf("Error while looking/creating config map: %v", err)
-	}*/
+	}
+	return nil
+}
+
+func checkConfigMap() error {
+	cmList := getConfigMapList()
+	listOptions := &metav1.ListOptions{}
+	err := sdk.List("kube-system", cmList, sdk.WithListOptions(listOptions))
+	if err != nil {
+		logrus.Errorf("Error while listing cluster roles %v", err)
+		return err
+	}
+	for _, cm := range cmList.Items {
+		if cm.Name == "descheduler-policy-configmap" {
+			logrus.Infof("descheduler cluster role exists, no need to create one")
+			return nil
+		}
+	}
+	err = sdk.Create(createConfigMap())
+	if err != nil {
+		logrus.Infof("Error while creating configmap descheduler-policy-configmap in kube-system namespace with %v", err)
+		return err
+	}
 	return nil
 }
 
@@ -216,8 +237,32 @@ func createServiceAccount() *v1.ServiceAccount {
 	}
 }
 
-func checkConfigMap() error {
-	return nil
+// We need to populate this configmap from properties.
+func createConfigMap() *v1.ConfigMap {
+	return &v1.ConfigMap {
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "descheduler-policy-configmap",
+			Namespace: "kube-system",
+		},
+		// strategies:\n  \"RemoveDuplicates\":\n    enabled: true
+		Data: map[string]string{
+			"policy.yaml": "apiVersion: \"descheduler/v1alpha1\"\nkind: \"DeschedulerPolicy\"\nstrategies:\n  \"RemoveDuplicates\":\n     enabled: true\n",
+		},
+	}
+}
+
+
+func getConfigMapList() *v1.ConfigMapList {
+	return &v1.ConfigMapList {
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+	}
 }
 
 func getServiceAccount() *v1.ServiceAccountList {
