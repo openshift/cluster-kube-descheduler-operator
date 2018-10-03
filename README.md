@@ -12,13 +12,3 @@ oc create -f deploy/operator.yaml
 oc create -f deploy/cr.yaml
 ```
 
-To uninstall the operator:
-```
-oc project kube-system
-oc delete -f deploy/cr.yaml
-oc delete -f deploy/operator.yaml
-oc delete -f deploy/rbac.yaml
-oc delete -f deploy/crd.yaml
-oc delete job descheduler-job
-oc delete configmap descheduler-policy-configmap
-```
