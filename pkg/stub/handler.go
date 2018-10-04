@@ -13,12 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 )
-
-const DefaultMilliCPURequest int64 = 100 // 0.1 core
-// DefaultMemoryRequest defines default memory request size.
-const DefaultMemoryRequest int64 = 200 * 1024 * 1024 // 200 MB
 
 func NewHandler() sdk.Handler {
 	return &Handler{}
@@ -40,7 +35,6 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 		if err != nil {
 			return fmt.Errorf("Descheduler prerequisites failed with %v", err)
 		}
-		// TODO: Add logic for creating service account, cluster role-binding and configmap.
 
 		deschedulerJob := createDeschedulerJob()
 		/*if checkIfDeschedulerPodExists("kube-system") {
@@ -366,34 +360,6 @@ func checkIfDeschedulerPodExists(namespace string) bool {
 	return false
 }
 
-func checkIfNodeUnderPressure(node *v1.Node) bool {
-	// Check this, this could fail.
-	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + node.Name + ",status.phase!=" + "Succeeded" + ",status.phase!=" + "Failed")
-	if err != nil {
-		logrus.Infof("Error while return ")
-		return false
-	}
-	podList := getPodList()
-	listOptions := &metav1.ListOptions{FieldSelector: fieldSelector.String()}
-	err = sdk.List(metav1.NamespaceAll, podList, sdk.WithListOptions(listOptions))
-	if err != nil {
-		logrus.Infof("Error while listing pods")
-		return false
-	}
-	nodeUsage := getUsage(node.Status.Allocatable, node.Status.Capacity, podList.Items)
-	return nodeUsage > int64(50) // Greater than 50%, so this node is heavily utilized.
-}
-
-// getNodeList returns a v1.PodList object
-func getNodeList() *v1.NodeList {
-	return &v1.NodeList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Node",
-			APIVersion: "v1",
-		},
-	}
-}
-
 // getPodList returns a v1.PodList object
 func getPodList() *v1.PodList {
 	return &v1.PodList{
@@ -413,56 +379,3 @@ func getJobList() *batch.JobList {
 	}
 }
 
-// getUsage returns the pod names of the array of pods passed in
-func getUsage(allocatable, capacity v1.ResourceList, pods []v1.Pod) int64 {
-	totalCpu := int64(0)
-	for _, pod := range pods {
-		var cpuUsed, memoryUsed int64
-		for _, container := range pod.Spec.Containers {
-			nonZeroMilliCPU, nonZeroMemory := getNonzeroRequests(&container.Resources.Requests)
-			cpuUsed += nonZeroMilliCPU
-			memoryUsed += nonZeroMemory
-		}
-		for _, container := range pod.Spec.InitContainers {
-			for rName, rQuantity := range container.Resources.Requests {
-				switch rName {
-				case v1.ResourceCPU:
-					if cpu := rQuantity.MilliValue(); cpu > cpuUsed {
-						cpuUsed = cpu
-					}
-				case v1.ResourceMemory:
-					if memory := rQuantity.Value(); memory > memoryUsed {
-						memoryUsed = memory
-					}
-				}
-			}
-		}
-		totalCpu += cpuUsed
-	}
-
-	nodeCapacity := capacity
-	if len(allocatable) > 0 {
-		nodeCapacity = allocatable
-	}
-	usage := int64((float64(totalCpu) * 100) / float64(nodeCapacity.Cpu().MilliValue()))
-	return usage
-}
-
-// getNonzeroRequests returns the default resource request if none is found or
-// what is provided on the request.
-func getNonzeroRequests(requests *v1.ResourceList) (int64, int64) {
-	var outMilliCPU, outMemory int64
-	// Override if un-set, but not if explicitly set to zero
-	if _, found := (*requests)[v1.ResourceCPU]; !found {
-		outMilliCPU = DefaultMilliCPURequest
-	} else {
-		outMilliCPU = requests.Cpu().MilliValue()
-	}
-	// Override if un-set, but not if explicitly set to zero
-	if _, found := (*requests)[v1.ResourceMemory]; !found {
-		outMemory = DefaultMemoryRequest
-	} else {
-		outMemory = requests.Memory().Value()
-	}
-	return outMilliCPU, outMemory
-}
