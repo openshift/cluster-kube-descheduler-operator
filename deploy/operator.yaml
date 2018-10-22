@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: descheduler-operator
+  name: descheduler-operator1
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: descheduler-operator
+      name: descheduler-operator1
   template:
     metadata:
       labels:
-        name: descheduler-operator
+        name: descheduler-operator1
     spec:
       containers:
         - name: descheduler-operator
@@ -27,4 +27,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: OPERATOR_NAME
-              value: "descheduler-operator"
+              value: "descheduler-operator1"
