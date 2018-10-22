@@ -1,0 +1,56 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: descheduler.v0.0.1
+  namespace: kube-system
+spec:
+  install:
+    strategy: deployment
+    spec:
+      deployments:
+      - name: descheduler-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: descheduler-operator
+          template:
+            metadata:
+              labels:
+                app: descheduler-operator
+            spec:
+              containers:
+                - name: descheduler-operator-olm-owned
+                  image: docker.io/ravig/descheduler-operator:v0.0.1
+                  command:
+                  - descheduler-operator
+                  imagePullPolicy: Always
+                  env:
+                  - name: MY_POD_NAMESPACE
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.namespace
+                  - name: MY_POD_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.name
+                  - name: WATCH_NAMESPACE
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.namespace
+                  - name: OPERATOR_NAME
+                    value: "descheduler-operator"
+              restartPolicy: Always
+              terminationGracePeriodSeconds: 5
+  customresourcedefinitions:
+    owned:
+      - description: Represents an instance of a Descheduler application
+        displayName: Descheduler Application
+        kind: Descheduler
+        name: deschedulers.descheduler.io
+        version: v1alpha1
+  version: 0.0.1
+  displayName: Descheduler
+  labels:
+    olm-owner-enterprise-app: descheduler-operator
+    olm-status-descriptors: descheduler.v0.0.1
