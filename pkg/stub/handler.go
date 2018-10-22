@@ -4,7 +4,8 @@ import (
 	"fmt"
 
 	"context"
-	"github.com/descheduler-io/descheduler-operator/pkg/apis/descheduler/v1alpha1"
+
+	"github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/sirupsen/logrus"
 	batch "k8s.io/api/batch/v1"
@@ -233,13 +234,13 @@ func createServiceAccount() *v1.ServiceAccount {
 
 // We need to populate this configmap from properties.
 func createConfigMap() *v1.ConfigMap {
-	return &v1.ConfigMap {
+	return &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "descheduler-policy-configmap",
+			Name:      "descheduler-policy-configmap",
 			Namespace: "kube-system",
 		},
 		// strategies:\n  \"RemoveDuplicates\":\n    enabled: true
@@ -249,9 +250,8 @@ func createConfigMap() *v1.ConfigMap {
 	}
 }
 
-
 func getConfigMapList() *v1.ConfigMapList {
-	return &v1.ConfigMapList {
+	return &v1.ConfigMapList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: "v1",
@@ -378,4 +378,3 @@ func getJobList() *batch.JobList {
 		},
 	}
 }
-
