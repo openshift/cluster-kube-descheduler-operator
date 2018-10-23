@@ -319,7 +319,7 @@ func createDeschedulerJob() *batch.Job {
 					RestartPolicy: "Never",
 					Containers: []v1.Container{{
 						Name:  "kube-descheduler",
-						Image: "ravig/descheduler",
+						Image: "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler-operator",
 						Ports: []v1.ContainerPort{{ContainerPort: 80}},
 						Resources: v1.ResourceRequirements{
 							Limits: v1.ResourceList{
