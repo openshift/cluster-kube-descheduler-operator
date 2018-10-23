@@ -20,8 +20,8 @@ spec:
                 app: descheduler-operator
             spec:
               containers:
-                - name: descheduler-operator-olm-owned
-                  image: docker.io/ravig/descheduler-operator:v0.0.1
+                - name: operator
+                  image: registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler-operator
                   command:
                   - descheduler-operator
                   imagePullPolicy: Always
