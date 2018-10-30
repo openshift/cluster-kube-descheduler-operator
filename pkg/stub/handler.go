@@ -331,7 +331,7 @@ func createDeschedulerJob() *batch.Job {
 								v1.ResourceMemory: resource.MustParse("500Mi"),
 							},
 						},
-						Command: []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"},
+						Command: []string{"/usr/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"},
 						VolumeMounts: []v1.VolumeMount{{
 							MountPath: "/policy-dir",
 							Name:      "policy-volume",
