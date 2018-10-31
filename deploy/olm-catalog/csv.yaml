@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   name: descheduler.v0.0.1
-  namespace: kube-system
+  namespace: openshift-descheduler-operator
 spec:
   install:
     strategy: deployment
@@ -42,6 +42,8 @@ spec:
                     value: "descheduler-operator"
               restartPolicy: Always
               terminationGracePeriodSeconds: 5
+              serviceAccountName: openshift-descheduler
+              serviceAccount: openshift-descheduler
   customresourcedefinitions:
     owned:
       - description: Represents an instance of a Descheduler application
