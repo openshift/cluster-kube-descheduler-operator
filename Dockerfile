@@ -8,4 +8,4 @@ COPY --from=0 /go/src/github.com/openshift/descheduler-operator/descheduler-oper
 LABEL io.k8s.display-name="OpenShift Descheduler Operator" \
       io.k8s.description="This is a component of OpenShift Container Platform and manages the OpenShift descheduler" \
       io.openshift.tags="openshift,descheduler-operator" \
-      maintainer="aos-pod@redhat.com>"
+      maintainer="AOS pod team, <aos-pod@redhat.com>"
