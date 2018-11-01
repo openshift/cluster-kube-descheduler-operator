@@ -100,7 +100,7 @@ func createDeschedulerJob() *batch.Job {
 					RestartPolicy: "Never",
 					Containers: []v1.Container{{
 						Name:  "openshift-descheduler",
-						Image: "ravig/descheduler", //TODO: Change this to official openshift descheduler image, once policy map generation is figured out.
+						Image: "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler", 
 						Ports: []v1.ContainerPort{{ContainerPort: 80}},
 						Resources: v1.ResourceRequirements{
 							Limits: v1.ResourceList{
