@@ -1,4 +1,4 @@
-kind: Role
+kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: descheduler-operator
@@ -12,81 +12,37 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - pods
   - services
-  - endpoints
-  - persistentvolumeclaims
-  - events
+  - pods
   - configmaps
   - secrets
   - names
   - nodes
-  - serviceaccounts
+  - pods/eviction
   verbs:
   - "*"
 - apiGroups:
   - apps
   resources:
   - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
   verbs:
   - "*"
 - apiGroups: ["batch", "extensions"]
   resources: ["jobs"]
   verbs:
   - "*"
----
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRole
-metadata:
-  name: role-grantor
-rules:
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["rolebindings","clusterroles","clusterrolebindings"]
-  verbs:
-  - "*"
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/eviction
-  - services
-  - endpoints
-  - persistentvolumeclaims
-  - events
-  - configmaps
-  - secrets
-  - names
-  - nodes
-  - serviceaccounts
-  verbs:
-  - "*"
 
 ---
 
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: descheduler-cluster-role-binding 
-subjects:
-- kind: ServiceAccount
-  name: default
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: descheduler-operator
----
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: default-account-descheduler-operator
+  name: descheduler-role-binding 
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: kube-system
+  name: openshift-descheduler
+  namespace: openshift-descheduler-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: role-grantor
+  name: descheduler-operator
