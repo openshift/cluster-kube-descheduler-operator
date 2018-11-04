@@ -19,10 +19,9 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/internal/optional"
 	"cloud.google.com/go/internal/trace"
 	"golang.org/x/net/context"
-
-	"cloud.google.com/go/internal/optional"
 	bq "google.golang.org/api/bigquery/v2"
 )
 
@@ -143,8 +142,14 @@ const (
 type TableType string
 
 const (
-	RegularTable  TableType = "TABLE"
-	ViewTable     TableType = "VIEW"
+	// RegularTable is a regular table.
+	RegularTable TableType = "TABLE"
+	// ViewTable is a table type describing that the table is view. See more
+	// information at https://cloud.google.com/bigquery/docs/views.
+	ViewTable TableType = "VIEW"
+	// ExternalTable is a table type describing that the table is an external
+	// table (also known as a federated data source). See more information at
+	// https://cloud.google.com/bigquery/external-data-sources.
 	ExternalTable TableType = "EXTERNAL"
 )
 
@@ -159,6 +164,10 @@ type TimePartitioning struct {
 	// table is partitioned by this field. The field must be a top-level TIMESTAMP or
 	// DATE field. Its mode must be NULLABLE or REQUIRED.
 	Field string
+
+	// If true, queries that reference this table must include a filter (e.g. a WHERE predicate)
+	// that can be used for partition elimination.
+	RequirePartitionFilter bool
 }
 
 func (p *TimePartitioning) toBQ() *bq.TimePartitioning {
@@ -166,9 +175,10 @@ func (p *TimePartitioning) toBQ() *bq.TimePartitioning {
 		return nil
 	}
 	return &bq.TimePartitioning{
-		Type:         "DAY",
-		ExpirationMs: int64(p.Expiration / time.Millisecond),
-		Field:        p.Field,
+		Type:                   "DAY",
+		ExpirationMs:           int64(p.Expiration / time.Millisecond),
+		Field:                  p.Field,
+		RequirePartitionFilter: p.RequirePartitionFilter,
 	}
 }
 
@@ -177,8 +187,9 @@ func bqToTimePartitioning(q *bq.TimePartitioning) *TimePartitioning {
 		return nil
 	}
 	return &TimePartitioning{
-		Expiration: time.Duration(q.ExpirationMs) * time.Millisecond,
-		Field:      q.Field,
+		Expiration:             time.Duration(q.ExpirationMs) * time.Millisecond,
+		Field:                  q.Field,
+		RequirePartitionFilter: q.RequirePartitionFilter,
 	}
 }
 
@@ -471,9 +482,16 @@ func (tm *TableMetadataToUpdate) toBQ() *bq.Table {
 		t.Schema = tm.Schema.toBQ()
 		forceSend("Schema")
 	}
+	if tm.EncryptionConfig != nil {
+		t.EncryptionConfiguration = tm.EncryptionConfig.toBQ()
+	}
 	if !tm.ExpirationTime.IsZero() {
 		t.ExpirationTime = tm.ExpirationTime.UnixNano() / 1e6
 		forceSend("ExpirationTime")
+	}
+	if tm.TimePartitioning != nil {
+		t.TimePartitioning = tm.TimePartitioning.toBQ()
+		t.TimePartitioning.ForceSendFields = []string{"Expiration", "RequirePartitionFilter"}
 	}
 	if tm.ViewQuery != nil {
 		t.View = &bq.ViewDefinition{
@@ -508,6 +526,10 @@ type TableMetadataToUpdate struct {
 	// When updating a schema, you can add columns but not remove them.
 	Schema Schema
 
+	// The table's encryption configuration.  When calling Update, ensure that
+	// all mutable fields of EncryptionConfig are populated.
+	EncryptionConfig *EncryptionConfig
+
 	// The time when this table expires.
 	ExpirationTime time.Time
 
@@ -516,6 +538,12 @@ type TableMetadataToUpdate struct {
 
 	// Use Legacy SQL for the view query.
 	UseLegacySQL optional.Bool
+
+	// TimePartitioning allows modification of certain aspects of partition
+	// configuration such as partition expiration and whether partition
+	// filtration is required at query time.  When calling Update, ensure
+	// that all mutable fields of TimePartitioning are populated.
+	TimePartitioning *TimePartitioning
 
 	labelUpdater
 }

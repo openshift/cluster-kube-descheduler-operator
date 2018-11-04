@@ -15,54 +15,20 @@
 package cmd
 
 import (
-	"os"
-
-	"github.com/operator-framework/operator-sdk/pkg/test"
+	"github.com/operator-framework/operator-sdk/commands/operator-sdk/cmd/test"
 
 	"github.com/spf13/cobra"
 )
 
-var (
-	testLocation     string
-	kubeconfig       string
-	crdManifestPath  string
-	opManifestPath   string
-	rbacManifestPath string
-	verbose          bool
-)
-
-// TODO: allow users to pass flags through to `go test`
 func NewTestCmd() *cobra.Command {
 	testCmd := &cobra.Command{
-		Use:   "test --test-location <path to tests directory> [flags]",
-		Short: "Run End-To-End tests",
-		Run:   testFunc,
+		Use:   "test",
+		Short: "Tests the operator",
+		Long: `The test command has subcommands that can test the operator locally or from within a cluster.
+`,
 	}
-	defaultKubeConfig := ""
-	homedir, ok := os.LookupEnv("HOME")
-	if ok {
-		defaultKubeConfig = homedir + "/.kube/config"
-	}
-	testCmd.Flags().StringVarP(&testLocation, "test-location", "t", "", "Location of test files (e.g. ./test/e2e/)")
-	testCmd.MarkFlagRequired("test-location")
-	testCmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", defaultKubeConfig, "Kubeconfig path")
-	testCmd.Flags().StringVarP(&crdManifestPath, "crd", "c", "deploy/crd.yaml", "Path to CRD manifest")
-	testCmd.Flags().StringVarP(&opManifestPath, "operator", "o", "deploy/operator.yaml", "Path to operator manifest")
-	testCmd.Flags().StringVarP(&rbacManifestPath, "rbac", "r", "deploy/rbac.yaml", "Path to RBAC manifest")
-	testCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose go test")
 
+	testCmd.AddCommand(cmdtest.NewTestLocalCmd())
+	testCmd.AddCommand(cmdtest.NewTestClusterCmd())
 	return testCmd
-}
-
-func testFunc(cmd *cobra.Command, args []string) {
-	testArgs := []string{"test", testLocation + "/..."}
-	if verbose {
-		testArgs = append(testArgs, "-v")
-	}
-	testArgs = append(testArgs, "-"+test.KubeConfigFlag, kubeconfig)
-	testArgs = append(testArgs, "-"+test.CrdManPathFlag, crdManifestPath)
-	testArgs = append(testArgs, "-"+test.OpManPathFlag, opManifestPath)
-	testArgs = append(testArgs, "-"+test.RbacManPathFlag, rbacManifestPath)
-	testArgs = append(testArgs, "-"+test.ProjRootFlag, mustGetwd())
-	execCmd(os.Stdout, "go", testArgs...)
 }

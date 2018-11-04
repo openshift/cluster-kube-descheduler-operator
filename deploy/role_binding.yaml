@@ -1,0 +1,11 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: descheduler-operator
+subjects:
+- kind: ServiceAccount
+  name: descheduler-operator
+roleRef:
+  kind: Role
+  name: descheduler-operator
+  apiGroup: rbac.authorization.k8s.io
