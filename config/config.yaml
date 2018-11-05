@@ -1,3 +1,0 @@
-apiVersion: descheduler.io/v1alpha1
-kind: Descheduler
-projectName: descheduler-operator

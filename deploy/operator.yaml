@@ -12,9 +12,11 @@ spec:
       labels:
         name: descheduler-operator
     spec:
+      serviceAccountName: descheduler-operator
       containers:
         - name: descheduler-operator
-          image: registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler-operator
+          # Replace this with the built image name
+          image: REPLACE_IMAGE
           ports:
           - containerPort: 60000
             name: metrics
@@ -26,5 +28,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "descheduler-operator"
