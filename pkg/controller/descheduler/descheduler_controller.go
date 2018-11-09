@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// array of valid strategies.
+// array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
 var validStrategies = []string{"duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity"}
 
 /**
@@ -93,112 +93,107 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	// Add logic for descheduler validation. If descheduler object doesn't have any of the valid fields, return error
+	// Descheduler. If descheduler object doesn't have any of the valid fields, return error
 	// immediately, don't proceed with config map/ job creation.
+	strategies := descheduler.Spec.Strategies
 
-	if len(descheduler.Spec.Strategies) == 0 {
-		err = fmt.Errorf("descheduler should have atleast one strategy enabled and they should be one of %v", strings.Join(validStrategies, ","))
-		log.Printf("%v", err)
+	if err := validateStrategies(strategies); err != nil {
 		return reconcile.Result{}, err
-	}
-	if len(descheduler.Spec.Strategies) >= 4 { // As of now, there are only 4 strategies supported in descheduler.
-		err = fmt.Errorf("descheduler can have a maximum of 4 strategies enabled at this point of time")
-		log.Printf("%v", err)
-		return reconcile.Result{}, err
-	}
-	wrongStrategiesEnabled := make([]string, 0)
-	if len(descheduler.Spec.Strategies) >= 0 {
-		for _, strategy := range descheduler.Spec.Strategies {
-			validStrategyFound := false
-			for _, validStrategy := range validStrategies {
-				if strategy == validStrategy {
-					validStrategyFound = true
-				}
-			}
-			// Aggregate wrong strategies enabled.
-			if !validStrategyFound {
-				wrongStrategiesEnabled = append(wrongStrategiesEnabled, strategy)
-			}
-		}
-		if len(wrongStrategiesEnabled) > 0 {
-			err = fmt.Errorf("expected one of the %v to be enabled but found following invalid strategies %v",
-				strings.Join(validStrategies, ","), strings.Join(wrongStrategiesEnabled, ","))
-			log.Printf("%v", err)
-			return reconcile.Result{}, err
-		}
 	}
 
-	deschedulerConfigMap := &v1.ConfigMap{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerConfigMap)
-	if err != nil && errors.IsNotFound(err) {
-		// Create a new ConfigMap
-		cm, err := r.createConfigMap(descheduler)
-		if err != nil {
-			log.Printf("%v", err)
-			return reconcile.Result{}, err
-		}
-		log.Printf("Creating a new configmap %s/%s\n", cm.Namespace, cm.Name)
-		err = r.client.Create(context.TODO(), cm)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
+	// Generate Descheduler policy configmap
+	if err := r.generateConfigMap(descheduler); err != nil {
 		return reconcile.Result{}, err
-	} else if !checkIfStrategyExistsInConfigMap(descheduler.Spec.Strategies, deschedulerConfigMap.Data) {
-		// descheduler strategies got updated. Let's delete the configmap and in next reconcilation, we would create a new one.
-		log.Printf("Strategy doesn't exist in configmap. Delete it")
-		err = r.client.Delete(context.TODO(), deschedulerConfigMap)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
+	} else {
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// Check if the job already exists
-	deschedulerJob := &batch.Job{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerJob)
-	if err != nil && errors.IsNotFound(err) {
-		// Create descheduler job
-		dj, err := r.createJob(descheduler)
-		if err != nil {
-			log.Printf("%v", err)
-			return reconcile.Result{}, err
-		}
-		log.Printf("Creating a new job %s/%s\n", dj.Namespace, dj.Name)
-		err = r.client.Create(context.TODO(), dj)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		// Job created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
+	// Generate descheduler job.
+	if err := r.generateConfigMap(descheduler); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
 }
 
+// validateStrategies validates the given strategies.
+func validateStrategies(strategies []string) error {
+	if len(strategies) == 0 {
+		err := fmt.Errorf("descheduler should have atleast one strategy enabled and it should be one of %v", strings.Join(validStrategies, ","))
+		log.Printf("%v", err)
+		return err
+	}
+
+	if len(strategies) > len(validStrategies) { // As of now, there are only 4 strategies supported in descheduler.
+		err := fmt.Errorf("descheduler can have a maximum of %v strategies enabled at this point of time", len(validStrategies))
+		log.Printf("%v", err)
+		return err
+	}
+	// Identify invalid strategies
+	invalidStrategies := identifyInvalidStrategies(strategies)
+	if len(invalidStrategies) > 0 {
+		err := fmt.Errorf("expected one of the %v to be enabled but found following invalid strategies %v",
+			strings.Join(validStrategies, ","), strings.Join(invalidStrategies, ","))
+		log.Printf("%v", err)
+		return err
+	}
+	return nil
+}
+
+// identifyInvalidStrategies collects all the invalid strategies.
+func identifyInvalidStrategies(strategies []string) []string {
+	invalidStrategiesEnabled := make([]string, 0)
+	for _, strategy := range strategies {
+		validStrategyFound := false
+		for _, validStrategy := range validStrategies {
+			if strategy == validStrategy {
+				validStrategyFound = true
+			}
+		}
+		// Aggregate wrong strategies enabled.
+		if !validStrategyFound {
+			invalidStrategiesEnabled = append(invalidStrategiesEnabled, strategy)
+		}
+	}
+	return invalidStrategiesEnabled
+}
+
+// generateConfigMap generates configmap needed for descheduler from CR.
+func (r *ReconcileDescheduler) generateConfigMap(descheduler *deschedulerv1alpha1.Descheduler) error {
+	deschedulerConfigMap := &v1.ConfigMap{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerConfigMap)
+	if err != nil && errors.IsNotFound(err) {
+		// Create a new ConfigMap
+		cm, err := r.createConfigMap(descheduler)
+		if err != nil {
+			log.Printf("%v", err)
+			return err
+		}
+		log.Printf("Creating a new configmap %s/%s\n", cm.Namespace, cm.Name)
+		err = r.client.Create(context.TODO(), cm)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else if err != nil {
+		return err
+	} else if !checkIfStrategyExistsInConfigMap(descheduler.Spec.Strategies, deschedulerConfigMap.Data) {
+		// descheduler strategies got updated. Let's delete the configmap and in next reconcilation phase, we would create a new one.
+		// TODO: Delete job as well.
+		log.Printf("Strategy doesn't exist in configmap. Delete it")
+		err = r.client.Delete(context.TODO(), deschedulerConfigMap)
+		if err != nil {
+			log.Printf("Error while deleting configmap")
+			return err
+		}
+	}
+	return nil
+}
+
 // createConfigmap creates config map from given fields of descheduler
 func (r *ReconcileDescheduler) createConfigMap(descheduler *deschedulerv1alpha1.Descheduler) (*v1.ConfigMap, error) {
 	log.Printf("Creating config map")
-	strategiesPolicyString := ""
-	// There is no need to do validation here. By the time, we reach here, validation would have already happened.
-	requestedStrategies := descheduler.Spec.Strategies
-	for _, strategy := range requestedStrategies {
-
-		switch strategy {
-		case "duplicates":
-			strategiesPolicyString = strategiesPolicyString + "  \"RemoveDuplicates\":\n     enabled: true\n"
-		case "interpodantiaffinity":
-			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n"
-		case "lownodeutilization":
-			strategiesPolicyString = strategiesPolicyString + "  \"LowNodeUtilization\":\n     enabled: true\n"
-		case "nodeaffinity":
-			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n"
-		}
-	}
-
+	strategiesPolicyString := generateConfigMapString(descheduler.Spec.Strategies)
 	cm := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -219,16 +214,61 @@ func (r *ReconcileDescheduler) createConfigMap(descheduler *deschedulerv1alpha1.
 	return cm, nil
 }
 
+// generateConfigMapString generates configmap needed for the string.
+func generateConfigMapString(requestedStrategies []string) string {
+	strategiesPolicyString := ""
+	// There is no need to do validation here. By the time, we reach here, validation would have already happened.
+	for _, strategy := range requestedStrategies {
+		switch strategy {
+		case "duplicates":
+			strategiesPolicyString = strategiesPolicyString + "  \"RemoveDuplicates\":\n     enabled: true\n"
+		case "interpodantiaffinity":
+			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n"
+		case "lownodeutilization":
+			strategiesPolicyString = strategiesPolicyString + "  \"LowNodeUtilization\":\n     enabled: true\n"
+		case "nodeaffinity":
+			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n"
+		}
+	}
+	return strategiesPolicyString
+}
+
+// generateDeschedulerJob generates descheduler job.
+func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1alpha1.Descheduler) error {
+	// Check if the job already exists
+	deschedulerJob := &batch.Job{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerJob)
+	if err != nil && errors.IsNotFound(err) {
+		// Create descheduler job
+		dj, err := r.createJob(descheduler)
+		if err != nil {
+			log.Printf(" error while creating job %v", err)
+			return err
+		}
+		log.Printf("Creating a new job %s/%s\n", dj.Namespace, dj.Name)
+		err = r.client.Create(context.TODO(), dj)
+		if err != nil {
+			log.Printf(" error while creating job %v", err)
+			return err
+		}
+		// Job created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkIfStrategyExistsInConfigMap checks if the given strategies are found in configmap.
 func checkIfStrategyExistsInConfigMap(strategies []string, existingStrategies map[string]string) bool {
 	policyString := existingStrategies["policy.yaml"]
 	currentStrategiesCount := 0
-	for _, strategy := range validStrategies {
+	for _, strategy := range strategies {
 		if strings.Contains(strings.ToUpper(policyString), strings.ToUpper(strategy)) {
-			log.Printf("%v, %v", strategy, policyString)
 			currentStrategiesCount++
 		}
 	}
-	log.Printf("%v", currentStrategiesCount)
+	log.Printf("%v, %v", currentStrategiesCount, len(strategies))
 	return len(strategies) == currentStrategiesCount
 }
 
