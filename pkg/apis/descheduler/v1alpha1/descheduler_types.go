@@ -14,6 +14,11 @@ type DeschedulerSpec struct {
 }
 
 
+type strategy struct { //TODO: Make strategy a struct with some valid params.
+	Name string
+	Params map[string][]string
+}
+
 // DeschedulerStatus defines the observed state of Descheduler
 type DeschedulerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
