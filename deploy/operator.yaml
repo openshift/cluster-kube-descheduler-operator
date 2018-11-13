@@ -12,10 +12,9 @@ spec:
       labels:
         name: descheduler-operator
     spec:
-      serviceAccountName: descheduler-operator
       containers:
         - name: descheduler-operator
-          image: registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler-operator
+          image: docker.io/ravig/descheduler-operator:v0.0.7
           ports:
           - containerPort: 60000
             name: metrics
@@ -29,3 +28,5 @@ spec:
                   fieldPath: metadata.namespace
             - name: OPERATOR_NAME
               value: "descheduler-operator"
+      serviceAccountName: openshift-descheduler
+      serviceAccount: openshift-descheduler

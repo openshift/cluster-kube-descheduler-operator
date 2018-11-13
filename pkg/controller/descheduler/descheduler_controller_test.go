@@ -132,7 +132,7 @@ func TestCheckIfStrategyExistsInConfigMap(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		if checkIfStrategyExistsInConfigMap(test.strategies, test.configMapString) != test.stringExists {
+		if CheckIfStrategyExistsInConfigMap(test.strategies, test.configMapString) != test.stringExists {
 			t.Fatalf("Strategy mismatch for %v", test.description)
 		}
 	}

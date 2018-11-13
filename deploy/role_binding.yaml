@@ -1,11 +1,13 @@
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: descheduler-operator
+  name: descheduler-role-binding 
 subjects:
 - kind: ServiceAccount
-  name: descheduler-operator
+  name: openshift-descheduler
+  namespace: openshift-descheduler-operator
 roleRef:
-  kind: Role
-  name: descheduler-operator
   apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: descheduler-operator
+
