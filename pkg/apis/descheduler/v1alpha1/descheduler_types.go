@@ -9,13 +9,12 @@ import (
 
 // DeschedulerSpec defines the desired state of Descheduler
 type DeschedulerSpec struct {
-	 // Strategies contain list of strategies that should be enabled in descheduler.
-        Strategies []string `json:"strategies,omitempty"`
+	// Strategies contain list of strategies that should be enabled in descheduler.
+	Strategies []string `json:"strategies,omitempty"`
 }
 
-
 type strategy struct { //TODO: Make strategy a struct with some valid params.
-	Name string
+	Name   string
 	Params map[string][]string
 }
 
@@ -23,6 +22,8 @@ type strategy struct { //TODO: Make strategy a struct with some valid params.
 type DeschedulerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	// Represents the descheduler operator phase. As of now, limited to Updating, Running, could be expanded later.
+	Phase string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
