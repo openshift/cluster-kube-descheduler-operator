@@ -5,5 +5,11 @@ metadata:
 spec:
   # Add fields here
   strategies: 
-  - Ravig1
-  - Gudimetla
+    - name: "lownodeutilization"
+      params:
+       - name: "cputhreshold"
+         value: "10"
+       - name: "memorythreshold"
+         value: "20"
+       - name: "memorytargetthreshold"
+         value: "30"

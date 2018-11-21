@@ -3,6 +3,8 @@ package descheduler
 import (
 	"reflect"
 	"testing"
+
+	deschedulerv1alpha1 "github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
 )
 
 func TestValidateStrategies(t *testing.T) {
@@ -75,64 +77,89 @@ func TestGeneratePolicyConfigMapString(t *testing.T) {
 		stringExpected string
 	}{
 		{
-			description:    "valid strategies",
+			description:    "invalid strategies",
 			strategies:     []string{"duplicates", "non-duplicates"},
-			stringExpected: "  \"RemoveDuplicates\":\n     enabled: true\n",
+			stringExpected: "",
 		},
 		{
 			description: "valid strategies",
 			strategies:  validStrategies,
 			stringExpected: "  \"RemoveDuplicates\":\n     enabled: true\n" + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n" +
-				"  \"LowNodeUtilization\":\n     enabled: true\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n",
+				"  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution",
 		},
 		{
 			description: "valid strategies with order changed",
 			strategies:  []string{"duplicates", "lownodeutilization", "nodeaffinity", "interpodantiaffinity"},
 			stringExpected: "  \"RemoveDuplicates\":\n     enabled: true\n" +
-				"  \"LowNodeUtilization\":\n     enabled: true\n" +
+				"  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n" +
 				"  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n" +
-				"  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n",
+				"  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true",
 		},
 		{
-			description: "valid strategies with order changed",
+			description: "partial valid strategies",
 			strategies:  []string{"duplicates", "nodeaffinity", "interpodantiaffinity"},
 			stringExpected: "  \"RemoveDuplicates\":\n     enabled: true\n" +
 				"  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n" +
-				"  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n",
+				"  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true",
+		},
+		{
+			description: "valid strategies with params",
+			strategies:  []string{"duplicates", "lownodeutilization", "nodeaffinity", "interpodantiaffinity"},
+			stringExpected: "  \"RemoveDuplicates\":\n     enabled: true\n" +
+				"  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n" + "         thresholds:\n" + "           cpu: " + "20" + "\n" +
+				"         targetThresholds:\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n" +
+				"  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true",
 		},
 	}
 	for _, test := range tests {
-		actualInvalidStrategies := generateConfigMapString(test.strategies)
+		setParams := false
+		if test.description == "valid strategies with params" {
+			setParams = true
+		}
+		actualInvalidStrategies := generateConfigMapString(buildDeschedulerStrategies(test.strategies, setParams))
 		if !reflect.DeepEqual(test.stringExpected, actualInvalidStrategies) {
-			t.Fatalf("Expected %v as invalid strategies but got %v for %v", test.stringExpected, actualInvalidStrategies, test.description)
+			t.Fatalf("Expected \n%v as invalid strategies but got \n%v for %v", test.stringExpected, actualInvalidStrategies, test.description)
 		}
 	}
 }
 
-func TestCheckIfStrategyExistsInConfigMap(t *testing.T) {
-	allStrategyConfigMapString := map[string]string{"policy.yaml": "  \"RemoveDuplicates\":\n     enabled: true\n" + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n" +
-		"  \"LowNodeUtilization\":\n     enabled: true\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n"}
+func buildDeschedulerStrategies(strategyNames []string, setParams bool) []deschedulerv1alpha1.Strategy {
+	strategies := make([]deschedulerv1alpha1.Strategy, 0)
+	for _, strategyName := range strategyNames {
+
+		if setParams && strategyName == "lownodeutilization" {
+			strategies = append(strategies, deschedulerv1alpha1.Strategy{strategyName, []deschedulerv1alpha1.Param{{Name: "cputhreshold", Value: "20"}}})
+		} else {
+			strategies = append(strategies, deschedulerv1alpha1.Strategy{strategyName, nil})
+		}
+	}
+	return strategies
+}
+
+func TestCheckIfPropertyChanges(t *testing.T) {
+	allStrategyConfigMapString := map[string]string{"policy.yaml": "apiVersion: \"descheduler/v1alpha1\"\nkind: \"DeschedulerPolicy\"\nstrategies:\n" + "  \"RemoveDuplicates\":\n     enabled: true\n" + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n" +
+		"  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution"}
 	tests := []struct {
 		description     string
-		strategies      []string
+		strategies      []deschedulerv1alpha1.Strategy
 		configMapString map[string]string
 		stringExists    bool
 	}{
 		{
 			description:     "valid strategies",
-			strategies:      validStrategies,
+			strategies:      buildDeschedulerStrategies(validStrategies, false),
 			configMapString: allStrategyConfigMapString,
 			stringExists:    true,
 		},
 		{
 			description:     "invalid strategies",
-			strategies:      append(validStrategies, "non-valid-strategy"),
+			strategies:      buildDeschedulerStrategies(append(validStrategies, "non-valid-strategy"), false),
 			configMapString: allStrategyConfigMapString,
 			stringExists:    false,
 		},
 	}
 	for _, test := range tests {
-		if CheckIfStrategyExistsInConfigMap(test.strategies, test.configMapString) != test.stringExists {
+		if CheckIfPropertyChanges(test.strategies, test.configMapString) != test.stringExists {
 			t.Fatalf("Strategy mismatch for %v", test.description)
 		}
 	}

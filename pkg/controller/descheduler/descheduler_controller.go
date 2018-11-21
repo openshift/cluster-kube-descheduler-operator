@@ -100,9 +100,11 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 
 	// Descheduler. If descheduler object doesn't have any of the valid fields, return error
 	// immediately, don't proceed with config map/ job creation.
-	strategies := descheduler.Spec.Strategies
+	//strategies := descheduler.Spec.Strategies
 
-	if err := validateStrategies(strategies); err != nil {
+	log.Printf("%v", descheduler.Spec)
+	strategiesEnabled := getAllStrategiesEnabled(descheduler.Spec.Strategies)
+	if err := validateStrategies(strategiesEnabled); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -113,7 +115,6 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 
 	// Generate descheduler job.
 	if err := r.generateDeschedulerJob(descheduler); err != nil {
-		log.Printf("error Ravig, %v", err)
 		return reconcile.Result{}, err
 	}
 
@@ -123,6 +124,16 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func getAllStrategiesEnabled(strategies []deschedulerv1alpha1.Strategy) []string {
+	strategyName := make([]string, 0)
+	//strategyParams := make(map[string]string)
+	for _, strategy := range strategies {
+		strategyName = append(strategyName, strategy.Name)
+
+	}
+	return strategyName
 }
 
 // validateStrategies validates the given strategies.
@@ -155,7 +166,7 @@ func identifyInvalidStrategies(strategies []string) []string {
 	for _, strategy := range strategies {
 		validStrategyFound := false
 		for _, validStrategy := range validStrategies {
-			if strategy == validStrategy {
+			if strings.ToUpper(strategy) == strings.ToUpper(validStrategy) {
 				validStrategyFound = true
 			}
 		}
@@ -183,7 +194,7 @@ func (r *ReconcileDescheduler) generateConfigMap(descheduler *deschedulerv1alpha
 		if err != nil {
 			return err
 		}
-	} else if !CheckIfStrategyExistsInConfigMap(descheduler.Spec.Strategies, deschedulerConfigMap.Data) {
+	} else if !CheckIfPropertyChanges(descheduler.Spec.Strategies, deschedulerConfigMap.Data) {
 		// descheduler strategies got updated. Let's delete the configmap and in next reconcilation phase, we would create a new one.
 		// TODO: Delete job as well.
 		log.Printf("Strategy mismatch in configmap. Delete it")
@@ -204,6 +215,7 @@ func (r *ReconcileDescheduler) generateConfigMap(descheduler *deschedulerv1alpha
 func (r *ReconcileDescheduler) createConfigMap(descheduler *deschedulerv1alpha1.Descheduler) (*v1.ConfigMap, error) {
 	log.Printf("Creating config map")
 	strategiesPolicyString := generateConfigMapString(descheduler.Spec.Strategies)
+	log.Printf("Ravig %v", strategiesPolicyString)
 	cm := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -225,22 +237,64 @@ func (r *ReconcileDescheduler) createConfigMap(descheduler *deschedulerv1alpha1.
 }
 
 // generateConfigMapString generates configmap needed for the string.
-func generateConfigMapString(requestedStrategies []string) string {
+func generateConfigMapString(requestedStrategies []deschedulerv1alpha1.Strategy) string {
 	strategiesPolicyString := ""
 	// There is no need to do validation here. By the time, we reach here, validation would have already happened.
 	for _, strategy := range requestedStrategies {
-		switch strategy {
+		switch strings.ToLower(strategy.Name) {
 		case "duplicates":
 			strategiesPolicyString = strategiesPolicyString + "  \"RemoveDuplicates\":\n     enabled: true\n"
 		case "interpodantiaffinity":
 			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n"
 		case "lownodeutilization":
-			strategiesPolicyString = strategiesPolicyString + "  \"LowNodeUtilization\":\n     enabled: true\n"
+			strategiesPolicyString = strategiesPolicyString + "  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n"
+			paramString := ""
+			if len(strategy.Params) > 0 {
+				// TODO: Make this more generic using methods and interfaces.
+				paramString = addStrategyParamsForLowNodeUtilization(strategy.Params)
+				strategiesPolicyString = strategiesPolicyString + paramString
+			}
 		case "nodeaffinity":
 			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n"
+		default:
+			strategiesPolicyString = "" // Accept no other strategy except for the valid ones.
 		}
 	}
-	return strategiesPolicyString
+	// At last, we will have a "\n", which we don't need.
+	return strings.TrimSuffix(strategiesPolicyString, "\n")
+}
+
+func addStrategyParamsForLowNodeUtilization(params []deschedulerv1alpha1.Param) string {
+	thresholds := ""
+	targetThresholds := ""
+	thresholdsString := "         thresholds:"
+	targetThresholdsString := "         targetThresholds:"
+	for _, param := range params {
+		// collect all thresholds
+		log.Printf("%v %v", param.Name, param.Value)
+		if !strings.Contains(strings.ToUpper(param.Name), strings.ToUpper("target")) {
+			switch param.Name {
+			case "cputhreshold":
+				thresholds = thresholds + "           cpu: " + param.Value + "\n"
+			case "memorythreshold":
+				thresholds = thresholds + "           memory: " + param.Value + "\n"
+			case "podsthreshold":
+				thresholds = thresholds + "           pods: " + param.Value + "\n"
+			}
+		} else {
+			// collect all target thresholds
+			switch param.Name {
+			case "cputargetthreshold":
+				targetThresholds = targetThresholds + "           cpu: " + param.Value + "\n"
+			case "memorytargetthreshold":
+				targetThresholds = targetThresholds + "           memory: " + param.Value + "\n"
+			case "podstargetthreshold":
+				targetThresholds = targetThresholds + "           pods: " + param.Value + "\n"
+			}
+		}
+	}
+	// If threshold is specified we should specify target threshold as well.
+	return thresholdsString + "\n" + thresholds + targetThresholdsString + "\n" + targetThresholds
 }
 
 // generateDeschedulerJob generates descheduler job.
@@ -270,17 +324,12 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 	return nil
 }
 
-// CheckIfStrategyExistsInConfigMap checks if the given strategies are found in configmap.
-func CheckIfStrategyExistsInConfigMap(strategies []string, existingStrategies map[string]string) bool {
+// CheckIfPropertyChanges checks if the given strategies or their params have changed.
+func CheckIfPropertyChanges(strategies []deschedulerv1alpha1.Strategy, existingStrategies map[string]string) bool {
 	policyString := existingStrategies["policy.yaml"]
-	currentStrategiesCount := 0
-	for _, strategy := range strategies {
-		if strings.Contains(strings.ToUpper(policyString), strings.ToUpper(strategy)) {
-			currentStrategiesCount++
-		}
-	}
-	log.Printf("%v, %v", currentStrategiesCount, len(strategies))
-	return len(strategies) == currentStrategiesCount
+	currentPolicyString := "apiVersion: \"descheduler/v1alpha1\"\nkind: \"DeschedulerPolicy\"\nstrategies:\n" + generateConfigMapString(strategies)
+	log.Printf("\n%v, \n%v", policyString, currentPolicyString)
+	return policyString == currentPolicyString
 }
 
 // createJob creates a descheduler job.
