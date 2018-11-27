@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: descheduler-operator
-          image: docker.io/ravig/descheduler-operator:v0.0.7
+          image: registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler-operator
           ports:
           - containerPort: 60000
             name: metrics
