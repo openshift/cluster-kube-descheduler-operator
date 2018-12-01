@@ -22,6 +22,7 @@
 package longrunning // import "cloud.google.com/go/longrunning"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -30,7 +31,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/googleapis/gax-go"
-	"golang.org/x/net/context"
 	pb "google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

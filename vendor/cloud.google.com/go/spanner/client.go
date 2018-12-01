@@ -17,13 +17,13 @@ limitations under the License.
 package spanner
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/internal/version"
-	"golang.org/x/net/context"
 	"google.golang.org/api/option"
 	gtransport "google.golang.org/api/transport/grpc"
 	sppb "google.golang.org/genproto/googleapis/spanner/v1"
@@ -161,6 +161,8 @@ func NewClientWithConfig(ctx context.Context, database string, config ClientConf
 	if config.MaxBurst == 0 {
 		config.MaxBurst = 10
 	}
+	// TODO(deklerk) This should be replaced with a balancer with config.NumChannels
+	// connections, instead of config.NumChannels clientconns.
 	for i := 0; i < config.NumChannels; i++ {
 		conn, err := gtransport.Dial(ctx, allOpts...)
 		if err != nil {

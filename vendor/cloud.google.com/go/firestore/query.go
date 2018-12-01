@@ -15,6 +15,7 @@
 package firestore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -24,7 +25,6 @@ import (
 
 	"cloud.google.com/go/internal/btree"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 	pb "google.golang.org/genproto/googleapis/firestore/v1beta1"
 )
@@ -240,6 +240,16 @@ func (q Query) toProto() (*pb.StructuredQuery, error) {
 	}
 	if q.collectionID == "" {
 		return nil, errors.New("firestore: query created without CollectionRef")
+	}
+	if q.startBefore {
+		if len(q.startVals) == 0 && q.startDoc == nil {
+			return nil, errors.New("firestore: StartAt/StartAfter must be called with at least one value")
+		}
+	}
+	if q.endBefore {
+		if len(q.endVals) == 0 && q.endDoc == nil {
+			return nil, errors.New("firestore: EndAt/EndBefore must be called with at least one value")
+		}
 	}
 	p := &pb.StructuredQuery{
 		From:   []*pb.StructuredQuery_CollectionSelector{{CollectionId: q.collectionID}},
