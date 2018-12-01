@@ -1,4 +1,4 @@
-.PHONY: verify-gofmt test-unit clean build image
+.PHONY: verify-gofmt test-unit clean build image test-e2e
 
 IMAGE_REPOSITORY_NAME ?= openshift
 
@@ -16,3 +16,7 @@ test-unit:
 
 verify-gofmt:
 	hack/verify-gofmt.sh
+
+test-e2e:
+	hack/run-e2e.sh
+
