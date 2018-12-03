@@ -10,7 +10,6 @@ import (
 	operator "github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
 	"github.com/openshift/descheduler-operator/pkg/controller/descheduler"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
-	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -152,17 +151,8 @@ func DeschedulerCluster(t *testing.T) {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
 	}
 	t.Log("Initialized cluster resources")
-	namespace, err := ctx.GetNamespace()
-	if err != nil {
-		t.Fatal(err)
-	}
 	// get global framework variables
 	f := framework.Global
-	// wait for descheduler-operator to be ready
-	err = e2eutil.WaitForDeployment(t, f.KubeClient, namespace, "descheduler-operator", 1, retryInterval, timeout)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err = deschedulerStrategiesTest(t, f, ctx); err != nil {
 		t.Fatal(err)
 	}

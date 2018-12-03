@@ -23,6 +23,7 @@
 package pstest
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"path"
@@ -36,7 +37,6 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
-	"golang.org/x/net/context"
 	pb "google.golang.org/genproto/googleapis/pubsub/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,6 +59,7 @@ func timeNow() time.Time {
 
 // Server is a fake Pub/Sub server.
 type Server struct {
+	srv     *testutil.Server
 	Addr    string // The address that the server is listening on.
 	gServer gServer
 }
@@ -84,6 +85,7 @@ func NewServer() *Server {
 		panic(fmt.Sprintf("pstest.NewServer: %v", err))
 	}
 	s := &Server{
+		srv:  srv,
 		Addr: srv.Addr,
 		gServer: gServer{
 			topics:   map[string]*topic{},
@@ -111,12 +113,12 @@ func (s *Server) Publish(topic string, data []byte, attrs map[string]string) str
 	if !ok {
 		panic(fmt.Sprintf("topic name must be of the form %q", topicPattern))
 	}
-	_, _ = s.gServer.CreateTopic(nil, &pb.Topic{Name: topic})
+	_, _ = s.gServer.CreateTopic(context.TODO(), &pb.Topic{Name: topic})
 	req := &pb.PublishRequest{
 		Topic:    topic,
 		Messages: []*pb.PubsubMessage{{Data: data, Attributes: attrs}},
 	}
-	res, err := s.gServer.Publish(nil, req)
+	res, err := s.gServer.Publish(context.TODO(), req)
 	if err != nil {
 		panic(fmt.Sprintf("pstest.Server.Publish: %v", err))
 	}
@@ -187,6 +189,17 @@ func (s *Server) Message(id string) *Message {
 // Wait blocks until all server activity has completed.
 func (s *Server) Wait() {
 	s.gServer.wg.Wait()
+}
+
+// Close shuts down the server and releases all resources.
+func (s *Server) Close() error {
+	s.srv.Close()
+	s.gServer.mu.Lock()
+	defer s.gServer.mu.Unlock()
+	for _, sub := range s.gServer.subs {
+		sub.stop()
+	}
+	return nil
 }
 
 func (s *gServer) CreateTopic(_ context.Context, t *pb.Topic) (*pb.Topic, error) {
