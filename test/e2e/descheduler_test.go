@@ -66,6 +66,7 @@ func deschedulerStrategiesTest(t *testing.T, f *framework.Framework, ctx *framew
 		},
 		Spec: operator.DeschedulerSpec{
 			Strategies: buildDeschedulerStrategies([]string{"duplicates"}),
+			Schedule:   "*/1 * * * ?",
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), exampleDescheduler, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
@@ -88,13 +89,23 @@ func deschedulerStrategiesTest(t *testing.T, f *framework.Framework, ctx *framew
 	}
 
 	// wait for policy configmap creation
-	err = waitForPolicyConfigMap(t, f.KubeClient, namespace, "example-descheduler", buildDeschedulerStrategies([]string{"duplicates", "interpodantiaffinity"}), retryInterval, timeout)
+	err = waitForPolicyConfigMap(t, f.KubeClient, namespace, "example-descheduler", exampleDescheduler.Spec.Strategies, retryInterval, timeout)
 	if err != nil {
 		return err
 	}
 
-	// job creation
-	return waitForJob(t, f.KubeClient, namespace, "example-descheduler", retryInterval, timeout)
+	err = waitForCronJob(t, f.KubeClient, namespace, "example-descheduler", exampleDescheduler.Spec.Schedule, retryInterval, timeout)
+	if err != nil {
+		return err
+	}
+
+	exampleDescheduler.Spec.Schedule = "*/4 * * * ?"
+	err = f.Client.Update(goctx.TODO(), exampleDescheduler)
+	if err != nil {
+		return err
+	}
+	// Cronjob creation
+	return waitForCronJob(t, f.KubeClient, namespace, "example-descheduler", exampleDescheduler.Spec.Schedule, retryInterval, timeout)
 }
 
 // waitForPolicyConfigMap to be created.
@@ -122,19 +133,23 @@ func waitForPolicyConfigMap(t *testing.T, kubeclient kubernetes.Interface, names
 	return nil
 }
 
-// waitForJob waits for job to be created.
-func waitForJob(t *testing.T, kubeclient kubernetes.Interface, namespace, name string, retryInterval, timeout time.Duration) error {
+// waitFoCronJob waits for cronjob to be created.
+func waitForCronJob(t *testing.T, kubeclient kubernetes.Interface, namespace, name, schedule string, retryInterval, timeout time.Duration) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		deschedulerJob, err := kubeclient.BatchV1().Jobs(namespace).Get(name, metav1.GetOptions{IncludeUninitialized: true})
+		deschedulerCronJob, err := kubeclient.BatchV1beta1().CronJobs(namespace).Get(name, metav1.GetOptions{IncludeUninitialized: true})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				t.Logf("Waiting for availability of %s job\n", deschedulerJob.Name)
+				t.Logf("Waiting for availability of %s cronjob\n", deschedulerCronJob.Name)
 				return false, nil
 			}
 			return false, err
 		}
-		t.Logf("Creation of job %s successful\n", name)
-		return true, nil
+		if deschedulerCronJob.Spec.Schedule == schedule {
+
+			return true, err
+		}
+		t.Logf("Waiting for creation of cron job %s with desired schedule failed \n", name)
+		return false, nil
 	})
 	if err != nil {
 		return err

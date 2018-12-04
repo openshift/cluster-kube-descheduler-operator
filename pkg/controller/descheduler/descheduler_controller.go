@@ -8,6 +8,7 @@ import (
 
 	deschedulerv1alpha1 "github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
 	batch "k8s.io/api/batch/v1"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -100,9 +101,12 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 
 	// Descheduler. If descheduler object doesn't have any of the valid fields, return error
 	// immediately, don't proceed with config map/ job creation.
-	//strategies := descheduler.Spec.Strategies
 
-	log.Printf("%v", descheduler.Spec)
+	if len(descheduler.Spec.Schedule) == 0 {
+		log.Printf("Descheduler should have schedule for cron job set")
+		return reconcile.Result{}, err
+	}
+
 	strategiesEnabled := getAllStrategiesEnabled(descheduler.Spec.Strategies)
 	if err := validateStrategies(strategiesEnabled); err != nil {
 		return reconcile.Result{}, err
@@ -128,7 +132,6 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 
 func getAllStrategiesEnabled(strategies []deschedulerv1alpha1.Strategy) []string {
 	strategyName := make([]string, 0)
-	//strategyParams := make(map[string]string)
 	for _, strategy := range strategies {
 		strategyName = append(strategyName, strategy.Name)
 
@@ -215,7 +218,7 @@ func (r *ReconcileDescheduler) generateConfigMap(descheduler *deschedulerv1alpha
 func (r *ReconcileDescheduler) createConfigMap(descheduler *deschedulerv1alpha1.Descheduler) (*v1.ConfigMap, error) {
 	log.Printf("Creating config map")
 	strategiesPolicyString := generateConfigMapString(descheduler.Spec.Strategies)
-	log.Printf("Ravig %v", strategiesPolicyString)
+	log.Printf("%v", strategiesPolicyString)
 	cm := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -300,23 +303,33 @@ func addStrategyParamsForLowNodeUtilization(params []deschedulerv1alpha1.Param) 
 // generateDeschedulerJob generates descheduler job.
 func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1alpha1.Descheduler) error {
 	log.Print("Inside generated descheduler job")
-	// Check if the job already exists
-	deschedulerJob := &batch.Job{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerJob)
+	// Check if the cron job already exists
+	deschedulerCronJob := &batchv1beta1.CronJob{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerCronJob)
 	if err != nil && errors.IsNotFound(err) {
-		// Create descheduler job
-		dj, err := r.createJob(descheduler)
+		// Create descheduler cronjob
+		dj, err := r.createCronJob(descheduler)
 		if err != nil {
 			log.Printf(" error while creating job %v", err)
 			return err
 		}
-		log.Printf("Creating a new job %s/%s\n", dj.Namespace, dj.Name)
+		log.Printf("Creating a new cron job %s/%s\n", dj.Namespace, dj.Name)
 		err = r.client.Create(context.TODO(), dj)
 		if err != nil {
-			log.Printf(" error while creating job %v", err)
+			log.Printf(" error while creating cron job %v", err)
 			return err
 		}
-		// Job created successfully - don't requeue
+		// Cronjob created successfully - don't requeue
+		return nil
+	} else if deschedulerCronJob.Spec.Schedule != descheduler.Spec.Schedule {
+		// descheduler schedule mismatch. Let's delete it and in the next reconcilation loop, we will create a new one.
+		log.Printf("Schedule mismatch in cron job. Delete it")
+		err = r.client.Delete(context.TODO(), deschedulerCronJob)
+		if err != nil {
+			log.Printf("Error while deleting configmap")
+			return err
+		}
+		descheduler.Status.Phase = Updating
 		return nil
 	} else if err != nil {
 		return err
@@ -332,59 +345,62 @@ func CheckIfPropertyChanges(strategies []deschedulerv1alpha1.Strategy, existingS
 	return policyString == currentPolicyString
 }
 
-// createJob creates a descheduler job.
-func (r *ReconcileDescheduler) createJob(descheduler *deschedulerv1alpha1.Descheduler) (*batch.Job, error) {
-	activeDeadline := int64(100)
+// createCronJob creates a descheduler job.
+func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.Descheduler) (*batchv1beta1.CronJob, error) {
 	log.Printf("Creating descheduler job")
-	job := &batch.Job{
+	job := &batchv1beta1.CronJob{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Job",
+			Kind:       "CronJob",
 			APIVersion: batch.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      descheduler.Name,
 			Namespace: descheduler.Namespace,
 		},
-		Spec: batch.JobSpec{
-			ActiveDeadlineSeconds: &activeDeadline,
-			Template: v1.PodTemplateSpec{
+		Spec: batchv1beta1.CronJobSpec{
+			Schedule: descheduler.Spec.Schedule,
+			JobTemplate: batchv1beta1.JobTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "descheduler-job-spec",
 				},
-				Spec: v1.PodSpec{
-					Volumes: []v1.Volume{{
-						Name: "policy-volume",
-						VolumeSource: v1.VolumeSource{
-							ConfigMap: &v1.ConfigMapVolumeSource{
-								LocalObjectReference: v1.LocalObjectReference{
-									Name: descheduler.Name,
+				Spec: batch.JobSpec{
+					Template: v1.PodTemplateSpec{
+						Spec: v1.PodSpec{
+							Volumes: []v1.Volume{{
+								Name: "policy-volume",
+								VolumeSource: v1.VolumeSource{
+									ConfigMap: &v1.ConfigMapVolumeSource{
+										LocalObjectReference: v1.LocalObjectReference{
+											Name: descheduler.Name,
+										},
+									},
 								},
 							},
+							},
+							RestartPolicy: "Never",
+							Containers: []v1.Container{{
+								Name:  "openshift-descheduler",
+								Image: "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler", // TODO: Make this configurable too.
+								Ports: []v1.ContainerPort{{ContainerPort: 80}},
+								Resources: v1.ResourceRequirements{
+									Limits: v1.ResourceList{
+										v1.ResourceCPU:    resource.MustParse("100m"),
+										v1.ResourceMemory: resource.MustParse("500Mi"),
+									},
+									Requests: v1.ResourceList{
+										v1.ResourceCPU:    resource.MustParse("100m"),
+										v1.ResourceMemory: resource.MustParse("500Mi"),
+									},
+								},
+								Command: []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"},
+								VolumeMounts: []v1.VolumeMount{{
+									MountPath: "/policy-dir",
+									Name:      "policy-volume",
+								}},
+							}},
+							ServiceAccountName: "openshift-descheduler", // TODO: This is hardcoded as of now, find a way to reference it from rbac.yaml.
 						},
 					},
-					},
-					RestartPolicy: "Never",
-					Containers: []v1.Container{{
-						Name:  "openshift-descheduler",
-						Image: "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler", // TODO: Make this configurable too.
-						Ports: []v1.ContainerPort{{ContainerPort: 80}},
-						Resources: v1.ResourceRequirements{
-							Limits: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("100m"),
-								v1.ResourceMemory: resource.MustParse("500Mi"),
-							},
-							Requests: v1.ResourceList{
-								v1.ResourceCPU:    resource.MustParse("100m"),
-								v1.ResourceMemory: resource.MustParse("500Mi"),
-							},
-						},
-						Command: []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"},
-						VolumeMounts: []v1.VolumeMount{{
-							MountPath: "/policy-dir",
-							Name:      "policy-volume",
-						}},
-					}},
-					ServiceAccountName: "openshift-descheduler", // TODO: This is hardcoded as of now, find a way to reference it from rbac.yaml.
 				},
 			},
 		},
