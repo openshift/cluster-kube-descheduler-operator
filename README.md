@@ -23,7 +23,7 @@ kind: Descheduler
 metadata:
   name: example-descheduler-1
 spec:
-  # Add fields here
+  schedule: "*/1 * * * ?"
   strategies: 
     - name: "lownodeutilization"
       params:
@@ -41,13 +41,13 @@ spec:
          value: "60"
     - name: "duplicates"
 ```
-The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code.
+The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code. Schedule field contains schedule of the cron job which would run the descheduler as a pod.
 
 ## How does the descheduler operator work?
 
 Descheduler operator at a high level is responsible for watching the above CR 
 - Create a configmap that could be used by descheduler.
-- Run descheduler as a job after creating configmap.
+- Run descheduler as a cron job after creating configmap.
 
 The configmap created from above sample CR definition looks like this:
 
@@ -71,4 +71,4 @@ strategies:
            "pods": 60
 ```
 
-The above configmap would be mounted as a volume in descheduler job pod created in next step. Whenever we change strategies or parameters in the CR, the descheduler operator is responsible for identifying those changes and regenerating the configmap.
+The above configmap would be mounted as a volume in descheduler cron job pod created. Whenever we change strategies, parameters or schedule in the CR, the descheduler operator is responsible for identifying those changes and regenerating the configmap.
