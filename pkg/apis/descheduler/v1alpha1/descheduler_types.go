@@ -11,6 +11,8 @@ import (
 type DeschedulerSpec struct {
 	// Strategies contain list of strategies that should be enabled in descheduler.
 	Strategies []Strategy `json:"strategies,omitempty"`
+	// Schedule on which cronjob should run, example would be "*/1 * * * ?"
+	Schedule string `json:"schedule,omitempty"`
 }
 
 type Strategy struct {
@@ -28,7 +30,7 @@ type DeschedulerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Represents the descheduler operator phase. As of now, limited to Updating, Running, could be expanded later.
-	Phase string `json:"phase"`
+	Phase string `json:"phase, omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
