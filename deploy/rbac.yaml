@@ -28,7 +28,7 @@ rules:
   verbs:
   - "*"
 - apiGroups: ["batch", "extensions"]
-  resources: ["jobs"]
+  resources: ["jobs", "cronjobs"]
   verbs:
   - "*"
 
