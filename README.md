@@ -6,7 +6,8 @@ To deploy the operator:
 ```
 oc create -f deploy/ns.yaml
 oc create -f deploy/crd.yaml
-oc create -f deploy/rbac.yaml
+oc create -f deploy/role.yaml
+oc create -f deploy/role_binding.yaml
 oc create -f deploy/operator.yaml
 oc create -f deploy/cr.yaml
 ```
