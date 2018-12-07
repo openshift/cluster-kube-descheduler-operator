@@ -12,7 +12,7 @@ clean:
 	rm -rf descheduler-operator 
 
 test-unit:
-	go test -v github.com/openshift/descheduler-operator/pkg/controller/descheduler
+	go test -race -v github.com/openshift/descheduler-operator/pkg/controller/descheduler
 
 verify-gofmt:
 	hack/verify-gofmt.sh
