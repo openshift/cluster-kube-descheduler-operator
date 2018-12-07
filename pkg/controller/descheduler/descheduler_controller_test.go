@@ -107,7 +107,7 @@ func TestGeneratePolicyConfigMapString(t *testing.T) {
 			strategies:  []string{"duplicates", "lownodeutilization", "nodeaffinity", "interpodantiaffinity"},
 			stringExpected: "  \"RemoveDuplicates\":\n     enabled: true\n" +
 				"  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n" + "         thresholds:\n" + "           cpu: " + "20" + "\n" +
-				"         targetThresholds:\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n" +
+				"         targetThresholds:\n" + "           cpu: " + "40" + "\n" + "         numberOfNodes: 3\n" + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n" +
 				"  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true",
 		},
 	}
@@ -128,7 +128,7 @@ func buildDeschedulerStrategies(strategyNames []string, setParams bool) []desche
 	for _, strategyName := range strategyNames {
 
 		if setParams && strategyName == "lownodeutilization" {
-			strategies = append(strategies, deschedulerv1alpha1.Strategy{strategyName, []deschedulerv1alpha1.Param{{Name: "cputhreshold", Value: "20"}}})
+			strategies = append(strategies, deschedulerv1alpha1.Strategy{strategyName, []deschedulerv1alpha1.Param{{Name: "cputhreshold", Value: "20"}, {Name: "cputargetthreshold", Value: "40"}, {Name: "nodes", Value: "3"}}})
 		} else {
 			strategies = append(strategies, deschedulerv1alpha1.Strategy{strategyName, nil})
 		}

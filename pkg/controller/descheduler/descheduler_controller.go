@@ -274,6 +274,8 @@ func addStrategyParamsForLowNodeUtilization(params []deschedulerv1alpha1.Param) 
 	targetThresholds := ""
 	thresholdsString := "         thresholds:"
 	targetThresholdsString := "         targetThresholds:"
+	noOfNodes := "         numberOfNodes:"
+	nodesParamFound := false
 	for _, param := range params {
 		// collect all thresholds
 		log.Printf("%v %v", param.Name, param.Value)
@@ -297,9 +299,17 @@ func addStrategyParamsForLowNodeUtilization(params []deschedulerv1alpha1.Param) 
 				targetThresholds = targetThresholds + "           pods: " + param.Value + "\n"
 			}
 		}
+		if param.Name == "nodes" {
+			nodesParamFound = true
+			noOfNodes = noOfNodes + " " + param.Value + "\n"
+		}
+	}
+	// If noOfNodes parameter is not found, set it to 0.
+	if !nodesParamFound {
+		noOfNodes = noOfNodes + " 0\n"
 	}
 	// If threshold is specified we should specify target threshold as well.
-	return thresholdsString + "\n" + thresholds + targetThresholdsString + "\n" + targetThresholds
+	return thresholdsString + "\n" + thresholds + targetThresholdsString + "\n" + targetThresholds + noOfNodes
 }
 
 // generateDeschedulerJob generates descheduler job.
