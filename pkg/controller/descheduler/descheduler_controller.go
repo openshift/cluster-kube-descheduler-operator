@@ -130,6 +130,7 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 	return reconcile.Result{}, nil
 }
 
+// getAllStrategiesEnabled returns the list of strategies enabled for descheduler.
 func getAllStrategiesEnabled(strategies []deschedulerv1alpha1.Strategy) []string {
 	strategyName := make([]string, 0)
 	for _, strategy := range strategies {
@@ -267,6 +268,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1alpha1.Strategy)
 	return strings.TrimSuffix(strategiesPolicyString, "\n")
 }
 
+// addStrategyParamsForLowNodeUtilization adds parameters for low node utilization strategy.
 func addStrategyParamsForLowNodeUtilization(params []deschedulerv1alpha1.Param) string {
 	thresholds := ""
 	targetThresholds := ""
@@ -377,7 +379,8 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 								},
 							},
 							},
-							RestartPolicy: "Never",
+							PriorityClassName: "system-cluster-critical",
+							RestartPolicy:     "Never",
 							Containers: []v1.Container{{
 								Name:  "openshift-descheduler",
 								Image: "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler", // TODO: Make this configurable too.
@@ -407,7 +410,7 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 	}
 	err := controllerutil.SetControllerReference(descheduler, job, r.scheme)
 	if err != nil {
-		return nil, fmt.Errorf("Error setting owner references %v", err)
+		return nil, fmt.Errorf("error setting owner references %v", err)
 	}
 	return job, nil
 }
