@@ -40,9 +40,11 @@ spec:
          value: "50"
        - name: "podstargetthreshold"
          value: "60"
+       - name: "nodes"
+         value: "3"
     - name: "duplicates"
 ```
-The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code. Schedule field contains schedule of the cron job which would run the descheduler as a pod.
+The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code. Schedule field contains schedule of the cron job which would run the descheduler as a pod. Nodes field indicate on how many nodes the lownodeutilization strategy should run.
 
 ## How does the descheduler operator work?
 
@@ -70,6 +72,7 @@ strategies:
            "cpu" : 40
            "memory": 50
            "pods": 60
+         numberOfNodes: 3
 ```
 
-The above configmap would be mounted as a volume in descheduler cron job pod created. Whenever we change strategies, parameters or schedule in the CR, the descheduler operator is responsible for identifying those changes and regenerating the configmap.
+The above configmap would be mounted as a volume in descheduler cron job pod created. Whenever we change strategies, parameters or schedule in the CR, the descheduler operator is responsible for identifying those changes and regenerating the configmap. For more information on how descheduler works, please visit [descheduler](https://docs.openshift.com/container-platform/3.11/admin_guide/scheduling/descheduler.html)
