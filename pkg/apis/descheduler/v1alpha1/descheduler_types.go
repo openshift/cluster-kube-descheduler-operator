@@ -13,13 +13,17 @@ type DeschedulerSpec struct {
 	Strategies []Strategy `json:"strategies,omitempty"`
 	// Schedule on which cronjob should run, example would be "*/1 * * * ?"
 	Schedule string `json:"schedule,omitempty"`
+	// Flags for descheduler.
+	Flags []Param `json:"Flags"`
 }
 
+// Strategy supported by descheduler
 type Strategy struct {
 	Name   string  `json:"name,omitempty"`
 	Params []Param `json:"params"`
 }
 
+// Param is a key/value pair representing the parameters in strategy or flags.
 type Param struct {
 	Name  string `json:"name, omitempty"`
 	Value string `json:"value, omitempty"`

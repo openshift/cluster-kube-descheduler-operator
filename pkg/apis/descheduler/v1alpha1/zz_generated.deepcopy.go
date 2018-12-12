@@ -95,6 +95,11 @@ func (in *DeschedulerSpec) DeepCopyInto(out *DeschedulerSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Flags != nil {
+		in, out := &in.Flags, &out.Flags
+		*out = make([]Param, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
