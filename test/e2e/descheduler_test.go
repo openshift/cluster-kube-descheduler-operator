@@ -82,7 +82,9 @@ func deschedulerStrategiesTest(t *testing.T, f *framework.Framework, ctx *framew
 	if err != nil {
 		return err
 	}
+
 	exampleDescheduler.Spec.Strategies = buildDeschedulerStrategies([]string{"duplicates", "interpodantiaffinity"})
+
 	err = f.Client.Update(goctx.TODO(), exampleDescheduler)
 	if err != nil {
 		return err
@@ -99,6 +101,10 @@ func deschedulerStrategiesTest(t *testing.T, f *framework.Framework, ctx *framew
 		return err
 	}
 
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "example-descheduler", Namespace: namespace}, exampleDescheduler)
+	if err != nil {
+		return err
+	}
 	exampleDescheduler.Spec.Schedule = "*/4 * * * ?"
 	err = f.Client.Update(goctx.TODO(), exampleDescheduler)
 	if err != nil {
@@ -133,7 +139,7 @@ func waitForPolicyConfigMap(t *testing.T, kubeclient kubernetes.Interface, names
 	return nil
 }
 
-// waitFoCronJob waits for cronjob to be created.
+// waitForCronJob waits for cronjob to be created.
 func waitForCronJob(t *testing.T, kubeclient kubernetes.Interface, namespace, name, schedule string, retryInterval, timeout time.Duration) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		deschedulerCronJob, err := kubeclient.BatchV1beta1().CronJobs(namespace).Get(name, metav1.GetOptions{IncludeUninitialized: true})

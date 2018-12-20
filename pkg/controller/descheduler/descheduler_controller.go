@@ -124,6 +124,11 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 
 	if descheduler.Status.Phase != Running {
 		descheduler.Status.Phase = Running
+		err := r.client.Update(context.TODO(), descheduler)
+		if err != nil {
+			log.Printf("Failed to update descheduler status.")
+			return reconcile.Result{}, err
+		}
 		return reconcile.Result{Requeue: true}, nil
 	}
 
@@ -208,6 +213,11 @@ func (r *ReconcileDescheduler) generateConfigMap(descheduler *deschedulerv1alpha
 			return err
 		}
 		descheduler.Status.Phase = Updating
+		err := r.client.Update(context.TODO(), descheduler)
+		if err != nil {
+			log.Printf("Failed to update descheduler status.")
+			return err
+		}
 		return nil
 	} else if err != nil {
 		return err
@@ -314,7 +324,6 @@ func addStrategyParamsForLowNodeUtilization(params []deschedulerv1alpha1.Param) 
 
 // generateDeschedulerJob generates descheduler job.
 func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1alpha1.Descheduler) error {
-	log.Print("Inside generated descheduler job")
 	// Check if the cron job already exists
 	deschedulerCronJob := &batchv1beta1.CronJob{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: descheduler.Name, Namespace: descheduler.Namespace}, deschedulerCronJob)
@@ -342,6 +351,11 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 			return err
 		}
 		descheduler.Status.Phase = Updating
+		err := r.client.Update(context.TODO(), descheduler)
+		if err != nil {
+			log.Printf("Failed to update descheduler status.")
+			return err
+		}
 		return nil
 	} else if err != nil {
 		return err
