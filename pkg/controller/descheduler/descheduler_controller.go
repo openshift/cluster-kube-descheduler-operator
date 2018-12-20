@@ -33,8 +33,9 @@ const (
 // array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
 var validStrategies = []string{"duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity"}
 
-// deschedulerCommand provides descheduler command with policyconfigfile mounted as volume
-var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"}
+// deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
+// compatibility with 3.11
+var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "5"}
 
 /**
 * USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
