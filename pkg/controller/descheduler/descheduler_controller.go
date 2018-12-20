@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -31,6 +32,9 @@ const (
 
 // array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
 var validStrategies = []string{"duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity"}
+
+// deschedulerCommand provides descheduler command with policyconfigfile mounted as volume
+var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"}
 
 /**
 * USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
@@ -133,6 +137,30 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// ValidateFlags validates flags for descheduler. We don't validate the values here in descheduler operator.
+func ValidateFlags(flags []deschedulerv1alpha1.Param) ([]string, error) {
+	log.Printf("Validating descheduler flags")
+	if len(flags) == 0 {
+		return nil, nil
+	}
+	deschedulerFlags := make([]string, 0)
+	validFlags := []string{"descheduling-interval", "dry-run", "node-selector"}
+	for _, flag := range flags {
+		allowedFlag := false
+		for _, validFlag := range validFlags {
+			if flag.Name == validFlag {
+				allowedFlag = true
+			}
+		}
+		if allowedFlag {
+			deschedulerFlags = append(deschedulerFlags, []string{"--" + flag.Name, flag.Value}...)
+		} else {
+			return nil, fmt.Errorf("descheduler allows only following flags %v but found %v", strings.Join(validFlags, ","), flag.Name)
+		}
+	}
+	return deschedulerFlags, nil
 }
 
 // getAllStrategiesEnabled returns the list of strategies enabled for descheduler.
@@ -347,7 +375,19 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 		log.Printf("Schedule mismatch in cron job. Delete it")
 		err = r.client.Delete(context.TODO(), deschedulerCronJob)
 		if err != nil {
-			log.Printf("Error while deleting configmap")
+			log.Printf("Error while deleting cronjob")
+			return err
+		}
+		descheduler.Status.Phase = Updating
+		return nil
+	} else if !CheckIfFlagsChanged(descheduler.Spec.Flags, deschedulerCronJob.Spec.JobTemplate.Spec.
+		Template.Spec.Containers[0].Command) {
+		//By the time we reach here, job would have been created, so no need to check for nil pointers anywhere
+		// till command
+		log.Printf("Flags mismatch for descheduler. Delete cronjob")
+		err = r.client.Delete(context.TODO(), deschedulerCronJob)
+		if err != nil {
+			log.Printf("Error while deleting cronjob")
 			return err
 		}
 		descheduler.Status.Phase = Updating
@@ -363,6 +403,16 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 	return nil
 }
 
+// CheckIfFlagsChanged checks if any of the flags changed.
+func CheckIfFlagsChanged(newFlags []deschedulerv1alpha1.Param, oldFlags []string) bool {
+	latestFlags, err := ValidateFlags(newFlags)
+	if err != nil {
+		log.Printf("Invalid flags detected")
+		return false
+	}
+	return reflect.DeepEqual(latestFlags, oldFlags)
+}
+
 // CheckIfPropertyChanges checks if the given strategies or their params have changed.
 func CheckIfPropertyChanges(strategies []deschedulerv1alpha1.Strategy, existingStrategies map[string]string) bool {
 	policyString := existingStrategies["policy.yaml"]
@@ -374,6 +424,11 @@ func CheckIfPropertyChanges(strategies []deschedulerv1alpha1.Strategy, existingS
 // createCronJob creates a descheduler job.
 func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.Descheduler) (*batchv1beta1.CronJob, error) {
 	log.Printf("Creating descheduler job")
+	flags, err := ValidateFlags(descheduler.Spec.Flags)
+	if err != nil {
+		return nil, err
+	}
+	flags = append(DeschedulerCommand, flags...)
 	job := &batchv1beta1.CronJob{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "CronJob",
@@ -419,7 +474,7 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 										v1.ResourceMemory: resource.MustParse("500Mi"),
 									},
 								},
-								Command: []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml"},
+								Command: flags,
 								VolumeMounts: []v1.VolumeMount{{
 									MountPath: "/policy-dir",
 									Name:      "policy-volume",
@@ -432,7 +487,7 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 			},
 		},
 	}
-	err := controllerutil.SetControllerReference(descheduler, job, r.scheme)
+	err = controllerutil.SetControllerReference(descheduler, job, r.scheme)
 	if err != nil {
 		return nil, fmt.Errorf("error setting owner references %v", err)
 	}

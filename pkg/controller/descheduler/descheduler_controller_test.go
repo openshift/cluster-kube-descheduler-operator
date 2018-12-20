@@ -164,3 +164,68 @@ func TestCheckIfPropertyChanges(t *testing.T) {
 		}
 	}
 }
+
+func TestDeschedulerFlags(t *testing.T) {
+	tests := []struct {
+		description        string
+		flags              []deschedulerv1alpha1.Param
+		flagsBuiltExpected []string
+		expectError        bool
+	}{
+		{
+			description:        "Valid descheduler flags",
+			flags:              []deschedulerv1alpha1.Param{{Name: "descheduling-interval", Value: "10"}, {Name: "dry-run", Value: "20"}, {Name: "node-selector", Value: "abc"}},
+			flagsBuiltExpected: []string{"descheduling-interval", "dry-run", "node-selector"},
+			expectError:        false,
+		},
+		{
+			description:        "Invalid descheduler flags",
+			flags:              []deschedulerv1alpha1.Param{{Name: "descheduling-interval1", Value: "10"}, {Name: "dry-run", Value: "20"}, {Name: "node-selector", Value: "abc"}},
+			flagsBuiltExpected: []string{"descheduling-interval", "dry-run", "node-selector"},
+			expectError:        true,
+		},
+		{
+			description:        "No flags",
+			flags:              []deschedulerv1alpha1.Param{},
+			flagsBuiltExpected: []string{},
+			expectError:        false,
+		},
+	}
+	for _, test := range tests {
+		var actualError bool
+		flagsBuilt, err := ValidateFlags(test.flags)
+		if err != nil {
+			actualError = true
+		}
+		if test.expectError != actualError || reflect.DeepEqual(flagsBuilt, test.flagsBuiltExpected) {
+			t.Fatalf("Validation failed for test %v", test.description)
+		}
+	}
+}
+
+func TestCheckIfFlagsChanged(t *testing.T) {
+	tests := []struct {
+		description string
+		newFlags    []deschedulerv1alpha1.Param
+		oldFlags    []string
+		expectError bool
+	}{
+		{
+			description: "Update descheduler flags",
+			newFlags:    []deschedulerv1alpha1.Param{{Name: "descheduling-interval", Value: "10"}, {Name: "dry-run", Value: "20"}, {Name: "node-selector", Value: "abc"}},
+			oldFlags:    []string{"descheduling-interval", "10", "dry-run", "20", "node-selector", "abc"},
+			expectError: false,
+		},
+		{
+			description: "Update descheduler flags",
+			newFlags:    []deschedulerv1alpha1.Param{{Name: "descheduling-interval", Value: "10"}, {Name: "dry-run", Value: "20"}, {Name: "node-selector", Value: "abc"}},
+			oldFlags:    []string{"descheduling-interval", "20", "dry-run", "20", "node-selector", "abc"},
+			expectError: false,
+		},
+	}
+	for _, test := range tests {
+		if test.expectError != CheckIfFlagsChanged(test.newFlags, test.oldFlags) {
+			t.Fatalf("Flags mismatch for %v", test.description)
+		}
+	}
+}
