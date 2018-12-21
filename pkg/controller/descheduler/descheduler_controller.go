@@ -128,10 +128,7 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	if descheduler.Status.Phase != Running {
-		descheduler.Status.Phase = Running
-		err := r.client.Update(context.TODO(), descheduler)
-		if err != nil {
-			log.Printf("Failed to update descheduler status.")
+		if err := r.updateDeschedulerStatus(descheduler, Running); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
@@ -234,20 +231,13 @@ func (r *ReconcileDescheduler) generateConfigMap(descheduler *deschedulerv1alpha
 		}
 	} else if !CheckIfPropertyChanges(descheduler.Spec.Strategies, deschedulerConfigMap.Data) {
 		// descheduler strategies got updated. Let's delete the configmap and in next reconcilation phase, we would create a new one.
-		// TODO: Delete job as well.
 		log.Printf("Strategy mismatch in configmap. Delete it")
 		err = r.client.Delete(context.TODO(), deschedulerConfigMap)
 		if err != nil {
 			log.Printf("Error while deleting configmap")
 			return err
 		}
-		descheduler.Status.Phase = Updating
-		err := r.client.Update(context.TODO(), descheduler)
-		if err != nil {
-			log.Printf("Failed to update descheduler status.")
-			return err
-		}
-		return nil
+		return r.updateDeschedulerStatus(descheduler, Updating)
 	} else if err != nil {
 		return err
 	}
@@ -379,8 +369,7 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 			log.Printf("Error while deleting cronjob")
 			return err
 		}
-		descheduler.Status.Phase = Updating
-		return nil
+		return r.updateDeschedulerStatus(descheduler, Updating)
 	} else if !CheckIfFlagsChanged(descheduler.Spec.Flags, deschedulerCronJob.Spec.JobTemplate.Spec.
 		Template.Spec.Containers[0].Command) {
 		//By the time we reach here, job would have been created, so no need to check for nil pointers anywhere
@@ -391,14 +380,20 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 			log.Printf("Error while deleting cronjob")
 			return err
 		}
-		descheduler.Status.Phase = Updating
-		err := r.client.Update(context.TODO(), descheduler)
-		if err != nil {
-			log.Printf("Failed to update descheduler status.")
-			return err
-		}
-		return nil
+		return r.updateDeschedulerStatus(descheduler, Updating)
 	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+// updateDeschedulerStatus from currentPhase to desiredPhase
+func (r *ReconcileDescheduler) updateDeschedulerStatus(descheduler *deschedulerv1alpha1.Descheduler, desiredPhase string) error {
+	currentPhase := descheduler.Status.Phase
+	descheduler.Status.Phase = desiredPhase
+	err := r.client.Update(context.TODO(), descheduler)
+	if err != nil {
+		log.Printf("Failed to update descheduler status from %v to %v", currentPhase, desiredPhase)
 		return err
 	}
 	return nil
