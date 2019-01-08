@@ -391,6 +391,10 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 func (r *ReconcileDescheduler) updateDeschedulerStatus(descheduler *deschedulerv1alpha1.Descheduler, desiredPhase string) error {
 	currentPhase := descheduler.Status.Phase
 	descheduler.Status.Phase = desiredPhase
+	// Return immediately if phases are same without having to update to reduce API calls.
+	if currentPhase == desiredPhase {
+		return nil
+	}
 	err := r.client.Update(context.TODO(), descheduler)
 	if err != nil {
 		log.Printf("Failed to update descheduler status from %v to %v", currentPhase, desiredPhase)
