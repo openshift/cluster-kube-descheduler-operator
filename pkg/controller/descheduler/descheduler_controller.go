@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	deschedulerv1alpha1 "github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
@@ -15,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	Running  = "RunningPhase"
-	Updating = "UpdatingPhase"
+	Running      = "RunningPhase"
+	Updating     = "UpdatingPhase"
+	defaultImage = "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler"
 )
 
 // array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
@@ -105,7 +106,7 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	// Descheduler. If descheduler object doesn't have any of the valid fields, return error
-	// immediately, don't proceed with config map/ job creation.
+	// immediately, don't proceed with config map/job creation.
 
 	if len(descheduler.Spec.Schedule) == 0 {
 		log.Printf("Descheduler should have schedule for cron job set")
@@ -122,10 +123,13 @@ func (r *ReconcileDescheduler) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	// Generate descheduler job.
+	// Generate descheduler cron job.
 	if err := r.generateDeschedulerJob(descheduler); err != nil {
 		return reconcile.Result{}, err
 	}
+	// TODO: Add validation logic to monitor the cronjob failed for n times
+	// with image related issues(eg: ImagePullError etc) and create the cronjob
+	// with default image specified above.
 
 	if descheduler.Status.Phase != Running {
 		if err := r.updateDeschedulerStatus(descheduler, Running); err != nil {
@@ -381,6 +385,14 @@ func (r *ReconcileDescheduler) generateDeschedulerJob(descheduler *deschedulerv1
 			return err
 		}
 		return r.updateDeschedulerStatus(descheduler, Updating)
+	} else if descheduler.Spec.Image != deschedulerCronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image {
+		log.Printf("Image mismatch within descheduler. Delete cronjob")
+		err = r.client.Delete(context.TODO(), deschedulerCronJob)
+		if err != nil {
+			log.Printf("Error while deleting cronjob")
+			return err
+		}
+		return r.updateDeschedulerStatus(descheduler, Updating)
 	} else if err != nil {
 		return err
 	}
@@ -428,6 +440,10 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 	if err != nil {
 		return nil, err
 	}
+	if len(descheduler.Spec.Image) == 0 {
+		// Set the default image here
+		descheduler.Spec.Image = defaultImage // No need to update the CR here making it opaque to end-user
+	}
 	flags = append(DeschedulerCommand, flags...)
 	job := &batchv1beta1.CronJob{
 		TypeMeta: metav1.TypeMeta{
@@ -462,8 +478,7 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 							RestartPolicy:     "Never",
 							Containers: []v1.Container{{
 								Name:  "openshift-descheduler",
-								Image: "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler", // TODO: Make this configurable too.
-								Ports: []v1.ContainerPort{{ContainerPort: 80}},
+								Image: descheduler.Spec.Image,
 								Resources: v1.ResourceRequirements{
 									Limits: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("100m"),

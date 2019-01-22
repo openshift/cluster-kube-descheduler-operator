@@ -15,6 +15,8 @@ type DeschedulerSpec struct {
 	Schedule string `json:"schedule,omitempty"`
 	// Flags for descheduler.
 	Flags []Param `json:"Flags"`
+	// Image of the deschduler being managed. This includes the version of the operand(descheduler).
+	Image string `json:"image, omitempty"`
 }
 
 // Strategy supported by descheduler
