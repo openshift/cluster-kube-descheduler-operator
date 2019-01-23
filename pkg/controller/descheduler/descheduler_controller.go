@@ -28,7 +28,7 @@ import (
 const (
 	Running      = "RunningPhase"
 	Updating     = "UpdatingPhase"
-	defaultImage = "registry.svc.ci.openshift.org/openshift/origin-v4.0:descheduler"
+	DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 )
 
 // array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
@@ -442,7 +442,7 @@ func (r *ReconcileDescheduler) createCronJob(descheduler *deschedulerv1alpha1.De
 	}
 	if len(descheduler.Spec.Image) == 0 {
 		// Set the default image here
-		descheduler.Spec.Image = defaultImage // No need to update the CR here making it opaque to end-user
+		descheduler.Spec.Image = DefaultImage // No need to update the CR here making it opaque to end-user
 	}
 	flags = append(DeschedulerCommand, flags...)
 	job := &batchv1beta1.CronJob{
