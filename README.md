@@ -23,6 +23,7 @@ apiVersion: descheduler.io/v1alpha1
 kind: Descheduler
 metadata:
   name: example-descheduler-1
+  namespace: openshift-operators
 spec:
   schedule: "*/1 * * * ?"
   strategies: 
