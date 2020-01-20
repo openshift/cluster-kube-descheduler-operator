@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openshift/descheduler-operator/pkg/apis"
-	operator "github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
-	"github.com/openshift/descheduler-operator/pkg/controller/descheduler"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/apis"
+	operator "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1alpha1"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/controller/descheduler"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

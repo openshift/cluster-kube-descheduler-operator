@@ -3,16 +3,16 @@
 IMAGE_REPOSITORY_NAME ?= openshift
 
 build:
-	go build -o descheduler-operator github.com/openshift/descheduler-operator/cmd/manager
+	go build -o cluster-kube-descheduler-operator github.com/openshift/cluster-kube-descheduler-operator/cmd/manager
 
 image:
-	imagebuilder -f Dockerfile -t $(IMAGE_REPOSITORY_NAME)/descheduler-operator .
+	imagebuilder -f Dockerfile -t $(IMAGE_REPOSITORY_NAME)/cluster-kube-descheduler-operator .
 
 clean:
-	rm -rf descheduler-operator 
+	rm -rf cluster-kube-descheduler-operator 
 
 test-unit:
-	go test -race -v github.com/openshift/descheduler-operator/pkg/controller/descheduler
+	go test -race -v github.com/openshift/cluster-kube-descheduler-operator/pkg/controller/descheduler
 
 verify-gofmt:
 	hack/verify-gofmt.sh

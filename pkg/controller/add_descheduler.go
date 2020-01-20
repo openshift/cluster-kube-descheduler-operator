@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/openshift/descheduler-operator/pkg/controller/descheduler"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/controller/descheduler"
 )
 
 func init() {

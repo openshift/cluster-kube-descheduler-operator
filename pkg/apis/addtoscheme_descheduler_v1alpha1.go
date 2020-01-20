@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1alpha1"
 )
 
 func init() {

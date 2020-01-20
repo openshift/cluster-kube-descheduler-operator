@@ -5,8 +5,8 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/openshift/descheduler-operator/pkg/apis"
-	"github.com/openshift/descheduler-operator/pkg/controller"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/apis"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/controller"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"

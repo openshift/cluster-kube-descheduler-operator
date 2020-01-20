@@ -1,4 +1,4 @@
-# descheduler-operator
+# cluster-kube-descheduler-operator
 An operator to run descheduler on OpenShift
 
 To deploy the operator:
