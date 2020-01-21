@@ -4,12 +4,12 @@ An operator to run descheduler on OpenShift
 To deploy the operator:
 
 ```
-oc create -f deploy/ns.yaml
-oc create -f deploy/crd.yaml
+oc create -f deploy/namespace.yaml
+oc create -f deploy/crds/descheduler_v1alpha1_descheduler_crd.yaml
 oc create -f deploy/role.yaml
 oc create -f deploy/role_binding.yaml
 oc create -f deploy/operator.yaml
-oc create -f deploy/cr.yaml
+oc create -f deploy/crds/descheduler_v1alpha1_descheduler_cr.yaml
 ```
 
 Replace `oc` with `kubectl` in case you want descheduler to run with kubernetes. All the required components are created in `openshift-descheduler-operator` namespace. 
