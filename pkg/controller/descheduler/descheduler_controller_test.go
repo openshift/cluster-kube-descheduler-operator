@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	deschedulerv1alpha1 "github.com/openshift/descheduler-operator/pkg/apis/descheduler/v1alpha1"
+	deschedulerv1alpha1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1alpha1"
 )
 
 func TestValidateStrategies(t *testing.T) {
