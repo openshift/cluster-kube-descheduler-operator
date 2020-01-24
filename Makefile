@@ -21,9 +21,9 @@ IMAGE_REGISTRY :=registry.svc.ci.openshift.org
 # $4 - context directory for image build
 $(call build-image,ocp-cluster-kube-descheduler-operator,$(IMAGE_REGISTRY)/ocp/4.4:cluster-kube-descheduler-operator, ./Dockerfile.rhel7,.)
 
-e2e: GO_TEST_PACKAGES :=./test/e2e
-e2e: test-unit
-.PHONY: e2e
+test-e2e: GO_TEST_PACKAGES :=./test/e2e
+test-e2e: test-unit
+.PHONY: test-e2e
 
 clean:
 	$(RM) ./cluster-kube-scheduler-operator
