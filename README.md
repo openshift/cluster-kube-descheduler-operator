@@ -1,4 +1,4 @@
-# cluster-kube-descheduler-operator
+# descheduler-operator
 An operator to run descheduler on OpenShift
 
 To deploy the operator:
@@ -19,8 +19,8 @@ Replace `oc` with `kubectl` in case you want descheduler to run with kubernetes.
 A sample CR definition looks like below:
 
 ```yaml
-apiVersion: descheduler.io/v1alpha1
-kind: Descheduler
+apiVersion: kubedeschedulers.operator.openshift.io/v1beta1
+kind: KubeDescheduler
 metadata:
   name: example-descheduler-1
   namespace: openshift-operators
@@ -56,7 +56,7 @@ Descheduler operator at a high level is responsible for watching the above CR
 The configmap created from above sample CR definition looks like this:
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "kubedeschedulers.operator.openshift.io/v1beta1"
 kind: "DeschedulerPolicy"
 strategies:
   "RemoveDuplicates":
