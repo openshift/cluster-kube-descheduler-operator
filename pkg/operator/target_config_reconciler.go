@@ -9,6 +9,7 @@ import (
 	deschedulerv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
 	operatorconfigclientv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1beta1"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/operator/events"
 
 	batch "k8s.io/api/batch/v1"
@@ -56,18 +57,12 @@ func NewTargetConfigReconciler(
 	}
 
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
-	descheduler, err := c.operatorClient.KubeDeschedulers("openshift-kube-descheduler-operator").Get("cluster", metav1.GetOptions{})
-	if err != nil {
-		fmt.Printf("ERROR %+v\n\n", err)
-	} else {
-		fmt.Printf("DESCHEDULER %+v\n\n", descheduler)
-	}
 
 	return c
 }
 
 func (c TargetConfigReconciler) sync() error {
-	descheduler, err := c.operatorClient.KubeDeschedulers("openshift-kube-descheduler-operator").Get("cluster", metav1.GetOptions{})
+	descheduler, err := c.operatorClient.KubeDeschedulers(operatorclient.OperatorNamespace).Get("cluster", metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

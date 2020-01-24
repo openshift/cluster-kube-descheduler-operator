@@ -8,6 +8,7 @@ import (
 
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 )
@@ -24,7 +25,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient,
 		"",
-		"openshift-kube-descheduler-operator",
+		operatorclient.OperatorNamespace,
 	)
 
 	operatorConfigClient, err := operatorconfigclient.NewForConfig(cc.KubeConfig)
