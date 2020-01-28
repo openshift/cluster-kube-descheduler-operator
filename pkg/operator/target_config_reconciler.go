@@ -32,7 +32,7 @@ import (
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 
 // array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
-var validStrategies = sets.NewString("duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity")
+var validStrategies = sets.NewString("duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity", "nodetaints")
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -181,6 +181,8 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 					NodeAffinityType: []string{"requiredDuringSchedulingIgnoredDuringExecution"},
 				},
 			}
+		case "nodetaints":
+			policy.Strategies["RemovePodsViolatingNodeTaints"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
 		default:
 			klog.Warningf("not using unknown strategy '%s'", strategy.Name)
 		}
