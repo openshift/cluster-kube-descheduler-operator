@@ -2,7 +2,7 @@ package operator
 
 import (
 	"fmt"
-	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,13 +10,13 @@ import (
 	operatorconfigclientv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1beta1"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/v410_00_assets"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 
-	batch "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -67,17 +67,17 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if len(descheduler.Spec.Schedule) == 0 {
-		return fmt.Errorf("descheduler should have schedule for cron job set")
+	if descheduler.Spec.DeschedulingIntervalSeconds == nil {
+		return fmt.Errorf("descheduler should have an interval set")
 	}
 
 	if err := validateStrategies(descheduler.Spec.Strategies); err != nil {
 		return err
 	}
-	if err := c.generateConfigMap(descheduler); err != nil {
+	if _, _, err := c.manageConfigMap(descheduler); err != nil {
 		return err
 	}
-	if err := c.generateDeschedulerJob(descheduler); err != nil {
+	if _, _, err := c.manageDeployment(descheduler); err != nil {
 		return err
 	}
 
@@ -106,48 +106,20 @@ func validateStrategies(strategies []deschedulerv1beta1.Strategy) error {
 	return nil
 }
 
-func (c *TargetConfigReconciler) generateConfigMap(descheduler *deschedulerv1beta1.KubeDescheduler) error {
-	configMap, err := c.kubeClient.CoreV1().ConfigMaps(descheduler.Namespace).Get(descheduler.Name, metav1.GetOptions{})
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-		// configmap was not found, so create it
-		cm := &v1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      descheduler.Name,
-				Namespace: descheduler.Namespace,
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "v1beta1",
-						Kind:       "KubeDescheduler",
-						Name:       descheduler.Name,
-						UID:        descheduler.UID,
-					},
-				},
-			},
-			Data: map[string]string{
-				"policy.yaml": generateConfigMapString(descheduler.Spec.Strategies),
-			},
-		}
-		if _, err := c.kubeClient.CoreV1().ConfigMaps(descheduler.Namespace).Create(cm); err != nil {
-			return err
-		}
-		return nil
+func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
+	required := resourceread.ReadConfigMapV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/configmap.yaml"))
+	required.Name = descheduler.Name
+	required.Namespace = descheduler.Namespace
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1beta1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
 	}
-
-	if propertiesHaveChanged(descheduler.Spec.Strategies, configMap.Data) {
-		configMap.Data = map[string]string{"policy.yaml": generateConfigMapString(descheduler.Spec.Strategies)}
-		if _, err := c.kubeClient.CoreV1().ConfigMaps(descheduler.Namespace).Update(configMap); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	required.Data = map[string]string{"policy.yaml": generateConfigMapString(descheduler.Spec.Strategies)}
+	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
 // generateConfigMapString generates configmap needed for the string.
@@ -221,36 +193,23 @@ func addStrategyParamsForLowNodeUtilization(params []deschedulerv1beta1.Param) s
 	return thresholdsString + "\n" + thresholds + targetThresholdsString + "\n" + targetThresholds + noOfNodes
 }
 
-func propertiesHaveChanged(strategies []deschedulerv1beta1.Strategy, existingStrategies map[string]string) bool {
-	policyString := existingStrategies["policy.yaml"]
-	return policyString == generateConfigMapString(strategies)
-}
-
-func (c *TargetConfigReconciler) generateDeschedulerJob(descheduler *deschedulerv1beta1.KubeDescheduler) error {
-	cronJob, err := c.kubeClient.BatchV1beta1().CronJobs(descheduler.Namespace).Get(descheduler.Name, metav1.GetOptions{})
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-		return c.createCronJob(descheduler)
+func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta1.KubeDescheduler) (*appsv1.Deployment, bool, error) {
+	required := resourceread.ReadDeploymentV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/deployment.yaml"))
+	required.Name = descheduler.Name
+	required.Namespace = descheduler.Namespace
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1beta1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
 	}
-
-	if cronJob.Spec.Schedule != descheduler.Spec.Schedule ||
-		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image != descheduler.Spec.Image ||
-		flagsChanged(descheduler.Spec.Flags, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Command) {
-		// Delete should trigger a new sync event to create the CronJob again with the new params
-		return c.kubeClient.BatchV1beta1().CronJobs(descheduler.Namespace).Delete(descheduler.Name, &metav1.DeleteOptions{})
-	}
-
-	return nil
-}
-
-func flagsChanged(newFlags []deschedulerv1beta1.Param, oldFlags []string) bool {
-	latestFlags, err := ValidateFlags(newFlags)
-	if err != nil {
-		return false
-	}
-	return reflect.DeepEqual(latestFlags, oldFlags)
+	required.Spec.Template.Spec.Containers[0].Image = descheduler.Spec.Image
+	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
+		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
+	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
+	return resourceapply.ApplyDeployment(c.kubeClient.AppsV1(), c.eventRecorder, required, 0, true)
 }
 
 // ValidateFlags validates flags for descheduler. We don't validate the values here in descheduler operator.
@@ -274,85 +233,6 @@ func ValidateFlags(flags []deschedulerv1beta1.Param) ([]string, error) {
 		}
 	}
 	return deschedulerFlags, nil
-}
-
-func (c *TargetConfigReconciler) createCronJob(descheduler *deschedulerv1beta1.KubeDescheduler) error {
-	flags, err := ValidateFlags(descheduler.Spec.Flags)
-	if err != nil {
-		return err
-	}
-	if len(descheduler.Spec.Image) == 0 {
-		// Set the default image here
-		descheduler.Spec.Image = DefaultImage // No need to update the CR here making it opaque to end-user
-	}
-	flags = append(DeschedulerCommand, flags...)
-	job := &batchv1beta1.CronJob{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "CronJob",
-			APIVersion: batch.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      descheduler.Name,
-			Namespace: descheduler.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "v1beta1",
-					Kind:       "KubeDescheduler",
-					Name:       descheduler.Name,
-					UID:        descheduler.UID,
-				},
-			},
-		},
-		Spec: batchv1beta1.CronJobSpec{
-			Schedule: descheduler.Spec.Schedule,
-			JobTemplate: batchv1beta1.JobTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "descheduler-job-spec",
-				},
-				Spec: batch.JobSpec{
-					Template: v1.PodTemplateSpec{
-						Spec: v1.PodSpec{
-							Volumes: []v1.Volume{{
-								Name: "policy-volume",
-								VolumeSource: v1.VolumeSource{
-									ConfigMap: &v1.ConfigMapVolumeSource{
-										LocalObjectReference: v1.LocalObjectReference{
-											Name: descheduler.Name,
-										},
-									},
-								},
-							},
-							},
-							PriorityClassName: "system-cluster-critical",
-							RestartPolicy:     "Never",
-							Containers: []v1.Container{{
-								Name:  "openshift-descheduler",
-								Image: descheduler.Spec.Image,
-								Resources: v1.ResourceRequirements{
-									Limits: v1.ResourceList{
-										v1.ResourceCPU:    resource.MustParse("100m"),
-										v1.ResourceMemory: resource.MustParse("500Mi"),
-									},
-									Requests: v1.ResourceList{
-										v1.ResourceCPU:    resource.MustParse("100m"),
-										v1.ResourceMemory: resource.MustParse("500Mi"),
-									},
-								},
-								Command: flags,
-								VolumeMounts: []v1.VolumeMount{{
-									MountPath: "/policy-dir",
-									Name:      "policy-volume",
-								}},
-							}},
-							ServiceAccountName: "openshift-descheduler", // TODO: This is hardcoded as of now, find a way to reference it from rbac.yaml.
-						},
-					},
-				},
-			},
-		},
-	}
-	_, err = c.kubeClient.BatchV1beta1().CronJobs(descheduler.Namespace).Create(job)
-	return err
 }
 
 // Run starts the kube-scheduler and blocks until stopCh is closed.

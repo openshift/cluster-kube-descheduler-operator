@@ -24,8 +24,8 @@ type KubeDeschedulerSpec struct {
 
 	// Strategies contain list of strategies that should be enabled in descheduler.
 	Strategies []Strategy `json:"strategies,omitempty"`
-	// Schedule on which cronjob should run, example would be "*/1 * * * ?"
-	Schedule string `json:"schedule,omitempty"`
+	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
+	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds"`
 	// Flags for descheduler.
 	Flags []Param `json:"Flags"`
 	// Image of the deschduler being managed. This includes the version of the operand(descheduler).
