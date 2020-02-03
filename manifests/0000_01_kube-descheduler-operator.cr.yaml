@@ -1,7 +1,0 @@
-apiVersion: operator.openshift.io/v1beta1
-kind: KubeDescheduler
-metadata:
-  name: cluster
-  namespace: openshift-kube-descheduler-operator
-spec:
-  image: gcr.io/k8s-staging-descheduler/descheduler
