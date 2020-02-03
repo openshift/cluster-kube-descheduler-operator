@@ -12,21 +12,21 @@ oc create -f deploy/operator.yaml
 oc create -f deploy/cr.yaml
 ```
 
-Replace `oc` with `kubectl` in case you want descheduler to run with kubernetes. All the required components are created in `openshift-descheduler-operator` namespace. 
+Replace `oc` with `kubectl` in case you want descheduler to run with kubernetes. All the required components are created in `openshift-descheduler-operator` namespace.
 
 ## Sample CR
 
-A sample CR definition looks like below:
+A sample CR definition looks like below (the operator expects `config` CR under `openshift-kube-descheduler-operator` namespace):
 
 ```yaml
-apiVersion: kubedeschedulers.operator.openshift.io/v1beta1
+apiVersion: operator.openshift.io/v1beta1
 kind: KubeDescheduler
 metadata:
-  name: example-descheduler-1
-  namespace: openshift-operators
+  name: config
+  namespace: openshift-kube-descheduler-operator
 spec:
   schedule: "*/1 * * * ?"
-  strategies: 
+  strategies:
     - name: "lownodeutilization"
       params:
        - name: "cputhreshold"
@@ -49,7 +49,7 @@ The valid list of strategies are "lownodeutilization", "duplicates", "interpodan
 
 ## How does the descheduler operator work?
 
-Descheduler operator at a high level is responsible for watching the above CR 
+Descheduler operator at a high level is responsible for watching the above CR
 - Create a configmap that could be used by descheduler.
 - Run descheduler as a cron job after creating configmap.
 
