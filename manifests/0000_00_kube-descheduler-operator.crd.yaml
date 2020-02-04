@@ -29,23 +29,16 @@ spec:
           description: KubeDeschedulerSpec defines the desired state of KubeDescheduler
           type: object
           properties:
-            Flags:
-              description: Flags for descheduler.
-              type: array
-              items:
-                description: Param is a key/value pair representing the parameters
-                  in strategy or flags.
-                type: object
-                properties:
-                  name:
-                    type: string
-                  value:
-                    type: string
             deschedulingIntervalSeconds:
               description: DeschedulingIntervalSeconds is the number of seconds between
                 descheduler runs
               type: integer
               format: int32
+            flags:
+              description: Flags for descheduler.
+              type: array
+              items:
+                type: string
             image:
               description: Image of the deschduler being managed. This includes the
                 version of the operand(descheduler).

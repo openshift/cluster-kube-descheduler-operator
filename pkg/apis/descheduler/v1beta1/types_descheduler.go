@@ -27,7 +27,7 @@ type KubeDeschedulerSpec struct {
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
 	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds"`
 	// Flags for descheduler.
-	Flags []Param `json:"Flags"`
+	Flags []string `json:"flags"`
 	// Image of the deschduler being managed. This includes the version of the operand(descheduler).
 	Image string `json:"image, omitempty"`
 }

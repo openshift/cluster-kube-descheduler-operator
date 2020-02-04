@@ -208,31 +208,13 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 	required.Spec.Template.Spec.Containers[0].Image = descheduler.Spec.Image
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
+
+	// Add any additional flags that were specified
+	if len(descheduler.Spec.Flags) > 0 {
+		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, descheduler.Spec.Flags...)
+	}
 	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
 	return resourceapply.ApplyDeployment(c.kubeClient.AppsV1(), c.eventRecorder, required, 0, true)
-}
-
-// ValidateFlags validates flags for descheduler. We don't validate the values here in descheduler operator.
-func ValidateFlags(flags []deschedulerv1beta1.Param) ([]string, error) {
-	if len(flags) == 0 {
-		return nil, nil
-	}
-	deschedulerFlags := make([]string, 0)
-	validFlags := []string{"descheduling-interval", "dry-run", "node-selector"}
-	for _, flag := range flags {
-		allowedFlag := false
-		for _, validFlag := range validFlags {
-			if flag.Name == validFlag {
-				allowedFlag = true
-			}
-		}
-		if allowedFlag {
-			deschedulerFlags = append(deschedulerFlags, []string{"--" + flag.Name, flag.Value}...)
-		} else {
-			return nil, fmt.Errorf("descheduler allows only following flags %v but found %v", strings.Join(validFlags, ","), flag.Name)
-		}
-	}
-	return deschedulerFlags, nil
 }
 
 // Run starts the kube-scheduler and blocks until stopCh is closed.
