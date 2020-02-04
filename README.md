@@ -9,6 +9,18 @@ oc create -f manifests/.
 
 Replace `oc` with `kubectl` in case you want descheduler to run with kubernetes. All the required components are created in `openshift-descheduler-operator` namespace.
 
+## Descheduler strategies
+
+The Descheduler operator attempts to simplify the descheduler strategy names from their [upstream names](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies). Thus when set on the operator, these strategy names map to:
+
+| Operator param | Descheduler strategy |
+| ---- | ---- |
+| `duplicates` | `RemoveDuplicates` |
+| `interpodantiaffinity` | `RemovePodsViolatingInterPodAntiAffinity` |
+| `lownodeutilization` | `LowNodeUtilization` |
+| `nodeaffinity` | `RemovePodsViolatingNodeAffinity` |
+| `nodetaints` | `RemovePodsViolatingNodeTaints` |
+
 ## Sample CR
 
 A sample CR definition looks like below (the operator expects `config` CR under `openshift-kube-descheduler-operator` namespace):

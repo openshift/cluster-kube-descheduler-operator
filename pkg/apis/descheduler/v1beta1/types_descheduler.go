@@ -14,8 +14,8 @@ type KubeDescheduler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   KubeDeschedulerSpec   `json:"spec,omitempty"`
-	Status KubeDeschedulerStatus `json:"status,omitempty"`
+	Spec   KubeDeschedulerSpec   `json:"spec"`
+	Status KubeDeschedulerStatus `json:"status"`
 }
 
 // KubeDeschedulerSpec defines the desired state of KubeDescheduler
