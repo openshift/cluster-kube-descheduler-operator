@@ -72,3 +72,11 @@ strategies:
 ```
 
 The above configmap would be mounted as a volume in descheduler pod created. Whenever we change strategies, parameters or schedule in the CR, the descheduler operator is responsible for identifying those changes and regenerating the configmap. For more information on how descheduler works, please visit [descheduler](https://docs.openshift.com/container-platform/3.11/admin_guide/scheduling/descheduler.html)
+
+
+## Parameters
+The Descheduler operator exposes the following parameters in its CRD:
+
+* `deschedulingIntervalSeconds` - this sets the number of seconds between descheduler runs
+* `image` - specifies the Descheduler container image to deploy
+* `flags` - this allows additional descheduler flags to be set, and they will be appended to the descheduler pod. Therefore, they must be in the same format as would be passed to the descheduler binary (eg, `"--dry-run"`)
