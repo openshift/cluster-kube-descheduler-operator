@@ -2,10 +2,12 @@ package operator
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	operatorv1 "github.com/openshift/api/operator/v1"
 	deschedulerv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
 	operatorconfigclientv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1beta1"
@@ -13,10 +15,13 @@ import (
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/v410_00_assets"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
+	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -37,23 +42,26 @@ var validStrategies = sets.NewString("duplicates", "interpodantiaffinity", "lown
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "5"}
 
 type TargetConfigReconciler struct {
-	operatorClient operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
-	kubeClient     kubernetes.Interface
-	eventRecorder  events.Recorder
-	queue          workqueue.RateLimitingInterface
+	operatorClient    operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
+	deschedulerClient *operatorclient.DeschedulerClient
+	kubeClient        kubernetes.Interface
+	eventRecorder     events.Recorder
+	queue             workqueue.RateLimitingInterface
 }
 
 func NewTargetConfigReconciler(
 	operatorConfigClient operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface,
 	operatorClientInformer operatorclientinformers.KubeDeschedulerInformer,
+	deschedulerClient *operatorclient.DeschedulerClient,
 	kubeClient kubernetes.Interface,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
 	c := &TargetConfigReconciler{
-		operatorClient: operatorConfigClient,
-		kubeClient:     kubeClient,
-		eventRecorder:  eventRecorder,
-		queue:          workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
+		operatorClient:    operatorConfigClient,
+		deschedulerClient: deschedulerClient,
+		kubeClient:        kubeClient,
+		eventRecorder:     eventRecorder,
+		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
 	}
 
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
@@ -74,14 +82,21 @@ func (c TargetConfigReconciler) sync() error {
 	if err := validateStrategies(descheduler.Spec.Strategies); err != nil {
 		return err
 	}
-	if _, _, err := c.manageConfigMap(descheduler); err != nil {
+	forceDeployment := false
+	_, forceDeployment, err = c.manageConfigMap(descheduler)
+	if err != nil {
 		return err
 	}
-	if _, _, err := c.manageDeployment(descheduler); err != nil {
+	deployment, _, err := c.manageDeployment(descheduler, forceDeployment)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	_, _, err = v1helpers.UpdateStatus(c.deschedulerClient, func(status *operatorv1.OperatorStatus) error {
+		resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
+		return nil
+	})
+	return err
 }
 
 func validateStrategies(strategies []deschedulerv1beta1.Strategy) error {
@@ -193,7 +208,7 @@ func addStrategyParamsForLowNodeUtilization(params []deschedulerv1beta1.Param) s
 	return thresholdsString + "\n" + thresholds + targetThresholdsString + "\n" + targetThresholds + noOfNodes
 }
 
-func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta1.KubeDescheduler) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/deployment.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace
@@ -213,8 +228,35 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 	if len(descheduler.Spec.Flags) > 0 {
 		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, descheduler.Spec.Flags...)
 	}
-	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
-	return resourceapply.ApplyDeployment(c.kubeClient.AppsV1(), c.eventRecorder, required, 0, true)
+
+	if !forceDeployment {
+		existingDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(descheduler.Name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				forceDeployment = true
+			} else {
+				return nil, false, err
+			}
+		} else {
+			forceDeployment = deploymentChanged(existingDeployment, required)
+		}
+	}
+	return resourceapply.ApplyDeployment(
+		c.kubeClient.AppsV1(),
+		c.eventRecorder,
+		required,
+		resourcemerge.ExpectedDeploymentGeneration(required, descheduler.Status.Generations),
+		forceDeployment)
+}
+
+func deploymentChanged(existing, new *appsv1.Deployment) bool {
+	newArgs := sets.NewString(new.Spec.Template.Spec.Containers[0].Args...)
+	existingArgs := sets.NewString(existing.Spec.Template.Spec.Containers[0].Args...)
+	return existing.Name != new.Name ||
+		existing.Namespace != new.Namespace ||
+		existing.Spec.Template.Spec.Containers[0].Image != new.Spec.Template.Spec.Containers[0].Image ||
+		existing.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name != new.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name ||
+		!reflect.DeepEqual(newArgs, existingArgs)
 }
 
 // Run starts the kube-scheduler and blocks until stopCh is closed.

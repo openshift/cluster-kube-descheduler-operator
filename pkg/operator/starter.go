@@ -34,9 +34,15 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	}
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 
+	deschedulerClient := &operatorclient.DeschedulerClient{
+		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1beta1().KubeDeschedulers().Informer(),
+		OperatorClient: operatorConfigClient.KubedeschedulersV1beta1(),
+	}
+
 	targetConfigReconciler := NewTargetConfigReconciler(
 		operatorConfigClient.KubedeschedulersV1beta1(),
 		operatorConfigInformers.Kubedeschedulers().V1beta1().KubeDeschedulers(),
+		deschedulerClient,
 		kubeClient,
 		cc.EventRecorder,
 	)

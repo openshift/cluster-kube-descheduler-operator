@@ -6,8 +6,12 @@ spec:
   group: operator.openshift.io
   names:
     kind: KubeDescheduler
+    listKind: KubeDeschedulerList
     plural: kubedeschedulers
-  scope: ""
+    singular: kubedescheduler
+  scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: KubeDescheduler is the Schema for the deschedulers API
@@ -163,13 +167,3 @@ spec:
               description: version is the level this availability applies to
               type: string
   version: v1beta1
-  versions:
-  - name: v1beta1
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

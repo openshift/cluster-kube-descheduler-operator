@@ -6,3 +6,4 @@ metadata:
 spec:
   image: gcr.io/k8s-staging-descheduler/descheduler:0.9.0-79-gd845040d7
   deschedulingIntervalSeconds: 3600
+
