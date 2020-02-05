@@ -709,6 +709,10 @@ k8s.io/utils/net
 k8s.io/utils/path
 k8s.io/utils/pointer
 k8s.io/utils/trace
+# sigs.k8s.io/descheduler v0.8.1-0.20200124153632-e3865fcf8e80
+sigs.k8s.io/descheduler/pkg/api
+sigs.k8s.io/descheduler/pkg/api/v1alpha1
+sigs.k8s.io/descheduler/pkg/descheduler/scheme
 # sigs.k8s.io/structured-merge-diff v1.0.1-0.20191108220359-b1b620dd3f06
 sigs.k8s.io/structured-merge-diff/fieldpath
 sigs.k8s.io/structured-merge-diff/merge

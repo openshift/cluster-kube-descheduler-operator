@@ -52,7 +52,7 @@ spec:
          value: "3"
     - name: "duplicates"
 ```
-The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code. DeschedulingIntervalSeconds field contains the number of seconds between a descheduler run (0 in this field will only run the descheduler once and exit). Nodes field indicate on how many nodes the lownodeutilization strategy should run.
+The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity", and "nodetaints". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code. DeschedulingIntervalSeconds field contains the number of seconds between a descheduler run (0 in this field will only run the descheduler once and exit). Nodes field indicate on how many nodes the lownodeutilization strategy should run.
 
 ## How does the descheduler operator work?
 

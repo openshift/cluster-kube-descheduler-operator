@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
+	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,12 +31,13 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
+	deschedulerapi "sigs.k8s.io/descheduler/pkg/api/v1alpha1"
 )
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 
 // array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
-var validStrategies = sets.NewString("duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity")
+var validStrategies = sets.NewString("duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity", "nodetaints")
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -133,79 +135,78 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 			UID:        descheduler.UID,
 		},
 	}
-	required.Data = map[string]string{"policy.yaml": generateConfigMapString(descheduler.Spec.Strategies)}
+	configMapString, err := generateConfigMapString(descheduler.Spec.Strategies)
+	if err != nil {
+		return nil, false, err
+	}
+	required.Data = map[string]string{"policy.yaml": configMapString}
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
 // generateConfigMapString generates configmap needed for the string.
-func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) string {
-	strategiesPolicyString := "apiVersion: \"descheduler/v1beta1\"\nkind: \"DeschedulerPolicy\"\nstrategies:\n"
+func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) (string, error) {
+	policy := &deschedulerapi.DeschedulerPolicy{Strategies: make(deschedulerapi.StrategyList)}
 	// There is no need to do validation here. By the time, we reach here, validation would have already happened.
 	for _, strategy := range requestedStrategies {
 		switch strings.ToLower(strategy.Name) {
 		case "duplicates":
-			strategiesPolicyString = strategiesPolicyString + "  \"RemoveDuplicates\":\n     enabled: true\n"
+			policy.Strategies["RemoveDuplicates"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
 		case "interpodantiaffinity":
-			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingInterPodAntiAffinity\":\n     enabled: true\n"
+			policy.Strategies["RemovePodsViolatingInterPodAntiAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
 		case "lownodeutilization":
-			strategiesPolicyString = strategiesPolicyString + "  \"LowNodeUtilization\":\n     enabled: true\n     params:\n" + "       nodeResourceUtilizationThresholds:\n"
-			paramString := ""
-			if len(strategy.Params) > 0 {
-				// TODO: Make this more generic using methods and interfaces.
-				paramString = addStrategyParamsForLowNodeUtilization(strategy.Params)
-				strategiesPolicyString = strategiesPolicyString + paramString
+			utilizationThresholds := deschedulerapi.NodeResourceUtilizationThresholds{NumberOfNodes: 0}
+			thresholds := deschedulerapi.ResourceThresholds{}
+			targetThresholds := deschedulerapi.ResourceThresholds{}
+			for _, param := range strategy.Params {
+				value, err := strconv.Atoi(param.Value)
+				if err != nil {
+					return "", err
+				}
+				switch param.Name {
+				case "cputhreshold":
+					thresholds[v1.ResourceCPU] = deschedulerapi.Percentage(value)
+				case "memorythreshold":
+					thresholds[v1.ResourceMemory] = deschedulerapi.Percentage(value)
+				case "podsthreshold":
+					thresholds[v1.ResourcePods] = deschedulerapi.Percentage(value)
+				case "cputargetthreshold":
+					targetThresholds[v1.ResourceCPU] = deschedulerapi.Percentage(value)
+				case "memorytargetthreshold":
+					targetThresholds[v1.ResourceMemory] = deschedulerapi.Percentage(value)
+				case "podstargetthreshold":
+					targetThresholds[v1.ResourcePods] = deschedulerapi.Percentage(value)
+				case "nodes":
+					utilizationThresholds.NumberOfNodes = value
+				}
+			}
+			if len(thresholds) > 0 {
+				utilizationThresholds.Thresholds = thresholds
+			}
+			if len(targetThresholds) > 0 {
+				utilizationThresholds.TargetThresholds = thresholds
+			}
+			policy.Strategies["LowNodeUtilization"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: deschedulerapi.StrategyParameters{
+					NodeResourceUtilizationThresholds: utilizationThresholds,
+				},
 			}
 		case "nodeaffinity":
-			strategiesPolicyString = strategiesPolicyString + "  \"RemovePodsViolatingNodeAffinity\":\n     enabled: true\n     params:\n       nodeAffinityType:\n       - requiredDuringSchedulingIgnoredDuringExecution\n"
+			policy.Strategies["RemovePodsViolatingNodeAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: deschedulerapi.StrategyParameters{
+					NodeAffinityType: []string{"requiredDuringSchedulingIgnoredDuringExecution"},
+				},
+			}
+		case "nodetaints":
+			policy.Strategies["RemovePodsViolatingNodeTaints"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
 		default:
-			// Accept no other strategy except for the valid ones.
+			klog.Warningf("not using unknown strategy '%s'", strategy.Name)
 		}
 	}
-	// At last, we will have a "\n", which we don't need.
-	return strings.TrimSuffix(strategiesPolicyString, "\n")
-}
-
-// addStrategyParamsForLowNodeUtilization adds parameters for low node utilization strategy.
-func addStrategyParamsForLowNodeUtilization(params []deschedulerv1beta1.Param) string {
-	thresholds := ""
-	targetThresholds := ""
-	thresholdsString := "         thresholds:"
-	targetThresholdsString := "         targetThresholds:"
-	noOfNodes := "         numberOfNodes:"
-	nodesParamFound := false
-	for _, param := range params {
-		// collect all thresholds
-		if !strings.Contains(strings.ToUpper(param.Name), strings.ToUpper("target")) {
-			switch param.Name {
-			case "cputhreshold":
-				thresholds = thresholds + "           cpu: " + param.Value + "\n"
-			case "memorythreshold":
-				thresholds = thresholds + "           memory: " + param.Value + "\n"
-			case "podsthreshold":
-				thresholds = thresholds + "           pods: " + param.Value + "\n"
-			}
-		} else {
-			// collect all target thresholds
-			switch param.Name {
-			case "cputargetthreshold":
-				targetThresholds = targetThresholds + "           cpu: " + param.Value + "\n"
-			case "memorytargetthreshold":
-				targetThresholds = targetThresholds + "           memory: " + param.Value + "\n"
-			case "podstargetthreshold":
-				targetThresholds = targetThresholds + "           pods: " + param.Value + "\n"
-			}
-		}
-		if param.Name == "nodes" {
-			nodesParamFound = true
-			noOfNodes = noOfNodes + " " + param.Value + "\n"
-		}
+	policyBytes, err := yaml.Marshal(policy)
+	if err != nil {
+		return "", err
 	}
-	// If noOfNodes parameter is not found, set it to 0.
-	if !nodesParamFound {
-		noOfNodes = noOfNodes + " 0\n"
-	}
-	// If threshold is specified we should specify target threshold as well.
-	return thresholdsString + "\n" + thresholds + targetThresholdsString + "\n" + targetThresholds + noOfNodes
+	return string(policyBytes), nil
 }
 
 func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
