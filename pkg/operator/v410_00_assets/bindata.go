@@ -65,7 +65,7 @@ func v410KubeDeschedulerConfigmapYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/configmap.yaml", size: 136, mode: os.FileMode(436), modTime: time.Unix(1580754997, 0)}
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/configmap.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -90,7 +90,7 @@ spec:
       volumes:
         - name: "policy-volume"
           configMap:
-            name: "descheduler"
+            name: "config"
       priorityClassName: "system-cluster-critical"
       restartPolicy: "Always"
       containers:
@@ -123,7 +123,7 @@ func v410KubeDeschedulerDeploymentYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/deployment.yaml", size: 1084, mode: os.FileMode(436), modTime: time.Unix(1580754798, 0)}
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/deployment.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

@@ -18,7 +18,7 @@ spec:
       volumes:
         - name: "policy-volume"
           configMap:
-            name: "descheduler"
+            name: "config"
       priorityClassName: "system-cluster-critical"
       restartPolicy: "Always"
       containers:
