@@ -224,6 +224,7 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 	required.Spec.Template.Spec.Containers[0].Image = descheduler.Spec.Image
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
+	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
 
 	// Add any additional flags that were specified
 	if len(descheduler.Spec.Flags) > 0 {
