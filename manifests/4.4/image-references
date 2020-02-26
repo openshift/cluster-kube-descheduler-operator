@@ -7,7 +7,7 @@ spec:
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-cluster-kube-descheduler-operator:4.4
-  - name: atomic-openshift-descheduler
+  - name: descheduler
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-descheduler:4.4
