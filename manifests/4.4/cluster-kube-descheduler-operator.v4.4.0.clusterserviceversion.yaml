@@ -27,7 +27,7 @@ metadata:
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
     capabilities: Basic Install
-    categories: Scheduling
+    categories: OpenShift Optional
 spec:
   customresourcedefinitions:
     owned:
