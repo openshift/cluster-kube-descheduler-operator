@@ -1,7 +1,8 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: clusterkubedescheduleroperator.v4.4
+  # The version value is substituted by the ART pipeline
+  name: clusterkubedescheduleroperator.v4.4.0
   namespace: openshift-kube-descheduler-operator
   annotations:
     alm-examples: |
@@ -136,7 +137,7 @@ spec:
   keywords: ["scheduling", "descheduler", "workload"]
   provider:
     name: Red Hat, Inc.
-  maturity: beta # or beta/stable maybe?
+  maturity: beta
   version: 4.4.0
   links:
   - name: Source Code
