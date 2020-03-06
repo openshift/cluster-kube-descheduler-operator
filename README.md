@@ -2,13 +2,40 @@
 
 Run the descheduler in your OpenShift cluster to move pods based on specific strategies.
 
-To deploy the operator:
+## Deploy the operator
 
-```
-oc create -f manifests/.
-```
+1. build and push the image to a registry (e.g. https://quay.io):
+   ```sh
+   $ podman build -t quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest -f Dockerfile .
+   $ podman push quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest
+   ```
 
-Replace `oc` with `kubectl` in case you want descheduler to run with kubernetes. All the required components are created in `openshift-descheduler-operator` namespace.
+1. build and push image index for operator-registry (pull and build https://github.com/operator-framework/operator-registry/ to get the `opm` binary)
+   ```sh
+   $ ./bin/linux-amd64-opm index add --bundles quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest --tag quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle-index:1.0.0
+   $ podman push quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle-index:1.0.0
+   ```
+
+   Don't forget to increase the number of open files, .e.g. `ulimit -n 100000` in case the current limit is insufficient.
+
+1. create and apply catalogsource manifest:
+   ```yaml
+   apiVersion: operators.coreos.com/v1alpha1
+   kind: CatalogSource
+   metadata:
+     name: cluster-kube-descheduler-operator
+     namespace: openshift-marketplace
+   spec:
+     sourceType: grpc
+     image: quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle-index:1.0.0
+   ```
+
+1. create `cluster-kube-descheduler-operator` namespace:
+   ```
+   $ oc create ns cluster-kube-descheduler-operator
+   ```
+
+1. open the console Operators -> OperatorHub, search for `descheduler operator` and install the operator
 
 ## Sample CR
 
