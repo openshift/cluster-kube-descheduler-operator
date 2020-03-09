@@ -37,18 +37,6 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 
 1. open the console Operators -> OperatorHub, search for `descheduler operator` and install the operator
 
-## Descheduler strategies
-
-The Descheduler operator attempts to simplify the descheduler strategy names from their [upstream names](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies). Thus when set on the operator, these strategy names map to:
-
-| Operator param | Descheduler strategy |
-| ---- | ---- |
-| `duplicates` | `RemoveDuplicates` |
-| `interpodantiaffinity` | `RemovePodsViolatingInterPodAntiAffinity` |
-| `lownodeutilization` | `LowNodeUtilization` |
-| `nodeaffinity` | `RemovePodsViolatingNodeAffinity` |
-| `nodetaints` | `RemovePodsViolatingNodeTaints` |
-
 ## Sample CR
 
 A sample CR definition looks like below (the operator expects `config` CR under `openshift-kube-descheduler-operator` namespace):
@@ -62,7 +50,7 @@ metadata:
 spec:
   deschedulingIntervalSeconds: 1800
   strategies:
-    - name: "lownodeutilization"
+    - name: "LowNodeUtilization"
       params:
        - name: "cputhreshold"
          value: "10"
@@ -78,9 +66,11 @@ spec:
          value: "60"
        - name: "nodes"
          value: "3"
-    - name: "duplicates"
+    - name: "RemoveDuplicates"
 ```
-The valid list of strategies are "lownodeutilization", "duplicates", "interpodantiaffinity", "nodeaffinity", and "nodetaints". Out of the above only lownodeutilization has parameters like cputhreshold, memorythreshold etc. Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As of now, adding new strategies could be done through code. DeschedulingIntervalSeconds field contains the number of seconds between a descheduler run (0 in this field will only run the descheduler once and exit). Nodes field indicate on how many nodes the lownodeutilization strategy should run.
+The valid list of strategies are `RemoveDuplicates`, `LowNodeUtilization`, `RemovePodsViolatingInterPodAntiAffinity`, `RemovePodsViolatingNodeAffinity`, and `RemovePodsViolatingNodeTaints`. These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
+
+Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As shown in the above example CR, the `LowNodeUtilization` strategy is the only one which accepts additional `params`, which map to the `thresholds` and `targetThresholds` parameters as defined in the [`LowNodeUtilization` section of the descheduler README](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization). The `nodes` parameter corresponds to `numberOfNodes`, which activates this strategy only when the number of underutilized nodes is above the configured value (default `0`).
 
 ## How does the descheduler operator work?
 
