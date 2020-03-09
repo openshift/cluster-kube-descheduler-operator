@@ -150,9 +150,9 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 	// There is no need to do validation here. By the time, we reach here, validation would have already happened.
 	for _, strategy := range requestedStrategies {
 		switch strings.ToLower(strategy.Name) {
-		case "duplicates":
+		case "duplicates", "removeduplicates":
 			policy.Strategies["RemoveDuplicates"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
-		case "interpodantiaffinity":
+		case "interpodantiaffinity", "removepodsviolatinginterpodantiaffinity":
 			policy.Strategies["RemovePodsViolatingInterPodAntiAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
 		case "lownodeutilization":
 			utilizationThresholds := deschedulerapi.NodeResourceUtilizationThresholds{NumberOfNodes: 0}
@@ -176,7 +176,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 					targetThresholds[v1.ResourceMemory] = deschedulerapi.Percentage(value)
 				case "podstargetthreshold":
 					targetThresholds[v1.ResourcePods] = deschedulerapi.Percentage(value)
-				case "nodes":
+				case "nodes", "numberOfNodes":
 					utilizationThresholds.NumberOfNodes = value
 				}
 			}
@@ -191,13 +191,13 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 					NodeResourceUtilizationThresholds: utilizationThresholds,
 				},
 			}
-		case "nodeaffinity":
+		case "nodeaffinity", "removepodsviolatingnodeaffinity":
 			policy.Strategies["RemovePodsViolatingNodeAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: deschedulerapi.StrategyParameters{
 					NodeAffinityType: []string{"requiredDuringSchedulingIgnoredDuringExecution"},
 				},
 			}
-		case "nodetaints":
+		case "nodetaints", "removepodsviolatingnodetaints":
 			policy.Strategies["RemovePodsViolatingNodeTaints"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
 		default:
 			klog.Warningf("not using unknown strategy '%s'", strategy.Name)
