@@ -1,5 +1,6 @@
-# cluster-kube-descheduler-operator
-An operator to run descheduler on OpenShift
+# Kube Descheduler Operator
+
+Run the descheduler in your OpenShift cluster to move pods based on specific strategies.
 
 To deploy the operator:
 
