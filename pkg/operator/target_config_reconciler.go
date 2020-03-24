@@ -37,8 +37,18 @@ import (
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 
-// array of valid strategies. TODO: Make this map(or set) once we have lot of strategies.
-var validStrategies = sets.NewString("duplicates", "interpodantiaffinity", "lownodeutilization", "nodeaffinity", "nodetaints")
+// array of valid strategies. This currently supports the actual strategy names as defined in sigs.k8s.io/descheduler,
+// as well as matching shortnames we have provided in the past for our operator and continue to support for now.
+var validStrategies = sets.NewString(
+	"duplicates",
+	"removeduplicates",
+	"interpodantiaffinity",
+	"removepodsviolatinginterpodantiaffinity",
+	"lownodeutilization",
+	"nodeaffinity",
+	"removepodsviolatingnodeaffinity",
+	"nodetaints",
+	"removepodsviolatingnodetaints")
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
