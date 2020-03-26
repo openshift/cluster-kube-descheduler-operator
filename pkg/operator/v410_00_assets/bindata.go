@@ -65,7 +65,7 @@ func v410KubeDeschedulerConfigmapYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/configmap.yaml", size: 136, mode: os.FileMode(436), modTime: time.Unix(1580754997, 0)}
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/configmap.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -95,7 +95,7 @@ spec:
       restartPolicy: "Always"
       containers:
         - name: "openshift-descheduler"
-          image: "gcr.io/k8s-staging-descheduler/descheduler:0.9.0-79-gd845040d7"
+          image: "us.gcr.io/k8s-artifacts-prod/descheduler/descheduler:v0.10.0"
           resources:
             limits:
               cpu: "100m"
@@ -123,7 +123,7 @@ func v410KubeDeschedulerDeploymentYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/deployment.yaml", size: 1084, mode: os.FileMode(436), modTime: time.Unix(1580754798, 0)}
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/deployment.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
