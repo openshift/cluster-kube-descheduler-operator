@@ -23,7 +23,7 @@ spec:
       restartPolicy: "Always"
       containers:
         - name: "openshift-descheduler"
-          image: "gcr.io/k8s-staging-descheduler/descheduler:0.9.0-79-gd845040d7"
+          image: "us.gcr.io/k8s-artifacts-prod/descheduler/descheduler:v0.10.0"
           resources:
             limits:
               cpu: "100m"
