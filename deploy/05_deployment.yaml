@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: descheduler-operator
+  namespace: openshift-kube-descheduler-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: descheduler-operator
+  template:
+    metadata:
+      labels:
+        name: descheduler-operator
+    spec:
+      containers:
+        - name: descheduler-operator
+          image: quay.io/openshift/origin-cluster-kube-descheduler-operator:latest
+          ports:
+          - containerPort: 60000
+            name: metrics
+          command:
+          - cluster-kube-descheduler-operator
+          args:
+          - "operator"
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPERATOR_NAME
+              value: "descheduler-operator"
+      serviceAccountName: openshift-descheduler
+      serviceAccount: openshift-descheduler

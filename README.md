@@ -4,6 +4,16 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 
 ## Deploy the operator
 
+### Quick Development
+
+1. Build and push the operator image to a registry:
+2. Ensure the `image` spec in `deploy/05_deployment.yaml` refers to the operator image you pushed
+3. Run `oc create -f deploy/.`
+
+### OperatorHub install with custom index image
+
+This process refers to building the operator in a way that it can be installed locally via the OperatorHub with a custom index image
+
 1. build and push the image to a registry (e.g. https://quay.io):
    ```sh
    $ podman build -t quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest -f Dockerfile .
