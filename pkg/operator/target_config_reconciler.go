@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -55,6 +56,7 @@ var validStrategies = sets.NewString(
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "5"}
 
 type TargetConfigReconciler struct {
+	ctx               context.Context
 	operatorClient    operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
 	deschedulerClient *operatorclient.DeschedulerClient
 	kubeClient        kubernetes.Interface
@@ -63,6 +65,7 @@ type TargetConfigReconciler struct {
 }
 
 func NewTargetConfigReconciler(
+	ctx context.Context,
 	operatorConfigClient operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface,
 	operatorClientInformer operatorclientinformers.KubeDeschedulerInformer,
 	deschedulerClient *operatorclient.DeschedulerClient,
@@ -70,6 +73,7 @@ func NewTargetConfigReconciler(
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
 	c := &TargetConfigReconciler{
+		ctx:               ctx,
 		operatorClient:    operatorConfigClient,
 		deschedulerClient: deschedulerClient,
 		kubeClient:        kubeClient,
@@ -83,7 +87,7 @@ func NewTargetConfigReconciler(
 }
 
 func (c TargetConfigReconciler) sync() error {
-	descheduler, err := c.operatorClient.KubeDeschedulers(operatorclient.OperatorNamespace).Get("cluster", metav1.GetOptions{})
+	descheduler, err := c.operatorClient.KubeDeschedulers(operatorclient.OperatorNamespace).Get(c.ctx, "cluster", metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -243,7 +247,7 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 	}
 
 	if !forceDeployment {
-		existingDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(descheduler.Name, metav1.GetOptions{})
+		existingDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, descheduler.Name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				forceDeployment = true

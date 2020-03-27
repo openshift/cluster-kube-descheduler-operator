@@ -6,6 +6,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
   targets/openshift/bindata.mk \
 	targets/openshift/images.mk \
+	targets/openshift/codegen.mk \
 	targets/openshift/deps.mk \
 )
 
@@ -13,6 +14,10 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 
 IMAGE_REGISTRY :=registry.svc.ci.openshift.org
+
+CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/cluster-kube-descheduler-operator/pkg/generated
+CODEGEN_API_PACKAGE :=github.com/openshift/cluster-kube-descheduler-operator/pkg/apis
+CODEGEN_GROUPS_VERSION :=descheduler:v1beta1
 
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
 # $0 - macro name

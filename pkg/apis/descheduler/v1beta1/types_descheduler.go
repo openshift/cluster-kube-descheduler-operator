@@ -29,7 +29,7 @@ type KubeDeschedulerSpec struct {
 	// Flags for descheduler.
 	Flags []string `json:"flags"`
 	// Image of the deschduler being managed. This includes the version of the operand(descheduler).
-	Image string `json:"image, omitempty"`
+	Image string `json:"image,omitempty"`
 }
 
 // Strategy supported by descheduler
@@ -40,8 +40,8 @@ type Strategy struct {
 
 // Param is a key/value pair representing the parameters in strategy or flags.
 type Param struct {
-	Name  string `json:"name, omitempty"`
-	Value string `json:"value, omitempty"`
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 // KubeDeschedulerStatus defines the observed state of KubeDescheduler
