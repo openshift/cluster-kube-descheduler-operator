@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -70,6 +71,11 @@ type ControllerBuilder struct {
 	authenticationConfig *operatorv1alpha1.DelegatedAuthentication
 	authorizationConfig  *operatorv1alpha1.DelegatedAuthorization
 	healthChecks         []healthz.HealthChecker
+
+	// nonZeroExitFn takes a function that exit the process with non-zero code.
+	// This stub exists for unit test where we can check if the graceful termination work properly.
+	// Default function will klog.Warning(args) and os.Exit(1).
+	nonZeroExitFn func(args ...interface{})
 }
 
 // NewController returns a builder struct for constructing the command you want to run
@@ -78,6 +84,10 @@ func NewController(componentName string, startFunc StartFunc) *ControllerBuilder
 		startFunc:        startFunc,
 		componentName:    componentName,
 		observerInterval: defaultObserverInterval,
+		nonZeroExitFn: func(args ...interface{}) {
+			klog.Warning(args...)
+			os.Exit(1)
+		},
 	}
 }
 
@@ -184,31 +194,31 @@ func (b *ControllerBuilder) Run(ctx context.Context, config *unstructured.Unstru
 		}
 	}
 
-	if b.servingInfo == nil {
-		return fmt.Errorf("server config required for health checks and debugging endpoints")
-	}
-
 	kubeConfig := ""
 	if b.kubeAPIServerConfigFile != nil {
 		kubeConfig = *b.kubeAPIServerConfigFile
 	}
-	serverConfig, err := serving.ToServerConfig(ctx, *b.servingInfo, *b.authenticationConfig, *b.authorizationConfig, kubeConfig)
-	if err != nil {
-		return err
-	}
-	serverConfig.HealthzChecks = append(serverConfig.HealthzChecks, b.healthChecks...)
 
-	server, err := serverConfig.Complete(nil).New(b.componentName, genericapiserver.NewEmptyDelegate())
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		if err := server.PrepareRun().Run(ctx.Done()); err != nil {
-			klog.Error(err)
+	var server *genericapiserver.GenericAPIServer
+	if b.servingInfo != nil {
+		serverConfig, err := serving.ToServerConfig(ctx, *b.servingInfo, *b.authenticationConfig, *b.authorizationConfig, kubeConfig)
+		if err != nil {
+			return err
 		}
-		klog.Fatal("server exited")
-	}()
+		serverConfig.HealthzChecks = append(serverConfig.HealthzChecks, b.healthChecks...)
+
+		server, err = serverConfig.Complete(nil).New(b.componentName, genericapiserver.NewEmptyDelegate())
+		if err != nil {
+			return err
+		}
+
+		go func() {
+			if err := server.PrepareRun().Run(ctx.Done()); err != nil {
+				klog.Fatal(err)
+			}
+			klog.Info("server exited")
+		}()
+	}
 
 	protoConfig := rest.CopyConfig(clientConfig)
 	protoConfig.AcceptContentTypes = "application/vnd.kubernetes.protobuf,application/json"
@@ -226,7 +236,7 @@ func (b *ControllerBuilder) Run(ctx context.Context, config *unstructured.Unstru
 		if err := b.startFunc(ctx, controllerContext); err != nil {
 			return err
 		}
-		return fmt.Errorf("exited")
+		return nil
 	}
 
 	// ensure blocking TCP connections don't block the leader election
@@ -238,13 +248,41 @@ func (b *ControllerBuilder) Run(ctx context.Context, config *unstructured.Unstru
 		return err
 	}
 
-	leaderElection.Callbacks.OnStartedLeading = func(ctx context.Context) {
-		if err := b.startFunc(ctx, controllerContext); err != nil {
-			klog.Fatal(err)
+	// 10s is the graceful termination time we give the controllers to finish their workers.
+	// when this time pass, we exit with non-zero code, killing all controller workers.
+	// NOTE: The pod must set the termination graceful time.
+	leaderElection.Callbacks.OnStartedLeading = b.getOnStartedLeadingFunc(controllerContext, 10*time.Second)
+
+	leaderelection.RunOrDie(ctx, leaderElection)
+	return nil
+}
+
+func (b ControllerBuilder) getOnStartedLeadingFunc(controllerContext *ControllerContext, gracefulTerminationDuration time.Duration) func(ctx context.Context) {
+	return func(ctx context.Context) {
+		stoppedCh := make(chan struct{})
+		go func() {
+			defer close(stoppedCh)
+			if err := b.startFunc(ctx, controllerContext); err != nil {
+				b.nonZeroExitFn(fmt.Sprintf("graceful termination failed, controllers failed with error: %v", err))
+			}
+		}()
+
+		select {
+		case <-ctx.Done(): // context closed means the process likely received signal to terminate
+		case <-stoppedCh:
+			// if context was not cancelled (it is not "done"), but the startFunc terminated, it means it terminated prematurely
+			// when this happen, it means the controllers terminated without error.
+			if ctx.Err() == nil {
+				b.nonZeroExitFn("graceful termination failed, controllers terminated prematurely")
+			}
+		}
+
+		select {
+		case <-time.After(gracefulTerminationDuration): // when context was closed above, give controllers extra time to terminate gracefully
+			b.nonZeroExitFn(fmt.Sprintf("graceful termination failed, some controllers failed to shutdown in %s", gracefulTerminationDuration))
+		case <-stoppedCh: // stoppedCh here means the controllers finished termination and we exit 0
 		}
 	}
-	leaderelection.RunOrDie(ctx, leaderElection)
-	return fmt.Errorf("exited")
 }
 
 func (b *ControllerBuilder) getComponentNamespace() (string, error) {
