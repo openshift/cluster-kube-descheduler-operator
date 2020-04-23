@@ -1,4 +1,4 @@
 packageName: cluster-kube-descheduler-operator
 channels:
-- name: "4.4"
-  currentCSV: cluster-kube-descheduler-operator.v4.4.0
+- name: "4.5"
+  currentCSV: cluster-kube-descheduler-operator.v4.5.0
