@@ -49,7 +49,8 @@ var validStrategies = sets.NewString(
 	"nodeaffinity",
 	"removepodsviolatingnodeaffinity",
 	"nodetaints",
-	"removepodsviolatingnodetaints")
+	"removepodsviolatingnodetaints",
+	"removepodshavingtoomanyrestarts")
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -177,7 +178,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				if err != nil {
 					return "", err
 				}
-				switch param.Name {
+				switch strings.ToLower(param.Name) {
 				case "cputhreshold":
 					thresholds[v1.ResourceCPU] = deschedulerapi.Percentage(value)
 				case "memorythreshold":
@@ -202,7 +203,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 			policy.Strategies["LowNodeUtilization"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: deschedulerapi.StrategyParameters{
-					NodeResourceUtilizationThresholds: utilizationThresholds,
+					NodeResourceUtilizationThresholds: &utilizationThresholds,
 				},
 			}
 		case "nodeaffinity", "removepodsviolatingnodeaffinity":
@@ -213,6 +214,29 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 		case "nodetaints", "removepodsviolatingnodetaints":
 			policy.Strategies["RemovePodsViolatingNodeTaints"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
+		case "removepodshavingtoomanyrestarts":
+			podsHavingTooManyRestarts := deschedulerapi.PodsHavingTooManyRestarts{}
+			for _, param := range strategy.Params {
+				switch strings.ToLower(param.Name) {
+				case "podrestartthreshold":
+					value, err := strconv.Atoi(param.Value)
+					if err != nil {
+						return "", err
+					}
+					podsHavingTooManyRestarts.PodRestartThreshold = int32(value)
+				case "includinginitcontainers":
+					value, err := strconv.ParseBool(param.Value)
+					if err != nil {
+						return "", err
+					}
+					podsHavingTooManyRestarts.IncludingInitContainers = value
+				}
+			}
+			policy.Strategies["RemovePodsHavingTooManyRestarts"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: deschedulerapi.StrategyParameters{
+					PodsHavingTooManyRestarts: podsHavingTooManyRestarts,
+				},
+			}
 		default:
 			klog.Warningf("not using unknown strategy '%s'", strategy.Name)
 		}

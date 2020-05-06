@@ -62,21 +62,27 @@ spec:
   strategies:
     - name: "LowNodeUtilization"
       params:
-       - name: "cputhreshold"
+       - name: "CPUThreshold"
          value: "10"
-       - name: "memorythreshold"
+       - name: "MemoryThreshold"
          value: "20"
-       - name: "podsthreshold"
+       - name: "PodsThreshold"
          value: "30"
-       - name: "memorytargetthreshold"
+       - name: "MemoryTargetThreshold"
          value: "40"
-       - name: "cputargetthreshold"
+       - name: "CPUTargetThreshold"
          value: "50"
-       - name: "podstargetthreshold"
+       - name: "PodsTargetThreshold"
          value: "60"
-       - name: "nodes"
+       - name: "NumberOfNodes"
          value: "3"
     - name: "RemoveDuplicates"
+    - name: "RemovePodsHavingTooManyRestarts"
+      params:
+       - name: "PodRestartThreshold"
+         value: "10"
+       - name: "IncludeInitContainers"
+         value: "false"
 ```
 The valid list of strategies are `RemoveDuplicates`, `LowNodeUtilization`, `RemovePodsViolatingInterPodAntiAffinity`, `RemovePodsViolatingNodeAffinity`, and `RemovePodsViolatingNodeTaints`. These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
 
