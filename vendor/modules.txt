@@ -798,7 +798,7 @@ k8s.io/utils/trace
 # sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.7
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/descheduler v0.8.1-0.20200124153632-e3865fcf8e80
+# sigs.k8s.io/descheduler v0.10.1-0.20200507191943-31c7855212e9
 sigs.k8s.io/descheduler/pkg/api
 sigs.k8s.io/descheduler/pkg/api/v1alpha1
 sigs.k8s.io/descheduler/pkg/descheduler/scheme

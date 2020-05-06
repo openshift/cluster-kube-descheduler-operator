@@ -234,7 +234,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 			policy.Strategies["RemovePodsHavingTooManyRestarts"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: deschedulerapi.StrategyParameters{
-					PodsHavingTooManyRestarts: podsHavingTooManyRestarts,
+					PodsHavingTooManyRestarts: &podsHavingTooManyRestarts,
 				},
 			}
 		default:
