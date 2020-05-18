@@ -81,7 +81,7 @@ spec:
       params:
        - name: "PodRestartThreshold"
          value: "10"
-       - name: "IncludeInitContainers"
+       - name: "IncludingInitContainers"
          value: "false"
 ```
 The valid list of strategies are `RemoveDuplicates`, `LowNodeUtilization`, `RemovePodsViolatingInterPodAntiAffinity`, `RemovePodsViolatingNodeAffinity`, and `RemovePodsViolatingNodeTaints`. These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
