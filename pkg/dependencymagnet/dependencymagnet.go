@@ -5,7 +5,7 @@
 package dependencymagnet
 
 import (
-	_ "github.com/jteeuwen/go-bindata/go-bindata"
+	_ "github.com/go-bindata/go-bindata/go-bindata"
 	_ "github.com/openshift/build-machinery-go"
 	_ "k8s.io/code-generator"
 )
