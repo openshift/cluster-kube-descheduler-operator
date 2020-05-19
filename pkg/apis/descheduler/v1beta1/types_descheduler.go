@@ -14,7 +14,11 @@ type KubeDescheduler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   KubeDeschedulerSpec   `json:"spec"`
+	// spec holds user settable values for configuration
+	// +required
+	Spec KubeDeschedulerSpec `json:"spec"`
+	// status holds observed values from the cluster. They may not be overridden.
+	// +optional
 	Status KubeDeschedulerStatus `json:"status"`
 }
 
@@ -23,11 +27,14 @@ type KubeDeschedulerSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
 	// Strategies contain list of strategies that should be enabled in descheduler.
+	// +optional
 	Strategies []Strategy `json:"strategies,omitempty"`
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
-	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds"`
+	// +optional
+	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds,omitempty"`
 	// Flags for descheduler.
-	Flags []string `json:"flags"`
+	// +optional
+	Flags []string `json:"flags,omitempty"`
 	// Image of the deschduler being managed. This includes the version of the operand(descheduler).
 	Image string `json:"image,omitempty"`
 }
@@ -35,7 +42,7 @@ type KubeDeschedulerSpec struct {
 // Strategy supported by descheduler
 type Strategy struct {
 	Name   string  `json:"name,omitempty"`
-	Params []Param `json:"params"`
+	Params []Param `json:"params,omitempty"`
 }
 
 // Param is a key/value pair representing the parameters in strategy or flags.
