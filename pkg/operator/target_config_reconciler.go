@@ -282,7 +282,8 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 			forceDeployment = deploymentChanged(existingDeployment, required)
 		}
 	}
-	return resourceapply.ApplyDeployment(
+	// FIXME: this method will disappear in 4.6 so we need to fix this ASAP
+	return resourceapply.ApplyDeploymentWithForce(
 		c.kubeClient.AppsV1(),
 		c.eventRecorder,
 		required,
