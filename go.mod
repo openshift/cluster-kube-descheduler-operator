@@ -16,3 +16,5 @@ require (
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/descheduler v0.8.1-0.20200124153632-e3865fcf8e80
 )
+
+replace golang.org/x/crypto => golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
