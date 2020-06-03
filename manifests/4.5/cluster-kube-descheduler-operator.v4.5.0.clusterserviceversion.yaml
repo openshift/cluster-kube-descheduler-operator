@@ -81,7 +81,7 @@ spec:
   maintainers:
   - email: support@redhat.com
     name: Red Hat
-  minKubeVersion: 1.17.0
+  minKubeVersion: 1.18.0
   labels:
     olm-owner-enterprise-app: cluster-kube-descheduler-operator
     olm-status-descriptors: cluster-kube-descheduler-operator.v4.5.0
