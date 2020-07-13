@@ -202,13 +202,13 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				utilizationThresholds.TargetThresholds = thresholds
 			}
 			policy.Strategies["LowNodeUtilization"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
-				Params: deschedulerapi.StrategyParameters{
+				Params: &deschedulerapi.StrategyParameters{
 					NodeResourceUtilizationThresholds: &utilizationThresholds,
 				},
 			}
 		case "nodeaffinity", "removepodsviolatingnodeaffinity":
 			policy.Strategies["RemovePodsViolatingNodeAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
-				Params: deschedulerapi.StrategyParameters{
+				Params: &deschedulerapi.StrategyParameters{
 					NodeAffinityType: []string{"requiredDuringSchedulingIgnoredDuringExecution"},
 				},
 			}
@@ -233,7 +233,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				}
 			}
 			policy.Strategies["RemovePodsHavingTooManyRestarts"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
-				Params: deschedulerapi.StrategyParameters{
+				Params: &deschedulerapi.StrategyParameters{
 					PodsHavingTooManyRestarts: &podsHavingTooManyRestarts,
 				},
 			}
