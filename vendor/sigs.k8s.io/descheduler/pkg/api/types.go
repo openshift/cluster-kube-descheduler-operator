@@ -17,7 +17,7 @@ limitations under the License.
 package api
 
 import (
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -41,7 +41,7 @@ type DeschedulerStrategy struct {
 	Weight int
 
 	// Strategy parameters
-	Params StrategyParameters
+	Params *StrategyParameters
 }
 
 // Only one of its members may be specified
@@ -49,6 +49,8 @@ type StrategyParameters struct {
 	NodeResourceUtilizationThresholds *NodeResourceUtilizationThresholds
 	NodeAffinityType                  []string
 	PodsHavingTooManyRestarts         *PodsHavingTooManyRestarts
+	MaxPodLifeTimeSeconds             *uint
+	RemoveDuplicates                  *RemoveDuplicates
 }
 
 type Percentage float64
@@ -63,4 +65,8 @@ type NodeResourceUtilizationThresholds struct {
 type PodsHavingTooManyRestarts struct {
 	PodRestartThreshold     int32
 	IncludingInitContainers bool
+}
+
+type RemoveDuplicates struct {
+	ExcludeOwnerKinds []string
 }
