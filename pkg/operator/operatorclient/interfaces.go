@@ -63,3 +63,11 @@ func (c *DeschedulerClient) UpdateOperatorStatus(resourceVersion string, status 
 
 	return &ret.Status.OperatorStatus, nil
 }
+
+func (c *DeschedulerClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error) {
+	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return &instance.ObjectMeta, nil
+}
