@@ -173,7 +173,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				if err != nil {
 					return "", err
 				}
-				switch param.Name {
+				switch strings.ToLower(param.Name) {
 				case "cputhreshold":
 					thresholds[v1.ResourceCPU] = deschedulerapi.Percentage(value)
 				case "memorythreshold":
