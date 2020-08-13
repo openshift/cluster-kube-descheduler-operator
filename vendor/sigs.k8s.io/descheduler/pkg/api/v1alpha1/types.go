@@ -28,6 +28,15 @@ type DeschedulerPolicy struct {
 
 	// Strategies
 	Strategies StrategyList `json:"strategies,omitempty"`
+
+	// NodeSelector for a set of nodes to operate over
+	NodeSelector *string `json:"nodeSelector,omitempty"`
+
+	// EvictLocalStoragePods allows pods using local storage to be evicted.
+	EvictLocalStoragePods *bool `json:"evictLocalStoragePods,omitempty"`
+
+	// MaxNoOfPodsToEvictPerNode restricts maximum of pods to be evicted per node.
+	MaxNoOfPodsToEvictPerNode *int `json:"maxNoOfPodsToEvictPerNode,omitempty"`
 }
 
 type StrategyName string
@@ -51,14 +60,16 @@ type Namespaces struct {
 	Exclude []string `json:"exclude"`
 }
 
-// Besides Namespaces only one of its members may be specified
+// Besides Namespaces ThresholdPriority and ThresholdPriorityClassName only one of its members may be specified
 type StrategyParameters struct {
 	NodeResourceUtilizationThresholds *NodeResourceUtilizationThresholds `json:"nodeResourceUtilizationThresholds,omitempty"`
 	NodeAffinityType                  []string                           `json:"nodeAffinityType,omitempty"`
 	PodsHavingTooManyRestarts         *PodsHavingTooManyRestarts         `json:"podsHavingTooManyRestarts,omitempty"`
 	MaxPodLifeTimeSeconds             *uint                              `json:"maxPodLifeTimeSeconds,omitempty"`
 	RemoveDuplicates                  *RemoveDuplicates                  `json:"removeDuplicates,omitempty"`
-	Namespaces                        Namespaces                         `json:"namespaces"`
+	Namespaces                        *Namespaces                        `json:"namespaces"`
+	ThresholdPriority                 *int32                             `json:"thresholdPriority"`
+	ThresholdPriorityClassName        string                             `json:"thresholdPriorityClassName"`
 }
 
 type Percentage float64
