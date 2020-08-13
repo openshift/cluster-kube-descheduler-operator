@@ -125,6 +125,7 @@ spec:
           - nodes
           - pods/eviction
           - events
+          - priorityclasses
           verbs:
           - "*"
         - apiGroups:
