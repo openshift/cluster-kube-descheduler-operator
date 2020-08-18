@@ -199,7 +199,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				utilizationThresholds.Thresholds = thresholds
 			}
 			if len(targetThresholds) > 0 {
-				utilizationThresholds.TargetThresholds = thresholds
+				utilizationThresholds.TargetThresholds = targetThresholds
 			}
 			policy.Strategies["LowNodeUtilization"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
