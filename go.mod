@@ -10,10 +10,10 @@ require (
 	github.com/openshift/library-go v0.0.0-20200728084749-958c008826cb
 	github.com/prometheus/client_golang v1.7.1
 	github.com/spf13/cobra v1.0.0
-	k8s.io/api v0.19.0-rc.2
-	k8s.io/apimachinery v0.19.0-rc.2
-	k8s.io/client-go v0.19.0-rc.2
-	k8s.io/code-generator v0.19.0-rc.2
+	k8s.io/api v0.19.0
+	k8s.io/apimachinery v0.19.0
+	k8s.io/client-go v0.19.0
+	k8s.io/code-generator v0.19.0
 	k8s.io/klog/v2 v2.2.0
-	sigs.k8s.io/descheduler v0.18.1-0.20200728174747-d0fbebb77c79
+	sigs.k8s.io/descheduler v0.19.0
 )

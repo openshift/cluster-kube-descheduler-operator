@@ -50,7 +50,8 @@ var validStrategies = sets.NewString(
 	"removepodsviolatingnodeaffinity",
 	"nodetaints",
 	"removepodsviolatingnodetaints",
-	"removepodshavingtoomanyrestarts")
+	"removepodshavingtoomanyrestarts",
+	"podlifetime")
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -159,16 +160,85 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
+func generateNamespaces(params []deschedulerv1beta1.Param) *deschedulerapi.Namespaces {
+	var namespaces deschedulerapi.Namespaces
+	for _, param := range params {
+		switch strings.ToLower(param.Name) {
+		case "includeNamespaces":
+			namespaces.Include = strings.Split(param.Value, ",")
+		case "excludeNamespaces":
+			namespaces.Exclude = strings.Split(param.Value, ",")
+		default:
+			klog.Warningf("unknown Namespaces value: %s", param.Name)
+		}
+	}
+	return &namespaces
+}
+
+func generatePriorityThreshold(params []deschedulerv1beta1.Param) (string, *int32, error) {
+	var thresholdPriority *int32
+	var thresholdPriorityClassName string
+	for _, param := range params {
+		switch strings.ToLower(param.Name) {
+		case "thresholdPriority":
+			value, err := strconv.Atoi(param.Value)
+			if err != nil {
+				return "", nil, err
+			}
+			priority := int32(value)
+			thresholdPriority = &priority
+		case "thresholdPriorityClassName":
+			thresholdPriorityClassName = param.Value
+		default:
+			klog.Warningf("unknown PriorityThreshold value: %s", param.Name)
+		}
+	}
+	if len(thresholdPriorityClassName) > 0 && thresholdPriority != nil {
+		return "", nil, fmt.Errorf("cannot set both thresholdPriorityClassName and thresholdPriority")
+	}
+	return thresholdPriorityClassName, thresholdPriority, nil
+}
+
 // generateConfigMapString generates configmap needed for the string.
+// TODO(@damemi): Deprecate this in favor of an actual upstream Descheduler policy, see https://github.com/openshift/cluster-kube-descheduler-operator/issues/119
 func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) (string, error) {
 	policy := &deschedulerapi.DeschedulerPolicy{Strategies: make(deschedulerapi.StrategyList)}
 	// There is no need to do validation here. By the time, we reach here, validation would have already happened.
 	for _, strategy := range requestedStrategies {
 		switch strings.ToLower(strategy.Name) {
 		case "duplicates", "removeduplicates":
-			policy.Strategies["RemoveDuplicates"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
+			removeDuplicates := deschedulerapi.RemoveDuplicates{}
+			for _, param := range strategy.Params {
+				switch strings.ToLower(param.Name) {
+				case "excludeOwnerKinds":
+					removeDuplicates.ExcludeOwnerKinds = strings.Split(param.Value, ",")
+				}
+			}
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			policy.Strategies["RemoveDuplicates"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: &deschedulerapi.StrategyParameters{
+					RemoveDuplicates:           &removeDuplicates,
+					ThresholdPriority:          priority,
+					ThresholdPriorityClassName: priorityClassName,
+				},
+			}
+
 		case "interpodantiaffinity", "removepodsviolatinginterpodantiaffinity":
-			policy.Strategies["RemovePodsViolatingInterPodAntiAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			policy.Strategies["RemovePodsViolatingInterPodAntiAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: &deschedulerapi.StrategyParameters{
+					ThresholdPriorityClassName: priorityClassName,
+					ThresholdPriority:          priority,
+					Namespaces:                 generateNamespaces(strategy.Params),
+				},
+			}
+
 		case "lownodeutilization":
 			utilizationThresholds := deschedulerapi.NodeResourceUtilizationThresholds{NumberOfNodes: 0}
 			thresholds := deschedulerapi.ResourceThresholds{}
@@ -201,19 +271,45 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			if len(targetThresholds) > 0 {
 				utilizationThresholds.TargetThresholds = targetThresholds
 			}
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
 			policy.Strategies["LowNodeUtilization"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
 					NodeResourceUtilizationThresholds: &utilizationThresholds,
+					ThresholdPriorityClassName:        priorityClassName,
+					ThresholdPriority:                 priority,
 				},
 			}
+
 		case "nodeaffinity", "removepodsviolatingnodeaffinity":
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
 			policy.Strategies["RemovePodsViolatingNodeAffinity"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
-					NodeAffinityType: []string{"requiredDuringSchedulingIgnoredDuringExecution"},
+					NodeAffinityType:           []string{"requiredDuringSchedulingIgnoredDuringExecution"},
+					ThresholdPriorityClassName: priorityClassName,
+					ThresholdPriority:          priority,
+					Namespaces:                 generateNamespaces(strategy.Params),
 				},
 			}
+
 		case "nodetaints", "removepodsviolatingnodetaints":
-			policy.Strategies["RemovePodsViolatingNodeTaints"] = deschedulerapi.DeschedulerStrategy{Enabled: true}
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			policy.Strategies["RemovePodsViolatingNodeTaints"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: &deschedulerapi.StrategyParameters{
+					ThresholdPriorityClassName: priorityClassName,
+					ThresholdPriority:          priority,
+					Namespaces:                 generateNamespaces(strategy.Params),
+				},
+			}
+
 		case "removepodshavingtoomanyrestarts":
 			podsHavingTooManyRestarts := deschedulerapi.PodsHavingTooManyRestarts{}
 			for _, param := range strategy.Params {
@@ -232,11 +328,45 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 					podsHavingTooManyRestarts.IncludingInitContainers = value
 				}
 			}
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
 			policy.Strategies["RemovePodsHavingTooManyRestarts"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
-					PodsHavingTooManyRestarts: &podsHavingTooManyRestarts,
+					PodsHavingTooManyRestarts:  &podsHavingTooManyRestarts,
+					ThresholdPriorityClassName: priorityClassName,
+					ThresholdPriority:          priority,
+					Namespaces:                 generateNamespaces(strategy.Params),
 				},
 			}
+
+		case "podlifetime":
+			var lifetimeSeconds *uint
+			for _, param := range strategy.Params {
+				switch strings.ToLower(param.Name) {
+				case "maxpodlifetimeseconds":
+					value, err := strconv.Atoi(param.Value)
+					if err != nil {
+						return "", err
+					}
+					val := uint(value)
+					lifetimeSeconds = &val
+				}
+			}
+			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			policy.Strategies["PodLifeTime"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
+				Params: &deschedulerapi.StrategyParameters{
+					MaxPodLifeTimeSeconds:      lifetimeSeconds,
+					ThresholdPriorityClassName: priorityClassName,
+					ThresholdPriority:          priority,
+					Namespaces:                 generateNamespaces(strategy.Params),
+				},
+			}
+
 		default:
 			klog.Warningf("not using unknown strategy '%s'", strategy.Name)
 		}
