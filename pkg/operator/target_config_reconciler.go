@@ -210,7 +210,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			removeDuplicates := deschedulerapi.RemoveDuplicates{}
 			for _, param := range strategy.Params {
 				switch strings.ToLower(param.Name) {
-				case "excludeOwnerKinds":
+				case "excludeownerkinds":
 					removeDuplicates.ExcludeOwnerKinds = strings.Split(param.Value, ",")
 				}
 			}
