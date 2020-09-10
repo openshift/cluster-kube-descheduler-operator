@@ -164,9 +164,9 @@ func generateNamespaces(params []deschedulerv1beta1.Param) *deschedulerapi.Names
 	var namespaces deschedulerapi.Namespaces
 	for _, param := range params {
 		switch strings.ToLower(param.Name) {
-		case "includeNamespaces":
+		case "includenamespaces":
 			namespaces.Include = strings.Split(param.Value, ",")
-		case "excludeNamespaces":
+		case "excludenamespaces":
 			namespaces.Exclude = strings.Split(param.Value, ",")
 		default:
 			klog.Warningf("unknown Namespaces value: %s", param.Name)
