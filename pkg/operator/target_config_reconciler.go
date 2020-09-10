@@ -180,14 +180,14 @@ func generatePriorityThreshold(params []deschedulerv1beta1.Param) (string, *int3
 	var thresholdPriorityClassName string
 	for _, param := range params {
 		switch strings.ToLower(param.Name) {
-		case "thresholdPriority":
+		case "thresholdpriority":
 			value, err := strconv.Atoi(param.Value)
 			if err != nil {
 				return "", nil, err
 			}
 			priority := int32(value)
 			thresholdPriority = &priority
-		case "thresholdPriorityClassName":
+		case "thresholdpriorityclassname":
 			thresholdPriorityClassName = param.Value
 		default:
 			klog.Warningf("unknown PriorityThreshold value: %s", param.Name)
