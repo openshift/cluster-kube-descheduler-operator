@@ -11,6 +11,7 @@ import (
 )
 
 const OperatorNamespace = "openshift-kube-descheduler-operator"
+const OperatorConfigName = "cluster"
 
 type DeschedulerClient struct {
 	Ctx            context.Context
@@ -23,7 +24,7 @@ func (c *DeschedulerClient) Informer() cache.SharedIndexInformer {
 }
 
 func (c *DeschedulerClient) GetOperatorState() (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
-	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, "cluster", metav1.GetOptions{})
+	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -31,7 +32,7 @@ func (c *DeschedulerClient) GetOperatorState() (spec *operatorv1.OperatorSpec, s
 }
 
 func (c *DeschedulerClient) UpdateOperatorSpec(resourceVersion string, spec *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
-	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, "cluster", metav1.GetOptions{})
+	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -48,7 +49,7 @@ func (c *DeschedulerClient) UpdateOperatorSpec(resourceVersion string, spec *ope
 }
 
 func (c *DeschedulerClient) UpdateOperatorStatus(resourceVersion string, status *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
-	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, "cluster", metav1.GetOptions{})
+	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func (c *DeschedulerClient) UpdateOperatorStatus(resourceVersion string, status 
 }
 
 func (c *DeschedulerClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error) {
-	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, "cluster", metav1.GetOptions{})
+	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
