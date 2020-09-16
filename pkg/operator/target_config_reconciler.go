@@ -53,6 +53,26 @@ var validStrategies = sets.NewString(
 	"removepodshavingtoomanyrestarts",
 	"podlifetime")
 
+// array of valid parameters for strategies. Note that not every strategy accepts all of these parameters, and it is
+// up to the strategy itself to validate parameters that are passed to it. This allows common parameters like namespace
+// filtering to be easily checked without interfering with other valid parameters.
+var validParameters = sets.NewString(
+	"cputhreshold",
+	"memorythreshold",
+	"podsthreshold",
+	"memorytargetthreshold",
+	"cputargetthreshold",
+	"podstargetthreshold",
+	"numberofnodes",
+	"excludeownerkinds",
+	"thresholdpriority",
+	"thresholdpriorityclassname",
+	"podrestartthreshold",
+	"includinginitcontainers",
+	"includenamespaces",
+	"excludenamespaces",
+	)
+
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "5"}
@@ -161,7 +181,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func generateNamespaces(params []deschedulerv1beta1.Param) *deschedulerapi.Namespaces {
+func generateNamespaces(params []deschedulerv1beta1.Param) (*deschedulerapi.Namespaces, error) {
 	var namespaces deschedulerapi.Namespaces
 	for _, param := range params {
 		switch strings.ToLower(param.Name) {
@@ -169,11 +189,12 @@ func generateNamespaces(params []deschedulerv1beta1.Param) *deschedulerapi.Names
 			namespaces.Include = strings.Split(param.Value, ",")
 		case "excludenamespaces":
 			namespaces.Exclude = strings.Split(param.Value, ",")
-		default:
-			klog.Warningf("unknown Namespaces value: %s", param.Name)
 		}
 	}
-	return &namespaces
+	if len(namespaces.Include) > 0 && len(namespaces.Exclude) > 0 {
+		return nil, fmt.Errorf("cannot set both include and exclude namespaces")
+	}
+	return &namespaces, nil
 }
 
 func generatePriorityThreshold(params []deschedulerv1beta1.Param) (string, *int32, error) {
@@ -190,8 +211,6 @@ func generatePriorityThreshold(params []deschedulerv1beta1.Param) (string, *int3
 			thresholdPriority = &priority
 		case "thresholdpriorityclassname":
 			thresholdPriorityClassName = param.Value
-		default:
-			klog.Warningf("unknown PriorityThreshold value: %s", param.Name)
 		}
 	}
 	if len(thresholdPriorityClassName) > 0 && thresholdPriority != nil {
@@ -210,6 +229,10 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 		case "duplicates", "removeduplicates":
 			removeDuplicates := deschedulerapi.RemoveDuplicates{}
 			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+
 				switch strings.ToLower(param.Name) {
 				case "excludeownerkinds":
 					removeDuplicates.ExcludeOwnerKinds = strings.Split(param.Value, ",")
@@ -228,7 +251,17 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 
 		case "interpodantiaffinity", "removepodsviolatinginterpodantiaffinity":
+			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+			}
+
 			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			namespaces, err := generateNamespaces(strategy.Params)
 			if err != nil {
 				return "", err
 			}
@@ -236,7 +269,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				Params: &deschedulerapi.StrategyParameters{
 					ThresholdPriorityClassName: priorityClassName,
 					ThresholdPriority:          priority,
-					Namespaces:                 generateNamespaces(strategy.Params),
+					Namespaces:                 namespaces,
 				},
 			}
 
@@ -245,6 +278,10 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			thresholds := deschedulerapi.ResourceThresholds{}
 			targetThresholds := deschedulerapi.ResourceThresholds{}
 			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+
 				value, err := strconv.Atoi(param.Value)
 				if err != nil {
 					return "", err
@@ -285,7 +322,17 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 
 		case "nodeaffinity", "removepodsviolatingnodeaffinity":
+			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+			}
+
 			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			namespaces, err := generateNamespaces(strategy.Params)
 			if err != nil {
 				return "", err
 			}
@@ -294,12 +341,22 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 					NodeAffinityType:           []string{"requiredDuringSchedulingIgnoredDuringExecution"},
 					ThresholdPriorityClassName: priorityClassName,
 					ThresholdPriority:          priority,
-					Namespaces:                 generateNamespaces(strategy.Params),
+					Namespaces:                 namespaces,
 				},
 			}
 
 		case "nodetaints", "removepodsviolatingnodetaints":
+			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+			}
+
 			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
+			if err != nil {
+				return "", err
+			}
+			namespaces, err := generateNamespaces(strategy.Params)
 			if err != nil {
 				return "", err
 			}
@@ -307,13 +364,17 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 				Params: &deschedulerapi.StrategyParameters{
 					ThresholdPriorityClassName: priorityClassName,
 					ThresholdPriority:          priority,
-					Namespaces:                 generateNamespaces(strategy.Params),
+					Namespaces:                 namespaces,
 				},
 			}
 
 		case "removepodshavingtoomanyrestarts":
 			podsHavingTooManyRestarts := deschedulerapi.PodsHavingTooManyRestarts{}
 			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+
 				switch strings.ToLower(param.Name) {
 				case "podrestartthreshold":
 					value, err := strconv.Atoi(param.Value)
@@ -333,18 +394,26 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			if err != nil {
 				return "", err
 			}
+			namespaces, err := generateNamespaces(strategy.Params)
+			if err != nil {
+				return "", err
+			}
 			policy.Strategies["RemovePodsHavingTooManyRestarts"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
 					PodsHavingTooManyRestarts:  &podsHavingTooManyRestarts,
 					ThresholdPriorityClassName: priorityClassName,
 					ThresholdPriority:          priority,
-					Namespaces:                 generateNamespaces(strategy.Params),
+					Namespaces:                 namespaces,
 				},
 			}
 
 		case "podlifetime":
 			var lifetimeSeconds *uint
 			for _, param := range strategy.Params {
+				if !validParameters.Has(strings.ToLower(param.Name)) {
+					return "", fmt.Errorf("unknown strategy parameter '%s' for strategy '%s'", param.Name, strategy.Name)
+				}
+
 				switch strings.ToLower(param.Name) {
 				case "maxpodlifetimeseconds":
 					value, err := strconv.Atoi(param.Value)
@@ -359,12 +428,16 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			if err != nil {
 				return "", err
 			}
+			namespaces, err := generateNamespaces(strategy.Params)
+			if err != nil {
+				return "", err
+			}
 			policy.Strategies["PodLifeTime"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
 					MaxPodLifeTimeSeconds:      lifetimeSeconds,
 					ThresholdPriorityClassName: priorityClassName,
 					ThresholdPriority:          priority,
-					Namespaces:                 generateNamespaces(strategy.Params),
+					Namespaces:                 namespaces,
 				},
 			}
 
