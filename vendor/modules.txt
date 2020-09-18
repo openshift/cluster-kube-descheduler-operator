@@ -155,6 +155,18 @@ github.com/openshift/build-machinery-go/make/targets/golang
 github.com/openshift/build-machinery-go/make/targets/openshift
 github.com/openshift/build-machinery-go/make/targets/openshift/operator
 github.com/openshift/build-machinery-go/scripts
+# github.com/openshift/client-go v0.0.0-20200722173614-5a1b0aaeff15 => github.com/damemi/client-go v0.0.0-20200918144855-c1594bef24b2
+github.com/openshift/client-go/operator/clientset/versioned
+github.com/openshift/client-go/operator/clientset/versioned/scheme
+github.com/openshift/client-go/operator/clientset/versioned/typed/operator/v1
+github.com/openshift/client-go/operator/clientset/versioned/typed/operator/v1alpha1
+github.com/openshift/client-go/operator/informers/externalversions
+github.com/openshift/client-go/operator/informers/externalversions/internalinterfaces
+github.com/openshift/client-go/operator/informers/externalversions/operator
+github.com/openshift/client-go/operator/informers/externalversions/operator/v1
+github.com/openshift/client-go/operator/informers/externalversions/operator/v1alpha1
+github.com/openshift/client-go/operator/listers/operator/v1
+github.com/openshift/client-go/operator/listers/operator/v1alpha1
 # github.com/openshift/library-go v0.0.0-20200728084749-958c008826cb
 github.com/openshift/library-go/pkg/config/client
 github.com/openshift/library-go/pkg/config/configdefaults
@@ -167,6 +179,7 @@ github.com/openshift/library-go/pkg/controller/metrics
 github.com/openshift/library-go/pkg/crypto
 github.com/openshift/library-go/pkg/operator/condition
 github.com/openshift/library-go/pkg/operator/events
+github.com/openshift/library-go/pkg/operator/genericoperatorclient
 github.com/openshift/library-go/pkg/operator/management
 github.com/openshift/library-go/pkg/operator/resource/resourceapply
 github.com/openshift/library-go/pkg/operator/resource/resourcehelper
@@ -605,8 +618,9 @@ k8s.io/apiserver/plugin/pkg/authenticator/token/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook
 # k8s.io/client-go v0.19.0
 k8s.io/client-go/discovery
-k8s.io/client-go/discovery/fake
 k8s.io/client-go/dynamic
+k8s.io/client-go/dynamic/dynamicinformer
+k8s.io/client-go/dynamic/dynamiclister
 k8s.io/client-go/informers
 k8s.io/client-go/informers/admissionregistration
 k8s.io/client-go/informers/admissionregistration/v1
@@ -751,7 +765,6 @@ k8s.io/client-go/pkg/version
 k8s.io/client-go/plugin/pkg/client/auth/exec
 k8s.io/client-go/rest
 k8s.io/client-go/rest/watch
-k8s.io/client-go/testing
 k8s.io/client-go/tools/auth
 k8s.io/client-go/tools/cache
 k8s.io/client-go/tools/clientcmd
@@ -857,9 +870,6 @@ k8s.io/utils/trace
 # sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/descheduler v0.19.0
-sigs.k8s.io/descheduler/pkg/api
-sigs.k8s.io/descheduler/pkg/api/v1alpha1
 # sigs.k8s.io/structured-merge-diff/v4 v4.0.1
 sigs.k8s.io/structured-merge-diff/v4/fieldpath
 sigs.k8s.io/structured-merge-diff/v4/merge
