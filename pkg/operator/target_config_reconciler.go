@@ -55,7 +55,7 @@ var validStrategies = sets.NewString(
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
-var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "5"}
+var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "2"}
 
 type TargetConfigReconciler struct {
 	ctx               context.Context
