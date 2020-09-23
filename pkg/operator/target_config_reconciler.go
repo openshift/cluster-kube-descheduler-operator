@@ -176,6 +176,14 @@ func generateNamespaces(params []deschedulerv1beta1.Param) *deschedulerapi.Names
 	return &namespaces
 }
 
+func isPriorityThresholdParam(param deschedulerv1beta1.Param) bool {
+	switch strings.ToLower(param.Name) {
+	case "thresholdpriority", "thresholdpriorityclassname":
+		return true
+	}
+	return false
+}
+
 func generatePriorityThreshold(params []deschedulerv1beta1.Param) (string, *int32, error) {
 	var thresholdPriority *int32
 	var thresholdPriorityClassName string
@@ -245,6 +253,9 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			thresholds := deschedulerapi.ResourceThresholds{}
 			targetThresholds := deschedulerapi.ResourceThresholds{}
 			for _, param := range strategy.Params {
+				if isPriorityThresholdParam(param) {
+					continue
+				}
 				value, err := strconv.Atoi(param.Value)
 				if err != nil {
 					return "", err

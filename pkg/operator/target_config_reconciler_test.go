@@ -1,9 +1,10 @@
 package operator
 
 import (
-	deschedulerv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
 	"strings"
 	"testing"
+
+	deschedulerv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
 )
 
 func TestValidateStrategies(t *testing.T) {
@@ -44,5 +45,39 @@ func TestValidateStrategies(t *testing.T) {
 				t.Errorf("expected error %+v, got %+v", test.expectedErr, err)
 			}
 		})
+	}
+}
+
+func TestGenerateConfigMapString(t *testing.T) {
+	tests := []struct {
+		requestedStrategies []deschedulerv1beta1.Strategy
+		expectedErr         string
+	}{
+		{
+			requestedStrategies: []deschedulerv1beta1.Strategy{
+				{
+					Name: "LowNodeUtilization",
+					Params: []deschedulerv1beta1.Param{
+						{
+							Name:  "thresholdPriorityClassName",
+							Value: "priorityclass1",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		_, err := generateConfigMapString(test.requestedStrategies)
+		switch {
+		case err == nil && len(test.expectedErr) == 0:
+		case err == nil && len(test.expectedErr) != 0:
+			t.Errorf("expected error %+v, got none", test.expectedErr)
+		case err != nil && len(test.expectedErr) == 0:
+			t.Errorf("unexpected error %+v", err)
+		case err != nil && len(test.expectedErr) != 0 && !strings.Contains(err.Error(), test.expectedErr):
+			t.Errorf("expected error %+v, got %+v", test.expectedErr, err)
+		}
 	}
 }
