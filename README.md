@@ -49,13 +49,13 @@ This process refers to building the operator in a way that it can be installed l
 
 ## Sample CR
 
-A sample CR definition looks like below (the operator expects `config` CR under `openshift-kube-descheduler-operator` namespace):
+A sample CR definition looks like below (the operator expects `cluster` CR under `openshift-kube-descheduler-operator` namespace):
 
 ```yaml
 apiVersion: operator.openshift.io/v1beta1
 kind: KubeDescheduler
 metadata:
-  name: config
+  name: cluster
   namespace: openshift-kube-descheduler-operator
 spec:
   deschedulingIntervalSeconds: 1800
@@ -93,7 +93,7 @@ spec:
 ```
 The valid list of strategies are `RemoveDuplicates`, `LowNodeUtilization`, `RemovePodsViolatingInterPodAntiAffinity`, `RemovePodsViolatingNodeAffinity`, and `RemovePodsViolatingNodeTaints`. These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
 
-Using the above strategies defined in CR we create a configmap in openshift-descheduler-operator namespace. As shown in the above example CR, the `LowNodeUtilization` strategy is the only one which accepts additional `params`, which map to the `thresholds` and `targetThresholds` parameters as defined in the [`LowNodeUtilization` section of the descheduler README](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization). The `nodes` parameter corresponds to `numberOfNodes`, which activates this strategy only when the number of underutilized nodes is above the configured value (default `0`).
+Using the above strategies defined in CR we create a configmap in openshift-kube-descheduler-operator namespace. As shown in the above example CR, the `LowNodeUtilization` strategy is the only one which accepts additional `params`, which map to the `thresholds` and `targetThresholds` parameters as defined in the [`LowNodeUtilization` section of the descheduler README](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization). The `nodes` parameter corresponds to `numberOfNodes`, which activates this strategy only when the number of underutilized nodes is above the configured value (default `0`).
 
 ## How does the descheduler operator work?
 
