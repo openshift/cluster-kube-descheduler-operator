@@ -29,13 +29,17 @@ rules:
   verbs:
   - "*"
 - apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
   - apps
   resources:
   - deployments
   - replicasets
-  verbs:
-  - "*"
-- apiGroups: ["batch", "extensions"]
-  resources: ["jobs", "cronjobs"]
   verbs:
   - "*"
