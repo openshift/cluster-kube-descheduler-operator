@@ -59,6 +59,8 @@ spec:
       * `RemovePodsViolatingInterPodAntiAffinity` - This strategy ensures that pods violating inter-pod anti-affinity are removed from nodes.
       * `RemovePodsViolatingNodeAffinity` - This strategy ensures that pods violating node affinity are removed from nodes.
       * `RemovePodsViolatingNodeTaints` - This strategy ensures that pods violating `NoSchedule` taints on nodes are removed.
+      * `RemovePodsHavingTooManyRestarts` - This strategy ensures that pods having too many restarts are removed from nodes.
+      * `PodLifeTime` - This strategy evicts pods that are older than a specified time
 
       These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
 
