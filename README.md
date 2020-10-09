@@ -91,7 +91,16 @@ spec:
        - name: "includeNamespaces"
          value: "my-project"
 ```
-The valid list of strategies are `RemoveDuplicates`, `LowNodeUtilization`, `RemovePodsViolatingInterPodAntiAffinity`, `RemovePodsViolatingNodeAffinity`, and `RemovePodsViolatingNodeTaints`. These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
+The valid list of strategies are:
+- `RemoveDuplicates`
+- `LowNodeUtilization`
+- `RemovePodsViolatingInterPodAntiAffinity`
+- `RemovePodsViolatingNodeAffinity`
+- `RemovePodsViolatingNodeTaints`.
+- `RemovePodsHavingTooManyRestarts`
+- `PodLifeTime`
+
+These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
 
 Using the above strategies defined in CR we create a configmap in openshift-kube-descheduler-operator namespace. As shown in the above example CR, the `LowNodeUtilization` strategy is the only one which accepts additional `params`, which map to the `thresholds` and `targetThresholds` parameters as defined in the [`LowNodeUtilization` section of the descheduler README](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization). The `nodes` parameter corresponds to `numberOfNodes`, which activates this strategy only when the number of underutilized nodes is above the configured value (default `0`).
 
