@@ -59,50 +59,33 @@ metadata:
   namespace: openshift-kube-descheduler-operator
 spec:
   deschedulingIntervalSeconds: 1800
-  strategies:
-    - name: "LowNodeUtilization"
-      params:
-       - name: "CPUThreshold"
-         value: "10"
-       - name: "MemoryThreshold"
-         value: "20"
-       - name: "PodsThreshold"
-         value: "30"
-       - name: "MemoryTargetThreshold"
-         value: "40"
-       - name: "CPUTargetThreshold"
-         value: "50"
-       - name: "PodsTargetThreshold"
-         value: "60"
-       - name: "NumberOfNodes"
-         value: "3"
-    - name: "RemoveDuplicates"
-      params:
-       - name: "excludeOwnerKinds"
-         value: "DeploymentConfig"
-       - name: "thresholdPriority"
-         value: 1000000000
-    - name: "RemovePodsHavingTooManyRestarts"
-      params:
-       - name: "PodRestartThreshold"
-         value: "10"
-       - name: "IncludingInitContainers"
-         value: "false"
-       - name: "includeNamespaces"
-         value: "my-project"
+  policy:
+    name: descheduler-policy
 ```
-The valid list of strategies are:
-- `RemoveDuplicates`
-- `LowNodeUtilization`
-- `RemovePodsViolatingInterPodAntiAffinity`
-- `RemovePodsViolatingNodeAffinity`
-- `RemovePodsViolatingNodeTaints`.
-- `RemovePodsHavingTooManyRestarts`
-- `PodLifeTime`
 
-These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
+The operator accepts a `policy` parameter, which specifies the name of a configmap in the `openshift-kube-descheduler-operator` 
+namespace containing an upstream [`v1alpha1.DeschedulerPolicy` config](https://github.com/kubernetes-sigs/descheduler/blob/master/pkg/api/v1alpha1/types.go#L26).
 
-Using the above strategies defined in CR we create a configmap in openshift-kube-descheduler-operator namespace. As shown in the above example CR, the `LowNodeUtilization` strategy is the only one which accepts additional `params`, which map to the `thresholds` and `targetThresholds` parameters as defined in the [`LowNodeUtilization` section of the descheduler README](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization). The `nodes` parameter corresponds to `numberOfNodes`, which activates this strategy only when the number of underutilized nodes is above the configured value (default `0`).
+The policy file must be named `policy.cfg`. For example, you can create the following file:
+```
+$ cat policy.cfg 
+apiVersion: "descheduler/v1alpha1"
+kind: "DeschedulerPolicy"
+strategies:
+  "RemoveDuplicates":
+     enabled: true
+     params:
+       removeDuplicates:
+         excludeOwnerKinds:
+         - "ReplicaSet"
+```
+
+Then create the configmap:
+```
+$ oc create configmap --from-file=policy.cfg descheduler-policy
+```
+
+For example configs and documentation please see the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
 
 ## How does the descheduler operator work?
 
