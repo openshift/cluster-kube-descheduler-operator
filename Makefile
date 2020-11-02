@@ -8,6 +8,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	targets/openshift/images.mk \
 	targets/openshift/codegen.mk \
 	targets/openshift/deps.mk \
+	targets/openshift/crd-schema-gen.mk \
 )
 
 # Exclude e2e tests from unit testing
@@ -38,9 +39,18 @@ $(call build-image,ocp-cluster-kube-descheduler-operator,$(IMAGE_REGISTRY)/ocp/4
 # and also hooked into {update,verify}-generated for broader integration.
 $(call add-bindata,v4.1.0,./bindata/v4.1.0/...,bindata,v410_00_assets,pkg/operator/v410_00_assets/bindata.go)
 
+$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1beta1,./manifests/4.7,./manifests/4.7)
+
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 test-e2e: test-unit
 .PHONY: test-e2e
+
+generate: update-codegen-crds generate-clients
+.PHONY: generate
+
+generate-clients:
+	./vendor/k8s.io/code-generator/generate-groups.sh all github.com/openshift/cluster-kube-descheduler-operator/pkg/generated github.com/openshift/cluster-kube-descheduler-operator/pkg/apis descheduler:v1beta1
+.PHONY: generate-clients
 
 clean:
 	$(RM) ./cluster-kube-scheduler-operator
