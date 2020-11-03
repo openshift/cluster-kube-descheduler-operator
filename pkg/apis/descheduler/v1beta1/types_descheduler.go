@@ -1,6 +1,7 @@
 package v1beta1
 
 import (
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -27,8 +28,15 @@ type KubeDeschedulerSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
 	// Strategies contain list of strategies that should be enabled in descheduler.
+	// DEPRECATED: This field for configuring strategies has been deprecated in favor of an upstream policy.
+	// Note that it may not support all strategies, please use "policy" instead.
 	// +optional
 	Strategies []Strategy `json:"strategies,omitempty"`
+
+	// Policy is a reference to a configmap containing an upstream DeschedulerPolicy
+	// +option
+	Policy configv1.ConfigMapNameReference `json:"policy,omitempty"`
+
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
 	// +optional
 	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds,omitempty"`

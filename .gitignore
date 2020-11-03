@@ -17,7 +17,7 @@ cluster-kube-descheduler-operator
 tmp/_output
 tmp/_test
 .idea
-
+_output
 
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 

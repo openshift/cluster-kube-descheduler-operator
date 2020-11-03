@@ -82,7 +82,6 @@ func NewTargetConfigReconciler(
 		eventRecorder:     eventRecorder,
 		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
 	}
-
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 
 	return c
@@ -99,8 +98,14 @@ func (c TargetConfigReconciler) sync() error {
 		return fmt.Errorf("descheduler should have an interval set")
 	}
 
-	if err := validateStrategies(descheduler.Spec.Strategies); err != nil {
-		return err
+	// TODO(@damemi): Remove this check and related functions when Strategies is removed
+	if len(descheduler.Spec.Strategies) > 0 {
+		klog.Warningf("'spec.Strategies' has been deprecated, use 'policy' instead")
+		if err := validateStrategies(descheduler.Spec.Strategies); err != nil {
+			return err
+		}
+	} else if len(descheduler.Spec.Policy.Name) == 0 {
+		return fmt.Errorf("descheduler must set a policy configmap")
 	}
 	forceDeployment := false
 	_, forceDeployment, err = c.manageConfigMap(descheduler)
@@ -153,11 +158,19 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 			UID:        descheduler.UID,
 		},
 	}
-	configMapString, err := generateConfigMapString(descheduler.Spec.Strategies)
-	if err != nil {
-		return nil, false, err
+	data := ""
+	if len(descheduler.Spec.Strategies) > 0 {
+		configMapString, err := generateConfigMapString(descheduler.Spec.Strategies)
+		if err != nil {
+			return nil, false, err
+		}
+		data = configMapString
+	} else if descheduler.Spec.Policy.Name == descheduler.Name {
+		return nil, false, fmt.Errorf("%s is reserved as a policy configmap name", descheduler.Name)
+	} else {
+		data = string(descheduler.Spec.ObservedConfig.Raw)
 	}
-	required.Data = map[string]string{"policy.yaml": configMapString}
+	required.Data = map[string]string{"policy.yaml": data}
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
