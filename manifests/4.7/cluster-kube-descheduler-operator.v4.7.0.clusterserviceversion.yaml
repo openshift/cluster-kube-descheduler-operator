@@ -16,7 +16,8 @@ metadata:
           },
           "spec": {
             "image": "quay.io/openshift/origin-descheduler:4.7",
-            "deschedulingIntervalSeconds": 3600
+            "deschedulingIntervalSeconds": 3600,
+            "managementState": "Managed"
           }
         }
       ]
