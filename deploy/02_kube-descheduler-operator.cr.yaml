@@ -5,7 +5,7 @@ metadata:
   namespace: openshift-kube-descheduler-operator
 spec:
   image: quay.io/openshift/origin-descheduler:latest
-  managementState: Unmanaged
+  managementState: Managed
   deschedulingIntervalSeconds: 3600
   strategies:
   - name: "LowNodeUtilization"
