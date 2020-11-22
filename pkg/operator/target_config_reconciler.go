@@ -367,7 +367,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 
 		case "podlifetime":
-			var lifetimeSeconds *uint
+			podLifeTime := &deschedulerapi.PodLifeTime{}
 			for _, param := range strategy.Params {
 				switch strings.ToLower(param.Name) {
 				case "maxpodlifetimeseconds":
@@ -376,7 +376,9 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 						return "", err
 					}
 					val := uint(value)
-					lifetimeSeconds = &val
+					podLifeTime.MaxPodLifeTimeSeconds = &val
+				case "podstatusphases":
+					podLifeTime.PodStatusPhases = strings.Split(param.Value, ",")
 				}
 			}
 			priorityClassName, priority, err := generatePriorityThreshold(strategy.Params)
@@ -385,7 +387,7 @@ func generateConfigMapString(requestedStrategies []deschedulerv1beta1.Strategy) 
 			}
 			policy.Strategies["PodLifeTime"] = deschedulerapi.DeschedulerStrategy{Enabled: true,
 				Params: &deschedulerapi.StrategyParameters{
-					MaxPodLifeTimeSeconds:      lifetimeSeconds,
+					PodLifeTime:                podLifeTime,
 					ThresholdPriorityClassName: priorityClassName,
 					ThresholdPriority:          priority,
 					Namespaces:                 generateNamespaces(strategy.Params),
