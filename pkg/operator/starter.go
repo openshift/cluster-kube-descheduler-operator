@@ -2,8 +2,6 @@ package operator
 
 import (
 	"context"
-	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation/configobservercontroller"
-	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/resourcesynccontroller"
 	"k8s.io/klog/v2"
 	"time"
 
@@ -11,8 +9,11 @@ import (
 
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation/configobservercontroller"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/resourcesynccontroller"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
+	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 )
 
@@ -69,9 +70,14 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		cc.EventRecorder,
 	)
 
+	logLevelController := loglevel.NewClusterOperatorLoggingController(deschedulerClient, cc.EventRecorder)
+
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
+
+	klog.Infof("Starting log level controller")
+	go logLevelController.Run(ctx, 1)
 	klog.Infof("Starting target config reconciler")
 	go targetConfigReconciler.Run(1, ctx.Done())
 	klog.Infof("Starting config observer")
