@@ -118,7 +118,7 @@ spec:
           - pods
           - configmaps
           - secrets
-          - names
+          - namespaces
           - nodes
           - pods/eviction
           - events
