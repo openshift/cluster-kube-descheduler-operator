@@ -43,13 +43,15 @@ spec:
                 type: integer
                 format: int32
               flags:
-                description: Flags for descheduler.
+                description: 'Flags for descheduler. DEPRECATED: This field is no
+                  longer supported'
                 type: array
                 items:
                   type: string
               image:
-                description: Image of the deschduler being managed. This includes
-                  the version of the operand(descheduler).
+                description: 'Image of the deschduler being managed. This includes
+                  the version of the operand(descheduler). DEPRECATED: This field
+                  is no longer supported'
                 type: string
               logLevel:
                 description: "logLevel is an intent based logging for an overall component.
@@ -91,25 +93,27 @@ spec:
                 - Debug
                 - Trace
                 - TraceAll
-              policy:
-                description: Policy is a reference to a configmap containing an upstream
-                  DeschedulerPolicy
-                type: object
-                required:
-                - name
-                properties:
-                  name:
-                    description: name is the metadata.name of the referenced config
-                      map
-                    type: string
+              profiles:
+                description: Profiles sets which descheduler strategy profiles are
+                  enabled
+                type: array
+                items:
+                  description: DeschedulerProfile allows configuring the enabled strategy
+                    profiles for the descheduler it allows multiple profiles to be
+                    enabled at once, which will have cumulative effects on the cluster.
+                  type: string
+                  enum:
+                  - AffinityAndTaints
+                  - TopologyAndDuplicates
+                  - LifecycleAndUtilization
               strategies:
                 description: 'Strategies contain list of strategies that should be
                   enabled in descheduler. DEPRECATED: This field for configuring strategies
-                  has been deprecated in favor of an upstream policy. Note that it
-                  may not support all strategies, please use "policy" instead.'
+                  has been deprecated in favor of profiles. Setting it will not do
+                  anything, it is only provided to allow transition of existing objects.'
                 type: array
                 items:
-                  description: Strategy supported by descheduler
+                  description: Strategy supported by descheduler DEPRECATED
                   type: object
                   properties:
                     name:
@@ -118,7 +122,7 @@ spec:
                       type: array
                       items:
                         description: Param is a key/value pair representing the parameters
-                          in strategy or flags.
+                          in strategy or flags. DEPRECATED
                         type: object
                         properties:
                           name:
