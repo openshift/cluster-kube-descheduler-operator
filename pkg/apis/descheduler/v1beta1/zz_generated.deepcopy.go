@@ -96,7 +96,11 @@ func (in *KubeDeschedulerSpec) DeepCopyInto(out *KubeDeschedulerSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	out.Policy = in.Policy
+	if in.Profiles != nil {
+		in, out := &in.Profiles, &out.Profiles
+		*out = make([]DeschedulerProfile, len(*in))
+		copy(*out, *in)
+	}
 	if in.DeschedulingIntervalSeconds != nil {
 		in, out := &in.DeschedulingIntervalSeconds, &out.DeschedulingIntervalSeconds
 		*out = new(int32)

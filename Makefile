@@ -49,9 +49,9 @@ generate: update-codegen-crds generate-clients
 .PHONY: generate
 
 generate-clients:
-	./vendor/k8s.io/code-generator/generate-groups.sh all github.com/openshift/cluster-kube-descheduler-operator/pkg/generated github.com/openshift/cluster-kube-descheduler-operator/pkg/apis descheduler:v1beta1
+	bash ./vendor/k8s.io/code-generator/generate-groups.sh all github.com/openshift/cluster-kube-descheduler-operator/pkg/generated github.com/openshift/cluster-kube-descheduler-operator/pkg/apis descheduler:v1beta1
 .PHONY: generate-clients
 
 clean:
-	$(RM) ./cluster-kube-scheduler-operator
+	$(RM) ./cluster-kube-descheduler-operator
 .PHONY: clean
