@@ -4,24 +4,7 @@ metadata:
   name: cluster
   namespace: openshift-kube-descheduler-operator
 spec:
-  image: quay.io/openshift/origin-descheduler:latest
   managementState: Managed
   deschedulingIntervalSeconds: 3600
-  strategies:
-  - name: "LowNodeUtilization"
-    params:
-     - name: "cputhreshold"
-       value: "10"
-     - name: "memorythreshold"
-       value: "20"
-     - name: "podsthreshold"
-       value: "30"
-     - name: "memorytargetthreshold"
-       value: "40"
-     - name: "cputargetthreshold"
-       value: "50"
-     - name: "podstargetthreshold"
-       value: "60"
-     - name: "nodes"
-       value: "3"
-  - name: "RemoveDuplicates"
+  profiles:
+    - AffinityAndTaints
