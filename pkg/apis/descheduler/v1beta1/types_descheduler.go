@@ -1,7 +1,6 @@
 package v1beta1
 
 import (
-	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -28,32 +27,55 @@ type KubeDeschedulerSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
 	// Strategies contain list of strategies that should be enabled in descheduler.
-	// DEPRECATED: This field for configuring strategies has been deprecated in favor of an upstream policy.
-	// Note that it may not support all strategies, please use "policy" instead.
+	// DEPRECATED: This field for configuring strategies has been deprecated in favor of profiles.
+	// Setting it will not do anything, it is only provided to allow transition of existing objects.
 	// +optional
 	Strategies []Strategy `json:"strategies,omitempty"`
 
-	// Policy is a reference to a configmap containing an upstream DeschedulerPolicy
-	// +option
-	Policy configv1.ConfigMapNameReference `json:"policy,omitempty"`
+	// Profiles sets which descheduler strategy profiles are enabled
+	Profiles []DeschedulerProfile `json:"profiles"`
 
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
 	// +optional
 	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds,omitempty"`
+
 	// Flags for descheduler.
+	// DEPRECATED: This field is no longer supported
 	// +optional
 	Flags []string `json:"flags,omitempty"`
 	// Image of the deschduler being managed. This includes the version of the operand(descheduler).
+	// DEPRECATED: This field is no longer supported
+	// +optional
 	Image string `json:"image,omitempty"`
 }
 
+// DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
+// it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization
+type DeschedulerProfile string
+
+var (
+	// AffinityAndTaints enables descheduling strategies that balance pods based on affinity and
+	// node taint violations.
+	AffinityAndTaints DeschedulerProfile = "AffinityAndTaints"
+
+	// TopologyAndDuplicates attempts to spread pods evenly among nodes based on topology spread
+	// constraints and duplicate replicas on the same node.
+	TopologyAndDuplicates DeschedulerProfile = "TopologyAndDuplicates"
+
+	// LifecycleAndUtilization attempts to balance pods based on node resource usage, pod age, and pod restarts
+	LifecycleAndUtilization DeschedulerProfile = "LifecycleAndUtilization"
+)
+
 // Strategy supported by descheduler
+// DEPRECATED
 type Strategy struct {
 	Name   string  `json:"name,omitempty"`
 	Params []Param `json:"params,omitempty"`
 }
 
 // Param is a key/value pair representing the parameters in strategy or flags.
+// DEPRECATED
 type Param struct {
 	Name  string `json:"name,omitempty"`
 	Value string `json:"value,omitempty"`
