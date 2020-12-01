@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/ghodss/yaml"
+	"github.com/imdario/mergo"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	deschedulerv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
@@ -30,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	deschedulerapi "sigs.k8s.io/descheduler/pkg/api/v1alpha1"
 )
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
@@ -39,12 +44,13 @@ const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "2"}
 
 type TargetConfigReconciler struct {
-	ctx               context.Context
-	operatorClient    operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
-	deschedulerClient *operatorclient.DeschedulerClient
-	kubeClient        kubernetes.Interface
-	eventRecorder     events.Recorder
-	queue             workqueue.RateLimitingInterface
+	ctx                context.Context
+	operatorClient     operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
+	deschedulerClient  *operatorclient.DeschedulerClient
+	kubeClient         kubernetes.Interface
+	eventRecorder      events.Recorder
+	queue              workqueue.RateLimitingInterface
+	excludedNamespaces []string
 }
 
 func NewTargetConfigReconciler(
@@ -55,13 +61,27 @@ func NewTargetConfigReconciler(
 	kubeClient kubernetes.Interface,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
+	// make sure our list of excluded system namespaces is up to date
+	allNamespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		klog.ErrorS(err, "error listing namespaces")
+		return nil
+	}
+	excludedNamespaces := []string{"kube-system"}
+	for _, ns := range allNamespaces.Items {
+		if strings.HasPrefix(ns.Name, "openshift-") {
+			excludedNamespaces = append(excludedNamespaces, ns.Name)
+		}
+	}
+
 	c := &TargetConfigReconciler{
-		ctx:               ctx,
-		operatorClient:    operatorConfigClient,
-		deschedulerClient: deschedulerClient,
-		kubeClient:        kubeClient,
-		eventRecorder:     eventRecorder,
-		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
+		ctx:                ctx,
+		operatorClient:     operatorConfigClient,
+		deschedulerClient:  deschedulerClient,
+		kubeClient:         kubeClient,
+		eventRecorder:      eventRecorder,
+		queue:              workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
+		excludedNamespaces: excludedNamespaces,
 	}
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 
@@ -108,7 +128,35 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 			UID:        descheduler.UID,
 		},
 	}
-	required.Data = map[string]string{"policy.yaml": ""}
+
+	// parse whatever profiles are set into their policy representations then merge them into one file
+	policy := &deschedulerapi.DeschedulerPolicy{}
+	for _, profileName := range descheduler.Spec.Profiles {
+		p := v410_00_assets.MustAsset("v4.1.0/profiles/" + string(profileName) + ".yaml")
+		profile := &deschedulerapi.DeschedulerPolicy{}
+		if err := yaml.Unmarshal(p, profile); err != nil {
+			return nil, false, err
+		}
+
+		// exclude openshift namespaces from descheduling
+		for name, strategy := range profile.Strategies {
+			// skip strategies which don't support namespace exclusion yet
+			if name == "LowNodeUtilization" {
+				continue
+			}
+			if strategy.Params == nil {
+				strategy.Params = &deschedulerapi.StrategyParameters{}
+			}
+			strategy.Params.Namespaces = &deschedulerapi.Namespaces{Exclude: c.excludedNamespaces}
+			profile.Strategies[name] = strategy
+		}
+		mergo.Merge(policy, profile, mergo.WithAppendSlice)
+	}
+	policyBytes, err := yaml.Marshal(policy)
+	if err != nil {
+		return nil, false, err
+	}
+	required.Data = map[string]string{"policy.yaml": string(policyBytes)}
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
@@ -124,7 +172,6 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 			UID:        descheduler.UID,
 		},
 	}
-	required.Spec.Template.Spec.Containers[0].Image = descheduler.Spec.Image
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
 	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
@@ -140,11 +187,6 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("-v=%d", 8))
 	default:
 		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("-v=%d", 2))
-	}
-
-	// Add any additional flags that were specified
-	if len(descheduler.Spec.Flags) > 0 {
-		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, descheduler.Spec.Flags...)
 	}
 
 	if !forceDeployment {
