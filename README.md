@@ -59,33 +59,46 @@ metadata:
   namespace: openshift-kube-descheduler-operator
 spec:
   deschedulingIntervalSeconds: 1800
-  policy:
-    name: descheduler-policy
+  profiles:
+  - AffinityAndTaints
 ```
 
-The operator accepts a `policy` parameter, which specifies the name of a configmap in the `openshift-kube-descheduler-operator` 
-namespace containing an upstream [`v1alpha1.DeschedulerPolicy` config](https://github.com/kubernetes-sigs/descheduler/blob/master/pkg/api/v1alpha1/types.go#L26).
+The operator spec provides a `profiles` field, which allows users to set one or more descheduling profiles to enable.
 
-The policy file must be named `policy.cfg`. For example, you can create the following file:
-```
-$ cat policy.cfg 
-apiVersion: "descheduler/v1alpha1"
-kind: "DeschedulerPolicy"
-strategies:
-  "RemoveDuplicates":
-     enabled: true
-     params:
-       removeDuplicates:
-         excludeOwnerKinds:
-         - "ReplicaSet"
-```
+These profiles map to preconfigured policy definitions, enabling several descheduler strategies grouped by intent, and 
+any that are enabled will be merged.
 
-Then create the configmap:
-```
-$ oc create configmap --from-file=policy.cfg descheduler-policy
-```
+## Profiles
 
-For example configs and documentation please see the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
+The following profiles are currently provided:
+* [`AffinityAndTaints`](#AffinityAndTaints)
+* [`TopologyAndDuplicates`](#TopologyAndDuplicates)
+* [`LifecycleAndUtilization`](#LifecycleAndUtilization)
+
+Each of these enables cluster-wide descheduling (excluding openshift and kube-system namespaces) based on certain goals.
+
+### AffinityAndTaints
+This is the most basic descheduling profile and it removes running pods which violate node and pod affinity, and node 
+taints.
+
+This profile enables the [`RemovePodsViolatingInterPodAntiAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatinginterpodantiaffinity), 
+[`RemovePodsViolatingNodeAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity), and 
+[`RemovePodsViolatingNodeTaints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity) strategies.
+
+### TopologyAndDuplicates
+This profile attempts to balance pod distribution based on topology constraint definitions and evicting duplicate copies 
+of the same pod running on the same node. It enables the [`RemovePodsViolatingTopologySpreadConstraints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingtopologyspreadconstraint) 
+and [`RemoveDuplicates`](https://github.com/kubernetes-sigs/descheduler/#removeduplicates) strategies.
+
+### LifecycleAndUtilization
+This profile focuses on pod lifecycles and node resource consumption. It will evict any running pod older than 24 hours 
+and attempts to evict pods from "high utilization" nodes that can fit onto "low utilization" nodes. A high utilization 
+node is any node consuming more than 50% its available cpu, memory, *or* pod capacity. A low utilization node is any node 
+with less than 20% of its available cpu, memory, *and* pod capacity.
+
+This profile enables the [`LowNodeUtilizaition`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization) and 
+[`PodLifeTime`](https://github.com/kubernetes-sigs/descheduler/#podlifetime) strategies. In the future, more configuration 
+may be made available through the operator for these strategies based on user feedback.
 
 ## How does the descheduler operator work?
 
@@ -96,32 +109,27 @@ Descheduler operator at a high level is responsible for watching the above CR
 The configmap created from above sample CR definition looks like this:
 
 ```yaml
-apiVersion: "kubedeschedulers.operator.openshift.io/v1beta1"
-kind: "DeschedulerPolicy"
-strategies:
-  "RemoveDuplicates":
-     enabled: true
-  "LowNodeUtilization":
-     enabled: true
-     params:
-       nodeResourceUtilizationThresholds:
-         thresholds:
-           "cpu" : 10
-           "memory": 20
-           "pods": 30
-         targetThresholds:
-           "cpu" : 40
-           "memory": 50
-           "pods": 60
-         numberOfNodes: 3
+apiVersion: descheduler/v1alpha1
+    kind: DeschedulerPolicy
+    strategies:
+      RemovePodsViolatingInterPodAntiAffinity:
+        enabled: true
+        ...
+      RemovePodsViolatingNodeAffinity:
+        enabled: true
+        params:
+          ...
+          nodeAffinityType:
+          - requiredDuringSchedulingIgnoredDuringExecution
+      RemovePodsViolatingNodeTaints:
+        enabled: true
+        ...
 ```
-
-The above configmap would be mounted as a volume in descheduler pod created. Whenever we change strategies, parameters or schedule in the CR, the descheduler operator is responsible for identifying those changes and regenerating the configmap. For more information on how descheduler works, please visit [descheduler](https://docs.openshift.com/container-platform/3.11/admin_guide/scheduling/descheduler.html)
+(Some generated parameters omitted.)
 
 
 ## Parameters
 The Descheduler operator exposes the following parameters in its CRD:
 
 * `deschedulingIntervalSeconds` - this sets the number of seconds between descheduler runs
-* `image` - specifies the Descheduler container image to deploy
-* `flags` - this allows additional descheduler flags to be set, and they will be appended to the descheduler pod. Therefore, they must be in the same format as would be passed to the descheduler binary (eg, `"--dry-run"`)
+* `profiles` - which descheduler profiles that are enabled

@@ -2,6 +2,9 @@
 // sources:
 // bindata/v4.1.0/kube-descheduler/configmap.yaml
 // bindata/v4.1.0/kube-descheduler/deployment.yaml
+// bindata/v4.1.0/profiles/AffinityAndTaints.yaml
+// bindata/v4.1.0/profiles/LifecycleAndUtilization.yaml
+// bindata/v4.1.0/profiles/TopologyAndDuplicates.yaml
 package v410_00_assets
 
 import (
@@ -104,7 +107,7 @@ spec:
       restartPolicy: "Always"
       containers:
         - name: "openshift-descheduler"
-          image: "us.gcr.io/k8s-artifacts-prod/descheduler/descheduler:v0.10.0"
+          image: "quay.io/openshift/origin-descheduler:4.7"
           resources:
             limits:
               cpu: "100m"
@@ -133,6 +136,102 @@ func v410KubeDeschedulerDeploymentYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/deployment.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410ProfilesAffinityandtaintsYaml = []byte(`apiVersion: "descheduler/v1alpha1"
+kind: "DeschedulerPolicy"
+strategies:
+  "RemovePodsViolatingInterPodAntiAffinity":
+    enabled: true
+  "RemovePodsViolatingNodeTaints":
+    enabled: true
+  "RemovePodsViolatingNodeAffinity":
+    enabled: true
+    params:
+      nodeAffinityType:
+      - "requiredDuringSchedulingIgnoredDuringExecution"
+`)
+
+func v410ProfilesAffinityandtaintsYamlBytes() ([]byte, error) {
+	return _v410ProfilesAffinityandtaintsYaml, nil
+}
+
+func v410ProfilesAffinityandtaintsYaml() (*asset, error) {
+	bytes, err := v410ProfilesAffinityandtaintsYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/profiles/AffinityAndTaints.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410ProfilesLifecycleandutilizationYaml = []byte(`apiVersion: "descheduler/v1alpha1"
+kind: "DeschedulerPolicy"
+strategies:
+  "PodLifeTime":
+     enabled: true
+     params:
+       podLifeTime:
+         maxPodLifeTimeSeconds: 86400 #24 hours
+  "RemovePodsHavingTooManyRestarts":
+     enabled: true
+     params:
+       podsHavingTooManyRestarts:
+         podRestartThreshold: 100
+         includingInitContainers: true
+  "LowNodeUtilization":
+     enabled: true
+     params:
+       nodeResourceUtilizationThresholds:
+         thresholds:
+           "cpu" : 20
+           "memory": 20
+           "pods": 20
+         targetThresholds:
+           "cpu" : 50
+           "memory": 50
+           "pods": 50
+`)
+
+func v410ProfilesLifecycleandutilizationYamlBytes() ([]byte, error) {
+	return _v410ProfilesLifecycleandutilizationYaml, nil
+}
+
+func v410ProfilesLifecycleandutilizationYaml() (*asset, error) {
+	bytes, err := v410ProfilesLifecycleandutilizationYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/profiles/LifecycleAndUtilization.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410ProfilesTopologyandduplicatesYaml = []byte(`apiVersion: "descheduler/v1alpha1"
+kind: "DeschedulerPolicy"
+strategies:
+  "RemovePodsViolatingTopologySpreadConstraint":
+    enabled: true
+  "RemoveDuplicates":
+    enabled: true
+`)
+
+func v410ProfilesTopologyandduplicatesYamlBytes() ([]byte, error) {
+	return _v410ProfilesTopologyandduplicatesYaml, nil
+}
+
+func v410ProfilesTopologyandduplicatesYaml() (*asset, error) {
+	bytes, err := v410ProfilesTopologyandduplicatesYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/profiles/TopologyAndDuplicates.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -189,8 +288,11 @@ func AssetNames() []string {
 
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
-	"v4.1.0/kube-descheduler/configmap.yaml":  v410KubeDeschedulerConfigmapYaml,
-	"v4.1.0/kube-descheduler/deployment.yaml": v410KubeDeschedulerDeploymentYaml,
+	"v4.1.0/kube-descheduler/configmap.yaml":       v410KubeDeschedulerConfigmapYaml,
+	"v4.1.0/kube-descheduler/deployment.yaml":      v410KubeDeschedulerDeploymentYaml,
+	"v4.1.0/profiles/AffinityAndTaints.yaml":       v410ProfilesAffinityandtaintsYaml,
+	"v4.1.0/profiles/LifecycleAndUtilization.yaml": v410ProfilesLifecycleandutilizationYaml,
+	"v4.1.0/profiles/TopologyAndDuplicates.yaml":   v410ProfilesTopologyandduplicatesYaml,
 }
 
 // AssetDir returns the file names below a certain
@@ -238,6 +340,11 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"kube-descheduler": {nil, map[string]*bintree{
 			"configmap.yaml":  {v410KubeDeschedulerConfigmapYaml, map[string]*bintree{}},
 			"deployment.yaml": {v410KubeDeschedulerDeploymentYaml, map[string]*bintree{}},
+		}},
+		"profiles": {nil, map[string]*bintree{
+			"AffinityAndTaints.yaml":       {v410ProfilesAffinityandtaintsYaml, map[string]*bintree{}},
+			"LifecycleAndUtilization.yaml": {v410ProfilesLifecycleandutilizationYaml, map[string]*bintree{}},
+			"TopologyAndDuplicates.yaml":   {v410ProfilesTopologyandduplicatesYaml, map[string]*bintree{}},
 		}},
 	}},
 }}
