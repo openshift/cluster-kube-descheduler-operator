@@ -130,6 +130,9 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 	}
 
 	// parse whatever profiles are set into their policy representations then merge them into one file
+	if len(descheduler.Spec.Profiles) == 0 {
+		return nil, false, fmt.Errorf("descheduler should have at least 1 profile enabled")
+	}
 	policy := &deschedulerapi.DeschedulerPolicy{}
 	for _, profileName := range descheduler.Spec.Profiles {
 		p := v410_00_assets.MustAsset("v4.1.0/profiles/" + string(profileName) + ".yaml")
