@@ -175,6 +175,8 @@ spec:
                           fieldPath: metadata.namespace
                     - name: OPERATOR_NAME
                       value: "descheduler-operator"
+                    - name: IMAGE
+                      value: quay.io/openshift/origin-descheduler:4.7
               serviceAccountName: openshift-descheduler
               serviceAccount: openshift-descheduler
     strategy: deployment
