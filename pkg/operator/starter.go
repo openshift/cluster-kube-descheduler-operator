@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"k8s.io/klog/v2"
+	"os"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -43,6 +44,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
+		os.Getenv("IMAGE"),
 		operatorConfigClient.KubedeschedulersV1beta1(),
 		operatorConfigInformers.Kubedeschedulers().V1beta1().KubeDeschedulers(),
 		deschedulerClient,

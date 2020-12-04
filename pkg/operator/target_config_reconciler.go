@@ -44,17 +44,19 @@ const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "2"}
 
 type TargetConfigReconciler struct {
-	ctx                context.Context
-	operatorClient     operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
-	deschedulerClient  *operatorclient.DeschedulerClient
-	kubeClient         kubernetes.Interface
-	eventRecorder      events.Recorder
-	queue              workqueue.RateLimitingInterface
-	excludedNamespaces []string
+	ctx                 context.Context
+	targetImagePullSpec string
+	operatorClient      operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
+	deschedulerClient   *operatorclient.DeschedulerClient
+	kubeClient          kubernetes.Interface
+	eventRecorder       events.Recorder
+	queue               workqueue.RateLimitingInterface
+	excludedNamespaces  []string
 }
 
 func NewTargetConfigReconciler(
 	ctx context.Context,
+	targetImagePullSpec string,
 	operatorConfigClient operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface,
 	operatorClientInformer operatorclientinformers.KubeDeschedulerInformer,
 	deschedulerClient *operatorclient.DeschedulerClient,
@@ -75,13 +77,14 @@ func NewTargetConfigReconciler(
 	}
 
 	c := &TargetConfigReconciler{
-		ctx:                ctx,
-		operatorClient:     operatorConfigClient,
-		deschedulerClient:  deschedulerClient,
-		kubeClient:         kubeClient,
-		eventRecorder:      eventRecorder,
-		queue:              workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
-		excludedNamespaces: excludedNamespaces,
+		ctx:                 ctx,
+		operatorClient:      operatorConfigClient,
+		deschedulerClient:   deschedulerClient,
+		kubeClient:          kubeClient,
+		eventRecorder:       eventRecorder,
+		queue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
+		excludedNamespaces:  excludedNamespaces,
+		targetImagePullSpec: targetImagePullSpec,
 	}
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 
@@ -178,6 +181,18 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
 	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
+
+	images := map[string]string{
+		"${IMAGE}": c.targetImagePullSpec,
+	}
+	for i := range required.Spec.Template.Spec.Containers {
+		for pat, img := range images {
+			if required.Spec.Template.Spec.Containers[i].Image == pat {
+				required.Spec.Template.Spec.Containers[i].Image = img
+				break
+			}
+		}
+	}
 
 	switch descheduler.Spec.LogLevel {
 	case operatorv1.Normal:

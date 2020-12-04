@@ -107,7 +107,7 @@ spec:
       restartPolicy: "Always"
       containers:
         - name: "openshift-descheduler"
-          image: "quay.io/openshift/origin-descheduler:4.7"
+          image: ${IMAGE}
           resources:
             limits:
               cpu: "100m"
