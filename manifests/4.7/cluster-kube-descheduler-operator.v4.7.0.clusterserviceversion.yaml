@@ -49,29 +49,23 @@ spec:
       * Node failure requires pods to be moved.
       * New nodes are added to clusters.
 
-      ## Descheduler Strategies
+      ## Descheduler Profiles
 
-      Once the operator is installed, you can configure one or more strategies to identify pods to evict. The scheduler will schedule the replacement of the evicted pods.
+      Once the operator is installed, you can configure one or more profiles to identify pods to evict. The scheduler will schedule the replacement of the evicted pods.
 
-      The following strategies are supported:
+      The following profiles are available:
+      
+      * AffinityAndTaints
+      * TopologyAndDuplicates
+      * LifecycleAndUtilization
 
-      * `LowNodeUtilization` - This strategy finds nodes that are underutilized and evicts pods, if possible, from other nodes in the hope that recreation of evicted pods will be scheduled on these underutilized nodes.
-      * `RemoveDuplicates` - This strategy ensures that there is only one pod associated with a ReplicaSet, ReplicationController, Deployment, or Job running on same node. If there are more, then those duplicate pods are evicted for better spreading of pods in a cluster.
-      * `RemovePodsViolatingInterPodAntiAffinity` - This strategy ensures that pods violating inter-pod anti-affinity are removed from nodes.
-      * `RemovePodsViolatingNodeAffinity` - This strategy ensures that pods violating node affinity are removed from nodes.
-      * `RemovePodsViolatingNodeTaints` - This strategy ensures that pods violating `NoSchedule` taints on nodes are removed.
-      * `RemovePodsHavingTooManyRestarts` - This strategy ensures that pods having too many restarts are removed from nodes.
-      * `PodLifeTime` - This strategy evicts pods that are older than a specified time
-
-      These strategies are documented in detail in the [descheduler README](https://github.com/kubernetes-sigs/descheduler/#policy-and-strategies).
-
+      These profiles are documented in detail in the [descheduler operator README](https://github.com/openshift/cluster-kube-descheduler-operator#profiles).
+      
       ## Additional Parameters
-
-      In addition to the strategies, the following parameters can be configured:
-
+      
+      In addition to the profiles, the following parameters can be configured:
+      
       * `deschedulingIntervalSeconds` - Set the number of seconds between descheduler runs. A value of `0` in this field runs the descheduler once and exits.
-      * `image` - Set the descheduler container image to deploy.
-      * `flags` - Set one or more flags to append to the descheduler Pod. This flag must be in the format ready to pass to the binary, such as `"--dry-run"`.
   displayName: Kube Descheduler Operator
   keywords: ["scheduling", "descheduler", "workload"]
   provider:
