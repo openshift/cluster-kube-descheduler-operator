@@ -119,6 +119,7 @@ spec:
           args:
             - --policy-config-file=/policy-dir/policy.yaml
             - --v=2
+            - --logging-format=text
           volumeMounts:
             - mountPath: "/policy-dir"
               name: "policy-volume"
