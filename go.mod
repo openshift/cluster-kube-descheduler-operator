@@ -17,5 +17,5 @@ require (
 	k8s.io/code-generator v0.20.1
 	k8s.io/klog/v2 v2.4.0
 	sigs.k8s.io/controller-tools v0.2.8
-	sigs.k8s.io/descheduler v0.20.0
+	sigs.k8s.io/descheduler v0.20.1-0.20210127064140-241f1325c968
 )
