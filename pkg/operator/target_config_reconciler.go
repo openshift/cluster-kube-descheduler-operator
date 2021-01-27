@@ -158,6 +158,11 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 		}
 		mergo.Merge(policy, profile, mergo.WithAppendSlice)
 	}
+
+	// ignore PVC pods by default
+	ignorePVCPods := true
+	policy.IgnorePVCPods = &ignorePVCPods
+
 	policyBytes, err := yaml.Marshal(policy)
 	if err != nil {
 		return nil, false, err
