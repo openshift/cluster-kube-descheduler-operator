@@ -2,10 +2,12 @@ package operator
 
 import (
 	"context"
-	"k8s.io/klog/v2"
 	"os"
 	"time"
 
+	"k8s.io/klog/v2"
+
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
@@ -22,6 +24,11 @@ const (
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
+	if err != nil {
+		return err
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return err
 	}
@@ -49,6 +56,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		operatorConfigInformers.Kubedeschedulers().V1beta1().KubeDeschedulers(),
 		deschedulerClient,
 		kubeClient,
+		dynamicClient,
 		cc.EventRecorder,
 	)
 

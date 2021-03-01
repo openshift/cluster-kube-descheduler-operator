@@ -25,11 +25,13 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -49,6 +51,7 @@ type TargetConfigReconciler struct {
 	operatorClient      operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
 	deschedulerClient   *operatorclient.DeschedulerClient
 	kubeClient          kubernetes.Interface
+	dynamicClient       dynamic.Interface
 	eventRecorder       events.Recorder
 	queue               workqueue.RateLimitingInterface
 	excludedNamespaces  []string
@@ -61,6 +64,7 @@ func NewTargetConfigReconciler(
 	operatorClientInformer operatorclientinformers.KubeDeschedulerInformer,
 	deschedulerClient *operatorclient.DeschedulerClient,
 	kubeClient kubernetes.Interface,
+	dynamicClient dynamic.Interface,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
 	// make sure our list of excluded system namespaces is up to date
@@ -81,6 +85,7 @@ func NewTargetConfigReconciler(
 		operatorClient:      operatorConfigClient,
 		deschedulerClient:   deschedulerClient,
 		kubeClient:          kubeClient,
+		dynamicClient:       dynamicClient,
 		eventRecorder:       eventRecorder,
 		queue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
 		excludedNamespaces:  excludedNamespaces,
@@ -107,6 +112,23 @@ func (c TargetConfigReconciler) sync() error {
 	if err != nil {
 		return err
 	}
+
+	if _, _, err := c.manageService(descheduler); err != nil {
+		return err
+	}
+
+	if _, _, err := c.manageRole(descheduler); err != nil {
+		return err
+	}
+
+	if _, _, err := c.manageRoleBinding(descheduler); err != nil {
+		return err
+	}
+
+	if _, err := c.manageServiceMonitor(descheduler); err != nil {
+		return err
+	}
+
 	deployment, _, err := c.manageDeployment(descheduler, forceDeployment)
 	if err != nil {
 		return err
@@ -117,6 +139,55 @@ func (c TargetConfigReconciler) sync() error {
 		return nil
 	})
 	return err
+}
+
+func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1beta1.KubeDescheduler) (*rbacv1.Role, bool, error) {
+	required := resourceread.ReadRoleV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/role.yaml"))
+	required.Namespace = descheduler.Namespace
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1beta1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
+	}
+
+	return resourceapply.ApplyRole(c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1beta1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
+	required := resourceread.ReadRoleBindingV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/rolebinding.yaml"))
+	required.Namespace = descheduler.Namespace
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1beta1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
+	}
+
+	return resourceapply.ApplyRoleBinding(c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1beta1.KubeDescheduler) (*v1.Service, bool, error) {
+	required := resourceread.ReadServiceV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/service.yaml"))
+	required.Namespace = descheduler.Namespace
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1beta1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
+	}
+
+	return resourceapply.ApplyService(c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1beta1.KubeDescheduler) (bool, error) {
+	return resourceapply.ApplyServiceMonitor(c.dynamicClient, c.eventRecorder, v410_00_assets.MustAsset("v4.1.0/kube-descheduler/servicemonitor.yaml"))
 }
 
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
