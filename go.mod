@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.7
 	github.com/openshift/api v0.0.0-20201214114959-164a2fb63b5f
 	github.com/openshift/build-machinery-go v0.0.0-20200917070002-f171684f77ab
