@@ -2,6 +2,10 @@
 // sources:
 // bindata/v4.1.0/kube-descheduler/configmap.yaml
 // bindata/v4.1.0/kube-descheduler/deployment.yaml
+// bindata/v4.1.0/kube-descheduler/role.yaml
+// bindata/v4.1.0/kube-descheduler/rolebinding.yaml
+// bindata/v4.1.0/kube-descheduler/service.yaml
+// bindata/v4.1.0/kube-descheduler/servicemonitor.yaml
 // bindata/v4.1.0/profiles/AffinityAndTaints.yaml
 // bindata/v4.1.0/profiles/LifecycleAndUtilization.yaml
 // bindata/v4.1.0/profiles/TopologyAndDuplicates.yaml
@@ -103,6 +107,9 @@ spec:
         - name: "policy-volume"
           configMap:
             name: "descheduler"
+        - name: certs-dir
+          secret:
+            secretName: kube-descheduler-serving-cert
       priorityClassName: "system-cluster-critical"
       restartPolicy: "Always"
       containers:
@@ -120,9 +127,13 @@ spec:
             - --policy-config-file=/policy-dir/policy.yaml
             - --v=2
             - --logging-format=text
+            - --tls-cert-file=/certs-dir/tls.crt
+            - --tls-private-key-file=/certs-dir/tls.key
           volumeMounts:
             - mountPath: "/policy-dir"
               name: "policy-volume"
+            - mountPath: "/certs-dir"
+              name: certs-dir
       serviceAccountName: "openshift-descheduler"
 `)
 
@@ -137,6 +148,158 @@ func v410KubeDeschedulerDeploymentYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/deployment.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410KubeDeschedulerRoleYaml = []byte(`apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-k8s
+  namespace: openshift-kube-descheduler-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+`)
+
+func v410KubeDeschedulerRoleYamlBytes() ([]byte, error) {
+	return _v410KubeDeschedulerRoleYaml, nil
+}
+
+func v410KubeDeschedulerRoleYaml() (*asset, error) {
+	bytes, err := v410KubeDeschedulerRoleYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/role.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410KubeDeschedulerRolebindingYaml = []byte(`apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-k8s
+  namespace: openshift-kube-descheduler-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-k8s
+subjects:
+- kind: ServiceAccount
+  name: prometheus-k8s
+  namespace: openshift-monitoring
+`)
+
+func v410KubeDeschedulerRolebindingYamlBytes() ([]byte, error) {
+	return _v410KubeDeschedulerRolebindingYaml, nil
+}
+
+func v410KubeDeschedulerRolebindingYaml() (*asset, error) {
+	bytes, err := v410KubeDeschedulerRolebindingYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/rolebinding.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410KubeDeschedulerServiceYaml = []byte(`apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    service.alpha.openshift.io/serving-cert-secret-name: kube-descheduler-serving-cert
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: https
+  labels:
+    app: descheduler
+  name: metrics
+  namespace: openshift-kube-descheduler-operator
+spec:
+  ports:
+  - name: https
+    port: 10258
+    protocol: TCP
+    targetPort: 10258
+  selector:
+    app: descheduler
+  sessionAffinity: None
+  type: ClusterIP
+`)
+
+func v410KubeDeschedulerServiceYamlBytes() ([]byte, error) {
+	return _v410KubeDeschedulerServiceYaml, nil
+}
+
+func v410KubeDeschedulerServiceYaml() (*asset, error) {
+	bytes, err := v410KubeDeschedulerServiceYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/service.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _v410KubeDeschedulerServicemonitorYaml = []byte(`apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kube-descheduler
+  namespace: openshift-kube-descheduler-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    interval: 30s
+    path: /metrics
+    port: https
+    scheme: https
+    tlsConfig:
+      caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+      serverName: metrics.openshift-kube-descheduler-operator.svc
+  namespaceSelector:
+    matchNames:
+    - openshift-kube-descheduler-operator
+  selector:
+    matchLabels:
+      app: descheduler
+`)
+
+func v410KubeDeschedulerServicemonitorYamlBytes() ([]byte, error) {
+	return _v410KubeDeschedulerServicemonitorYaml, nil
+}
+
+func v410KubeDeschedulerServicemonitorYaml() (*asset, error) {
+	bytes, err := v410KubeDeschedulerServicemonitorYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/servicemonitor.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -291,6 +454,10 @@ func AssetNames() []string {
 var _bindata = map[string]func() (*asset, error){
 	"v4.1.0/kube-descheduler/configmap.yaml":       v410KubeDeschedulerConfigmapYaml,
 	"v4.1.0/kube-descheduler/deployment.yaml":      v410KubeDeschedulerDeploymentYaml,
+	"v4.1.0/kube-descheduler/role.yaml":            v410KubeDeschedulerRoleYaml,
+	"v4.1.0/kube-descheduler/rolebinding.yaml":     v410KubeDeschedulerRolebindingYaml,
+	"v4.1.0/kube-descheduler/service.yaml":         v410KubeDeschedulerServiceYaml,
+	"v4.1.0/kube-descheduler/servicemonitor.yaml":  v410KubeDeschedulerServicemonitorYaml,
 	"v4.1.0/profiles/AffinityAndTaints.yaml":       v410ProfilesAffinityandtaintsYaml,
 	"v4.1.0/profiles/LifecycleAndUtilization.yaml": v410ProfilesLifecycleandutilizationYaml,
 	"v4.1.0/profiles/TopologyAndDuplicates.yaml":   v410ProfilesTopologyandduplicatesYaml,
@@ -339,8 +506,12 @@ type bintree struct {
 var _bintree = &bintree{nil, map[string]*bintree{
 	"v4.1.0": {nil, map[string]*bintree{
 		"kube-descheduler": {nil, map[string]*bintree{
-			"configmap.yaml":  {v410KubeDeschedulerConfigmapYaml, map[string]*bintree{}},
-			"deployment.yaml": {v410KubeDeschedulerDeploymentYaml, map[string]*bintree{}},
+			"configmap.yaml":      {v410KubeDeschedulerConfigmapYaml, map[string]*bintree{}},
+			"deployment.yaml":     {v410KubeDeschedulerDeploymentYaml, map[string]*bintree{}},
+			"role.yaml":           {v410KubeDeschedulerRoleYaml, map[string]*bintree{}},
+			"rolebinding.yaml":    {v410KubeDeschedulerRolebindingYaml, map[string]*bintree{}},
+			"service.yaml":        {v410KubeDeschedulerServiceYaml, map[string]*bintree{}},
+			"servicemonitor.yaml": {v410KubeDeschedulerServicemonitorYaml, map[string]*bintree{}},
 		}},
 		"profiles": {nil, map[string]*bintree{
 			"AffinityAndTaints.yaml":       {v410ProfilesAffinityandtaintsYaml, map[string]*bintree{}},

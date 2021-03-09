@@ -19,6 +19,9 @@ spec:
         - name: "policy-volume"
           configMap:
             name: "descheduler"
+        - name: certs-dir
+          secret:
+            secretName: kube-descheduler-serving-cert
       priorityClassName: "system-cluster-critical"
       restartPolicy: "Always"
       containers:
@@ -36,7 +39,11 @@ spec:
             - --policy-config-file=/policy-dir/policy.yaml
             - --v=2
             - --logging-format=text
+            - --tls-cert-file=/certs-dir/tls.crt
+            - --tls-private-key-file=/certs-dir/tls.key
           volumeMounts:
             - mountPath: "/policy-dir"
               name: "policy-volume"
+            - mountPath: "/certs-dir"
+              name: certs-dir
       serviceAccountName: "openshift-descheduler"
