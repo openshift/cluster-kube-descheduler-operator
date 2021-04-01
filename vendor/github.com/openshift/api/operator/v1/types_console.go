@@ -42,6 +42,9 @@ type ConsoleSpec struct {
 	// If not specified, default route will be used.
 	// +optional
 	Route ConsoleConfigRoute `json:"route"`
+	// plugins defines a list of enabled console plugin names.
+	// +optional
+	Plugins []string `json:"plugins,omitempty"`
 }
 
 // ConsoleConfigRoute holds information on external route access to console.
@@ -110,6 +113,21 @@ type ConsoleCustomization struct {
 	// +kubebuilder:validation:Optional
 	// +optional
 	DeveloperCatalog DeveloperConsoleCatalogCustomization `json:"developerCatalog,omitempty"`
+	// projectAccess allows customizing the available list of ClusterRoles in the Developer perspective
+	// Project access page which can be used by a project admin to specify roles to other users and
+	// restrict access within the project. If set, the list will replace the default ClusterRole options.
+	// +kubebuilder:validation:Optional
+	// +optional
+	ProjectAccess ProjectAccess `json:"projectAccess,omitempty"`
+}
+
+// ProjectAccess contains options for project access roles
+type ProjectAccess struct {
+	// availableClusterRoles is the list of ClusterRole names that are assignable to users
+	// through the project access tab.
+	// +kubebuilder:validation:Optional
+	// +optional
+	AvailableClusterRoles []string `json:"availableClusterRoles,omitempty"`
 }
 
 // DeveloperConsoleCatalogCustomization allow cluster admin to configure developer catalog.
