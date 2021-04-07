@@ -12,9 +12,9 @@ import (
 	"github.com/imdario/mergo"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
-	deschedulerv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
-	operatorconfigclientv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
-	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1beta1"
+	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
+	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/v410_00_assets"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -48,7 +48,7 @@ var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/
 type TargetConfigReconciler struct {
 	ctx                 context.Context
 	targetImagePullSpec string
-	operatorClient      operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
+	operatorClient      operatorconfigclientv1.KubedeschedulersV1Interface
 	deschedulerClient   *operatorclient.DeschedulerClient
 	kubeClient          kubernetes.Interface
 	dynamicClient       dynamic.Interface
@@ -60,7 +60,7 @@ type TargetConfigReconciler struct {
 func NewTargetConfigReconciler(
 	ctx context.Context,
 	targetImagePullSpec string,
-	operatorConfigClient operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface,
+	operatorConfigClient operatorconfigclientv1.KubedeschedulersV1Interface,
 	operatorClientInformer operatorclientinformers.KubeDeschedulerInformer,
 	deschedulerClient *operatorclient.DeschedulerClient,
 	kubeClient kubernetes.Interface,
@@ -141,7 +141,7 @@ func (c TargetConfigReconciler) sync() error {
 	return err
 }
 
-func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1beta1.KubeDescheduler) (*rbacv1.Role, bool, error) {
+func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.Role, bool, error) {
 	required := resourceread.ReadRoleV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/role.yaml"))
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -156,7 +156,7 @@ func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1beta1.Kube
 	return resourceapply.ApplyRole(c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1beta1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
+func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
 	required := resourceread.ReadRoleBindingV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/rolebinding.yaml"))
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -171,7 +171,7 @@ func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1bet
 	return resourceapply.ApplyRoleBinding(c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1beta1.KubeDescheduler) (*v1.Service, bool, error) {
+func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDescheduler) (*v1.Service, bool, error) {
 	required := resourceread.ReadServiceV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/service.yaml"))
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -186,11 +186,11 @@ func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1beta1.K
 	return resourceapply.ApplyService(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1beta1.KubeDescheduler) (bool, error) {
+func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
 	return resourceapply.ApplyServiceMonitor(c.dynamicClient, c.eventRecorder, v410_00_assets.MustAsset("v4.1.0/kube-descheduler/servicemonitor.yaml"))
 }
 
-func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
+func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
 	required := resourceread.ReadConfigMapV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/configmap.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace
@@ -242,7 +242,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1beta1
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1beta1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/deployment.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace

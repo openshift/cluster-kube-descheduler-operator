@@ -45,15 +45,15 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	deschedulerClient := &operatorclient.DeschedulerClient{
 		Ctx:            ctx,
-		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1beta1().KubeDeschedulers().Informer(),
-		OperatorClient: operatorConfigClient.KubedeschedulersV1beta1(),
+		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
+		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
 	}
 
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
 		os.Getenv("IMAGE"),
-		operatorConfigClient.KubedeschedulersV1beta1(),
-		operatorConfigInformers.Kubedeschedulers().V1beta1().KubeDeschedulers(),
+		operatorConfigClient.KubedeschedulersV1(),
+		operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
 		deschedulerClient,
 		kubeClient,
 		dynamicClient,

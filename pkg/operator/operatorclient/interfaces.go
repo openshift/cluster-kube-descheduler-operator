@@ -4,7 +4,7 @@ import (
 	"context"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
-	operatorconfigclientv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
+	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -16,7 +16,7 @@ const OperatorConfigName = "cluster"
 type DeschedulerClient struct {
 	Ctx            context.Context
 	SharedInformer cache.SharedIndexInformer
-	OperatorClient operatorconfigclientv1beta1.KubedeschedulersV1beta1Interface
+	OperatorClient operatorconfigclientv1.KubedeschedulersV1Interface
 }
 
 func (c *DeschedulerClient) Informer() cache.SharedIndexInformer {

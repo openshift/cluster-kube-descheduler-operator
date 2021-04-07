@@ -5,6 +5,7 @@ package versioned
 import (
 	"fmt"
 
+	kubedeschedulersv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
 	kubedeschedulersv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -14,6 +15,7 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	KubedeschedulersV1beta1() kubedeschedulersv1beta1.KubedeschedulersV1beta1Interface
+	KubedeschedulersV1() kubedeschedulersv1.KubedeschedulersV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -21,11 +23,17 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	kubedeschedulersV1beta1 *kubedeschedulersv1beta1.KubedeschedulersV1beta1Client
+	kubedeschedulersV1      *kubedeschedulersv1.KubedeschedulersV1Client
 }
 
 // KubedeschedulersV1beta1 retrieves the KubedeschedulersV1beta1Client
 func (c *Clientset) KubedeschedulersV1beta1() kubedeschedulersv1beta1.KubedeschedulersV1beta1Interface {
 	return c.kubedeschedulersV1beta1
+}
+
+// KubedeschedulersV1 retrieves the KubedeschedulersV1Client
+func (c *Clientset) KubedeschedulersV1() kubedeschedulersv1.KubedeschedulersV1Interface {
+	return c.kubedeschedulersV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -53,6 +61,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.kubedeschedulersV1, err = kubedeschedulersv1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -66,6 +78,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.kubedeschedulersV1beta1 = kubedeschedulersv1beta1.NewForConfigOrDie(c)
+	cs.kubedeschedulersV1 = kubedeschedulersv1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -75,6 +88,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.kubedeschedulersV1beta1 = kubedeschedulersv1beta1.New(c)
+	cs.kubedeschedulersV1 = kubedeschedulersv1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
