@@ -20,6 +20,8 @@ package fake
 
 import (
 	clientset "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
+	kubedeschedulersv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
+	fakekubedeschedulersv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1/fake"
 	kubedeschedulersv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1"
 	fakekubedeschedulersv1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,4 +81,9 @@ var _ clientset.Interface = &Clientset{}
 // KubedeschedulersV1beta1 retrieves the KubedeschedulersV1beta1Client
 func (c *Clientset) KubedeschedulersV1beta1() kubedeschedulersv1beta1.KubedeschedulersV1beta1Interface {
 	return &fakekubedeschedulersv1beta1.FakeKubedeschedulersV1beta1{Fake: &c.Fake}
+}
+
+// KubedeschedulersV1 retrieves the KubedeschedulersV1Client
+func (c *Clientset) KubedeschedulersV1() kubedeschedulersv1.KubedeschedulersV1Interface {
+	return &fakekubedeschedulersv1.FakeKubedeschedulersV1{Fake: &c.Fake}
 }

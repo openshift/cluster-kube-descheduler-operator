@@ -21,6 +21,7 @@ package externalversions
 import (
 	"fmt"
 
+	v1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	v1beta1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1beta1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -52,7 +53,11 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=operator.openshift.io, Version=v1beta1
+	// Group=operator.openshift.io, Version=v1
+	case v1.SchemeGroupVersion.WithResource("kubedeschedulers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Kubedeschedulers().V1().KubeDeschedulers().Informer()}, nil
+
+		// Group=operator.openshift.io, Version=v1beta1
 	case v1beta1.SchemeGroupVersion.WithResource("kubedeschedulers"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Kubedeschedulers().V1beta1().KubeDeschedulers().Informer()}, nil
 
