@@ -11,147 +11,82 @@ spec:
     singular: kubedescheduler
   scope: Namespaced
   versions:
-  - name: v1beta1
-    served: true
-    storage: true
-    subresources:
-      status: {}
-    "schema":
-      "openAPIV3Schema":
+  - name: v1
+    schema:
+      openAPIV3Schema:
         description: KubeDescheduler is the Schema for the deschedulers API
-        type: object
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
           spec:
             description: spec holds user settable values for configuration
-            type: object
             properties:
               deschedulingIntervalSeconds:
-                description: DeschedulingIntervalSeconds is the number of seconds
-                  between descheduler runs
-                type: integer
+                description: DeschedulingIntervalSeconds is the number of seconds between descheduler runs
                 format: int32
-              flags:
-                description: 'Flags for descheduler. DEPRECATED: This field is no
-                  longer supported'
-                type: array
-                items:
-                  type: string
-              image:
-                description: 'Image of the deschduler being managed. This includes
-                  the version of the operand(descheduler). DEPRECATED: This field
-                  is no longer supported'
-                type: string
+                type: integer
               logLevel:
-                description: "logLevel is an intent based logging for an overall component.
-                  \ It does not give fine grained control, but it is a simple way
-                  to manage coarse grained logging choices that operators have to
-                  interpret for their operands. \n Valid values are: \"Normal\", \"Debug\",
-                  \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
-                type: string
                 default: Normal
+                description: "logLevel is an intent based logging for an overall component.  It does not give fine grained control, but it is a simple way to manage coarse grained logging choices that operators have to interpret for their operands. \n Valid values are: \"Normal\", \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
                 enum:
                 - ""
                 - Normal
                 - Debug
                 - Trace
                 - TraceAll
-              managementState:
-                description: managementState indicates whether and how the operator
-                  should manage the component
                 type: string
+              managementState:
+                description: managementState indicates whether and how the operator should manage the component
                 pattern: ^(Managed|Unmanaged|Force|Removed)$
+                type: string
               observedConfig:
-                description: observedConfig holds a sparse config that controller
-                  has observed from the cluster state.  It exists in spec because
-                  it is an input to the level for the operator
-                type: object
+                description: observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because it is an input to the level for the operator
                 nullable: true
+                type: object
                 x-kubernetes-preserve-unknown-fields: true
               operatorLogLevel:
-                description: "operatorLogLevel is an intent based logging for the
-                  operator itself.  It does not give fine grained control, but it
-                  is a simple way to manage coarse grained logging choices that operators
-                  have to interpret for themselves. \n Valid values are: \"Normal\",
-                  \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
-                type: string
                 default: Normal
+                description: "operatorLogLevel is an intent based logging for the operator itself.  It does not give fine grained control, but it is a simple way to manage coarse grained logging choices that operators have to interpret for themselves. \n Valid values are: \"Normal\", \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
                 enum:
                 - ""
                 - Normal
                 - Debug
                 - Trace
                 - TraceAll
+                type: string
               profiles:
-                description: Profiles sets which descheduler strategy profiles are
-                  enabled
-                type: array
+                description: Profiles sets which descheduler strategy profiles are enabled
                 items:
-                  description: DeschedulerProfile allows configuring the enabled strategy
-                    profiles for the descheduler it allows multiple profiles to be
-                    enabled at once, which will have cumulative effects on the cluster.
-                  type: string
+                  description: DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
                   enum:
                   - AffinityAndTaints
                   - TopologyAndDuplicates
                   - LifecycleAndUtilization
-              strategies:
-                description: 'Strategies contain list of strategies that should be
-                  enabled in descheduler. DEPRECATED: This field for configuring strategies
-                  has been deprecated in favor of profiles. Setting it will not do
-                  anything, it is only provided to allow transition of existing objects.'
+                  type: string
                 type: array
-                items:
-                  description: Strategy supported by descheduler DEPRECATED
-                  type: object
-                  properties:
-                    name:
-                      type: string
-                    params:
-                      type: array
-                      items:
-                        description: Param is a key/value pair representing the parameters
-                          in strategy or flags. DEPRECATED
-                        type: object
-                        properties:
-                          name:
-                            type: string
-                          value:
-                            type: string
               unsupportedConfigOverrides:
-                description: 'unsupportedConfigOverrides holds a sparse config that
-                  will override any previously set options.  It only needs to be the
-                  fields to override it will end up overlaying in the following order:
-                  1. hardcoded defaults 2. observedConfig 3. unsupportedConfigOverrides'
-                type: object
+                description: 'unsupportedConfigOverrides holds a sparse config that will override any previously set options.  It only needs to be the fields to override it will end up overlaying in the following order: 1. hardcoded defaults 2. observedConfig 3. unsupportedConfigOverrides'
                 nullable: true
+                type: object
                 x-kubernetes-preserve-unknown-fields: true
-          status:
-            description: status holds observed values from the cluster. They may not
-              be overridden.
             type: object
+          status:
+            description: status holds observed values from the cluster. They may not be overridden.
             properties:
               conditions:
                 description: conditions is a list of conditions and their status
-                type: array
                 items:
                   description: OperatorCondition is just the standard condition fields.
-                  type: object
                   properties:
                     lastTransitionTime:
-                      type: string
                       format: date-time
+                      type: string
                     message:
                       type: string
                     reason:
@@ -160,28 +95,23 @@ spec:
                       type: string
                     type:
                       type: string
-              generations:
-                description: generations are used to determine when an item needs
-                  to be reconciled or has changed in a way that needs a reaction.
-                type: array
-                items:
-                  description: GenerationStatus keeps track of the generation for
-                    a given resource so that decisions about forced updates can be
-                    made.
                   type: object
+                type: array
+              generations:
+                description: generations are used to determine when an item needs to be reconciled or has changed in a way that needs a reaction.
+                items:
+                  description: GenerationStatus keeps track of the generation for a given resource so that decisions about forced updates can be made.
                   properties:
                     group:
                       description: group is the group of the thing you're tracking
                       type: string
                     hash:
-                      description: hash is an optional field set for resources without
-                        generation that are content sensitive like secrets and configmaps
+                      description: hash is an optional field set for resources without generation that are content sensitive like secrets and configmaps
                       type: string
                     lastGeneration:
-                      description: lastGeneration is the last generation of the workload
-                        controller involved
-                      type: integer
+                      description: lastGeneration is the last generation of the workload controller involved
                       format: int64
+                      type: integer
                     name:
                       description: name is the name of the thing you're tracking
                       type: string
@@ -189,19 +119,182 @@ spec:
                       description: namespace is where the thing you're tracking is
                       type: string
                     resource:
-                      description: resource is the resource type of the thing you're
-                        tracking
+                      description: resource is the resource type of the thing you're tracking
                       type: string
+                  type: object
+                type: array
               observedGeneration:
-                description: observedGeneration is the last generation change you've
-                  dealt with
-                type: integer
+                description: observedGeneration is the last generation change you've dealt with
                 format: int64
-              readyReplicas:
-                description: readyReplicas indicates how many replicas are ready and
-                  at the desired state
                 type: integer
+              readyReplicas:
+                description: readyReplicas indicates how many replicas are ready and at the desired state
                 format: int32
+                type: integer
               version:
                 description: version is the level this availability applies to
                 type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: KubeDescheduler is the Schema for the deschedulers API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec holds user settable values for configuration
+            properties:
+              deschedulingIntervalSeconds:
+                description: DeschedulingIntervalSeconds is the number of seconds between descheduler runs
+                format: int32
+                type: integer
+              flags:
+                description: 'Flags for descheduler. DEPRECATED: This field is no longer supported'
+                items:
+                  type: string
+                type: array
+              image:
+                description: 'Image of the deschduler being managed. This includes the version of the operand(descheduler). DEPRECATED: This field is no longer supported'
+                type: string
+              logLevel:
+                default: Normal
+                description: "logLevel is an intent based logging for an overall component.  It does not give fine grained control, but it is a simple way to manage coarse grained logging choices that operators have to interpret for their operands. \n Valid values are: \"Normal\", \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                enum:
+                - ""
+                - Normal
+                - Debug
+                - Trace
+                - TraceAll
+                type: string
+              managementState:
+                description: managementState indicates whether and how the operator should manage the component
+                pattern: ^(Managed|Unmanaged|Force|Removed)$
+                type: string
+              observedConfig:
+                description: observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because it is an input to the level for the operator
+                nullable: true
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              operatorLogLevel:
+                default: Normal
+                description: "operatorLogLevel is an intent based logging for the operator itself.  It does not give fine grained control, but it is a simple way to manage coarse grained logging choices that operators have to interpret for themselves. \n Valid values are: \"Normal\", \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                enum:
+                - ""
+                - Normal
+                - Debug
+                - Trace
+                - TraceAll
+                type: string
+              profiles:
+                description: Profiles sets which descheduler strategy profiles are enabled
+                items:
+                  description: DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
+                  enum:
+                  - AffinityAndTaints
+                  - TopologyAndDuplicates
+                  - LifecycleAndUtilization
+                  type: string
+                type: array
+              strategies:
+                description: 'Strategies contain list of strategies that should be enabled in descheduler. DEPRECATED: This field for configuring strategies has been deprecated in favor of profiles. Setting it will not do anything, it is only provided to allow transition of existing objects.'
+                items:
+                  description: Strategy supported by descheduler DEPRECATED
+                  properties:
+                    name:
+                      type: string
+                    params:
+                      items:
+                        description: Param is a key/value pair representing the parameters in strategy or flags. DEPRECATED
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              unsupportedConfigOverrides:
+                description: 'unsupportedConfigOverrides holds a sparse config that will override any previously set options.  It only needs to be the fields to override it will end up overlaying in the following order: 1. hardcoded defaults 2. observedConfig 3. unsupportedConfigOverrides'
+                nullable: true
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+            type: object
+          status:
+            description: status holds observed values from the cluster. They may not be overridden.
+            properties:
+              conditions:
+                description: conditions is a list of conditions and their status
+                items:
+                  description: OperatorCondition is just the standard condition fields.
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              generations:
+                description: generations are used to determine when an item needs to be reconciled or has changed in a way that needs a reaction.
+                items:
+                  description: GenerationStatus keeps track of the generation for a given resource so that decisions about forced updates can be made.
+                  properties:
+                    group:
+                      description: group is the group of the thing you're tracking
+                      type: string
+                    hash:
+                      description: hash is an optional field set for resources without generation that are content sensitive like secrets and configmaps
+                      type: string
+                    lastGeneration:
+                      description: lastGeneration is the last generation of the workload controller involved
+                      format: int64
+                      type: integer
+                    name:
+                      description: name is the name of the thing you're tracking
+                      type: string
+                    namespace:
+                      description: namespace is where the thing you're tracking is
+                      type: string
+                    resource:
+                      description: resource is the resource type of the thing you're tracking
+                      type: string
+                  type: object
+                type: array
+              observedGeneration:
+                description: observedGeneration is the last generation change you've dealt with
+                format: int64
+                type: integer
+              readyReplicas:
+                description: readyReplicas indicates how many replicas are ready and at the desired state
+                format: int32
+                type: integer
+              version:
+                description: version is the level this availability applies to
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
