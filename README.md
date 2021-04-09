@@ -65,7 +65,7 @@ spec:
 
 The operator spec provides a `profiles` field, which allows users to set one or more descheduling profiles to enable.
 
-These profiles map to preconfigured policy definitions, enabling several descheduler strategies grouped by intent, and 
+These profiles map to preconfigured policy definitions, enabling several descheduler strategies grouped by intent, and
 any that are enabled will be merged.
 
 ## Profiles
@@ -78,26 +78,27 @@ The following profiles are currently provided:
 Each of these enables cluster-wide descheduling (excluding openshift and kube-system namespaces) based on certain goals.
 
 ### AffinityAndTaints
-This is the most basic descheduling profile and it removes running pods which violate node and pod affinity, and node 
+This is the most basic descheduling profile and it removes running pods which violate node and pod affinity, and node
 taints.
 
-This profile enables the [`RemovePodsViolatingInterPodAntiAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatinginterpodantiaffinity), 
-[`RemovePodsViolatingNodeAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity), and 
+This profile enables the [`RemovePodsViolatingInterPodAntiAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatinginterpodantiaffinity),
+[`RemovePodsViolatingNodeAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity), and
 [`RemovePodsViolatingNodeTaints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity) strategies.
 
 ### TopologyAndDuplicates
-This profile attempts to balance pod distribution based on topology constraint definitions and evicting duplicate copies 
-of the same pod running on the same node. It enables the [`RemovePodsViolatingTopologySpreadConstraints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingtopologyspreadconstraint) 
+This profile attempts to balance pod distribution based on topology constraint definitions and evicting duplicate copies
+of the same pod running on the same node. It enables the [`RemovePodsViolatingTopologySpreadConstraints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingtopologyspreadconstraint)
 and [`RemoveDuplicates`](https://github.com/kubernetes-sigs/descheduler/#removeduplicates) strategies.
 
 ### LifecycleAndUtilization
-This profile focuses on pod lifecycles and node resource consumption. It will evict any running pod older than 24 hours 
-and attempts to evict pods from "high utilization" nodes that can fit onto "low utilization" nodes. A high utilization 
-node is any node consuming more than 50% its available cpu, memory, *or* pod capacity. A low utilization node is any node 
+This profile focuses on pod lifecycles and node resource consumption. It will evict any running pod older than 24 hours
+and attempts to evict pods from "high utilization" nodes that can fit onto "low utilization" nodes. A high utilization
+node is any node consuming more than 50% its available cpu, memory, *or* pod capacity. A low utilization node is any node
 with less than 20% of its available cpu, memory, *and* pod capacity.
 
-This profile enables the [`LowNodeUtilizaition`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization) and 
-[`PodLifeTime`](https://github.com/kubernetes-sigs/descheduler/#podlifetime) strategies. In the future, more configuration 
+This profile enables the [`LowNodeUtilizaition`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization),
+[`RemovePodsHavingTooManyRestarts`](https://github.com/kubernetes-sigs/descheduler/#removepodshavingtoomanyrestarts) and 
+[`PodLifeTime`](https://github.com/kubernetes-sigs/descheduler/#podlifetime) strategies. In the future, more configuration
 may be made available through the operator for these strategies based on user feedback.
 
 ## How does the descheduler operator work?
