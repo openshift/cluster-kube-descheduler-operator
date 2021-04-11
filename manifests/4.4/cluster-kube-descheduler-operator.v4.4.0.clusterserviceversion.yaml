@@ -146,6 +146,10 @@ spec:
               containers:
                 - name: descheduler-operator
                   image: quay.io/openshift/origin-cluster-kube-descheduler-operator:4.4
+                  resources:
+                    requests:
+                      memory: 50Mi
+                      cpu: 10m
                   ports:
                   - containerPort: 60000
                     name: metrics
