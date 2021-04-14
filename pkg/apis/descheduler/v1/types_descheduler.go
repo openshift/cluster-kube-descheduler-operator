@@ -11,6 +11,7 @@ import (
 // +k8s:openapi-gen=true
 // +genclient
 // +kubebuilder:storageversion
+// +kubebuilder:subresource:status
 type KubeDescheduler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

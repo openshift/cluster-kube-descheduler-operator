@@ -10,6 +10,7 @@ import (
 // KubeDescheduler is the Schema for the deschedulers API
 // +k8s:openapi-gen=true
 // +genclient
+// +kubebuilder:subresource:status
 type KubeDescheduler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
