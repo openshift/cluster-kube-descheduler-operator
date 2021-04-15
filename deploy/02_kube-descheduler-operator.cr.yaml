@@ -1,4 +1,4 @@
-apiVersion: operator.openshift.io/v1beta1
+apiVersion: operator.openshift.io/v1
 kind: KubeDescheduler
 metadata:
   name: cluster

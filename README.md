@@ -52,7 +52,7 @@ This process refers to building the operator in a way that it can be installed l
 A sample CR definition looks like below (the operator expects `cluster` CR under `openshift-kube-descheduler-operator` namespace):
 
 ```yaml
-apiVersion: operator.openshift.io/v1beta1
+apiVersion: operator.openshift.io/v1
 kind: KubeDescheduler
 metadata:
   name: cluster
