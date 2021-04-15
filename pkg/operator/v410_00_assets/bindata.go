@@ -275,6 +275,11 @@ spec:
   endpoints:
   - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
     interval: 30s
+    metricRelabelings:
+    - action: replace
+      sourceLabels:
+      - exported_namespace
+      targetLabel: pod_namespace
     path: /metrics
     port: https
     scheme: https
