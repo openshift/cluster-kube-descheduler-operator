@@ -8,7 +8,7 @@ metadata:
     alm-examples: |
       [
         {
-          "apiVersion": "operator.openshift.io/v1beta1",
+          "apiVersion": "operator.openshift.io/v1",
           "kind": "KubeDescheduler",
           "metadata": {
             "name": "cluster",
@@ -38,7 +38,7 @@ spec:
       group: operator.openshift.io
       kind: KubeDescheduler
       name: kubedeschedulers.operator.openshift.io
-      version: v1beta1
+      version: v1
   description: |
       The Kube Descheduler Operator provides the ability to evict a running pod so that the pod can be rescheduled onto a more suitable node.
 

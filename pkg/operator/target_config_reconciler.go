@@ -146,7 +146,7 @@ func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDesch
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
-			APIVersion: "v1beta1",
+			APIVersion: "v1",
 			Kind:       "KubeDescheduler",
 			Name:       descheduler.Name,
 			UID:        descheduler.UID,
@@ -161,7 +161,7 @@ func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.Ku
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
-			APIVersion: "v1beta1",
+			APIVersion: "v1",
 			Kind:       "KubeDescheduler",
 			Name:       descheduler.Name,
 			UID:        descheduler.UID,
@@ -176,7 +176,7 @@ func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDe
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
-			APIVersion: "v1beta1",
+			APIVersion: "v1",
 			Kind:       "KubeDescheduler",
 			Name:       descheduler.Name,
 			UID:        descheduler.UID,
@@ -196,7 +196,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
-			APIVersion: "v1beta1",
+			APIVersion: "v1",
 			Kind:       "KubeDescheduler",
 			Name:       descheduler.Name,
 			UID:        descheduler.UID,
@@ -248,7 +248,7 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
-			APIVersion: "v1beta1",
+			APIVersion: "v1",
 			Kind:       "KubeDescheduler",
 			Name:       descheduler.Name,
 			UID:        descheduler.UID,
