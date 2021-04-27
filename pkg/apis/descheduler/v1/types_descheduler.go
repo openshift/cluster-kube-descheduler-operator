@@ -38,7 +38,7 @@ type KubeDeschedulerSpec struct {
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
 // it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
-// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle
 type DeschedulerProfile string
 
 var (
@@ -52,6 +52,9 @@ var (
 
 	// LifecycleAndUtilization attempts to balance pods based on node resource usage, pod age, and pod restarts
 	LifecycleAndUtilization DeschedulerProfile = "LifecycleAndUtilization"
+
+	// DevPreviewLongLifecycle handles cluster lifecycle over a long term
+	DevPreviewLongLifecycle DeschedulerProfile = "DevPreviewLongLifecycle"
 )
 
 // KubeDeschedulerStatus defines the observed state of KubeDescheduler

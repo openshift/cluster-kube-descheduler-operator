@@ -7,6 +7,7 @@
 // bindata/v4.1.0/kube-descheduler/service.yaml
 // bindata/v4.1.0/kube-descheduler/servicemonitor.yaml
 // bindata/v4.1.0/profiles/AffinityAndTaints.yaml
+// bindata/v4.1.0/profiles/DevPreviewLongLifecycle.yaml
 // bindata/v4.1.0/profiles/LifecycleAndUtilization.yaml
 // bindata/v4.1.0/profiles/TopologyAndDuplicates.yaml
 package v410_00_assets
@@ -338,6 +339,44 @@ func v410ProfilesAffinityandtaintsYaml() (*asset, error) {
 	return a, nil
 }
 
+var _v410ProfilesDevpreviewlonglifecycleYaml = []byte(`apiVersion: "descheduler/v1alpha1"
+kind: "DeschedulerPolicy"
+strategies:
+  "RemovePodsHavingTooManyRestarts":
+     enabled: true
+     params:
+       podsHavingTooManyRestarts:
+         podRestartThreshold: 100
+         includingInitContainers: true
+  "LowNodeUtilization":
+     enabled: true
+     params:
+       nodeResourceUtilizationThresholds:
+         thresholds:
+           "cpu" : 20
+           "memory": 20
+           "pods": 20
+         targetThresholds:
+           "cpu" : 50
+           "memory": 50
+           "pods": 50
+`)
+
+func v410ProfilesDevpreviewlonglifecycleYamlBytes() ([]byte, error) {
+	return _v410ProfilesDevpreviewlonglifecycleYaml, nil
+}
+
+func v410ProfilesDevpreviewlonglifecycleYaml() (*asset, error) {
+	bytes, err := v410ProfilesDevpreviewlonglifecycleYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/profiles/DevPreviewLongLifecycle.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _v410ProfilesLifecycleandutilizationYaml = []byte(`apiVersion: "descheduler/v1alpha1"
 kind: "DeschedulerPolicy"
 strategies:
@@ -464,6 +503,7 @@ var _bindata = map[string]func() (*asset, error){
 	"v4.1.0/kube-descheduler/service.yaml":         v410KubeDeschedulerServiceYaml,
 	"v4.1.0/kube-descheduler/servicemonitor.yaml":  v410KubeDeschedulerServicemonitorYaml,
 	"v4.1.0/profiles/AffinityAndTaints.yaml":       v410ProfilesAffinityandtaintsYaml,
+	"v4.1.0/profiles/DevPreviewLongLifecycle.yaml": v410ProfilesDevpreviewlonglifecycleYaml,
 	"v4.1.0/profiles/LifecycleAndUtilization.yaml": v410ProfilesLifecycleandutilizationYaml,
 	"v4.1.0/profiles/TopologyAndDuplicates.yaml":   v410ProfilesTopologyandduplicatesYaml,
 }
@@ -520,6 +560,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		}},
 		"profiles": {nil, map[string]*bintree{
 			"AffinityAndTaints.yaml":       {v410ProfilesAffinityandtaintsYaml, map[string]*bintree{}},
+			"DevPreviewLongLifecycle.yaml": {v410ProfilesDevpreviewlonglifecycleYaml, map[string]*bintree{}},
 			"LifecycleAndUtilization.yaml": {v410ProfilesLifecycleandutilizationYaml, map[string]*bintree{}},
 			"TopologyAndDuplicates.yaml":   {v410ProfilesTopologyandduplicatesYaml, map[string]*bintree{}},
 		}},
