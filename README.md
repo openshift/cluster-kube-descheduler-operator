@@ -74,6 +74,9 @@ The following profiles are currently provided:
 * [`AffinityAndTaints`](#AffinityAndTaints)
 * [`TopologyAndDuplicates`](#TopologyAndDuplicates)
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
+  
+Along with the following profiles, which are in development and may change:
+* [`DevPreviewLongLifecycle`](#DevPreviewLongLifecycle)
 
 Each of these enables cluster-wide descheduling (excluding openshift and kube-system namespaces) based on certain goals.
 
@@ -100,6 +103,10 @@ This profile enables the [`LowNodeUtilizaition`](https://github.com/kubernetes-s
 [`RemovePodsHavingTooManyRestarts`](https://github.com/kubernetes-sigs/descheduler/#removepodshavingtoomanyrestarts) and 
 [`PodLifeTime`](https://github.com/kubernetes-sigs/descheduler/#podlifetime) strategies. In the future, more configuration
 may be made available through the operator for these strategies based on user feedback.
+
+### DevPreviewLongLifecycle
+This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running 
+clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
 
 ## How does the descheduler operator work?
 
