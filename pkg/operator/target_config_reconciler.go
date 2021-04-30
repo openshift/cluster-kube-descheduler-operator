@@ -207,12 +207,18 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	if len(descheduler.Spec.Profiles) == 0 {
 		return nil, false, fmt.Errorf("descheduler should have at least 1 profile enabled")
 	}
+	profiles := sets.NewString()
 	policy := &deschedulerapi.DeschedulerPolicy{}
 	for _, profileName := range descheduler.Spec.Profiles {
 		p := v410_00_assets.MustAsset("v4.1.0/profiles/" + string(profileName) + ".yaml")
 		profile := &deschedulerapi.DeschedulerPolicy{}
 		if err := yaml.Unmarshal(p, profile); err != nil {
 			return nil, false, err
+		}
+
+		if err := checkProfileConflicts(profiles, profileName); err != nil {
+			klog.ErrorS(err, "Profile conflict")
+			continue
 		}
 
 		// exclude openshift namespaces from descheduling
@@ -240,6 +246,21 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	}
 	required.Data = map[string]string{"policy.yaml": string(policyBytes)}
 	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+// checkProfileConflicts ensures that multiple profiles aren't redeclared
+// it also checks for various inter-profile conflicts (profiles which should not be enabled simultaneously)
+func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.DeschedulerProfile) error {
+	if profiles.Has(string(profileName)) {
+		return fmt.Errorf("profile %s already declared, ignoring", profileName)
+	} else {
+		profiles.Insert(string(profileName))
+	}
+
+	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LifecycleAndUtilization)
+	}
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
