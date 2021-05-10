@@ -10,6 +10,12 @@ rules:
   verbs:
   - "*"
 - apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - "*"
+- apiGroups:
   - kubedeschedulers.operator.openshift.io
   resources:
   - "*"
@@ -28,6 +34,13 @@ rules:
   - events
   verbs:
   - "*"
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  verbs:
+  - '*'
 - apiGroups:
   - scheduling.k8s.io
   resources:
