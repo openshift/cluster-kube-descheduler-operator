@@ -2,8 +2,8 @@ updates:
   - file: "{MAJOR}.{MINOR}/cluster-kube-descheduler-operator.v{MAJOR}.{MINOR}.0.clusterserviceversion.yaml" # relative to this file
     update_list:
     # replace metadata.name value
-    - search: "clusterkubedescheduleroperator.v{MAJOR}.{MINOR}.0"
-      replace: "clusterkubedescheduleroperator.{FULL_VER}"
+    - search: "kubedescheduleroperator.v{MAJOR}.{MINOR}.0"
+      replace: "kubedescheduleroperator.{FULL_VER}"
     # replace entire version line, otherwise would replace {MAJOR}.{MINOR}.0 anywhere
     - search: "version: {MAJOR}.{MINOR}.0"
       replace: "version: {FULL_VER}"
