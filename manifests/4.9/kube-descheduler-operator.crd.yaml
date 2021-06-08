@@ -92,6 +92,9 @@ spec:
                   - TopologyAndDuplicates
                   - LifecycleAndUtilization
                   - DevPreviewLongLifecycle
+                  - SoftTopologyAndDuplicates
+                  type: string
+                type: array
               unsupportedConfigOverrides:
                 description: 'unsupportedConfigOverrides holds a sparse config that
                   will override any previously set options.  It only needs to be the
