@@ -39,7 +39,7 @@ $(call build-image,ocp-cluster-kube-descheduler-operator,$(IMAGE_REGISTRY)/ocp/4
 # and also hooked into {update,verify}-generated for broader integration.
 $(call add-bindata,v4.1.0,./bindata/v4.1.0/...,bindata,v410_00_assets,pkg/operator/v410_00_assets/bindata.go)
 
-$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1beta1,./manifests/4.7,./manifests/4.7)
+$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests/4.9,./manifests/4.9)
 
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 test-e2e: test-unit
