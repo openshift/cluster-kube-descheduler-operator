@@ -7,6 +7,7 @@ require (
 	github.com/imdario/mergo v0.3.7
 	github.com/openshift/api v0.0.0-20210730095913-85e1d547cdee
 	github.com/openshift/build-machinery-go v0.0.0-20210712174854-1bb7fd1518d3
+	github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e
 	github.com/openshift/library-go v0.0.0-20210730114916-d82fae7e3feb
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/cobra v1.1.3
