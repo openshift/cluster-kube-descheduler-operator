@@ -1,10 +1,9 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.15
+go 1.16
 
 require (
 	github.com/ghodss/yaml v1.0.0
-	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/imdario/mergo v0.3.7
 	github.com/openshift/api v0.0.0-20210331193751-3acddb19d360
 	github.com/openshift/build-machinery-go v0.0.0-20210209125900-0da259a2c359

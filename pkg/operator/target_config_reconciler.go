@@ -12,11 +12,11 @@ import (
 	"github.com/imdario/mergo"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	"github.com/openshift/cluster-kube-descheduler-operator/bindata"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
-	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/v410_00_assets"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
@@ -142,7 +142,7 @@ func (c TargetConfigReconciler) sync() error {
 }
 
 func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.Role, bool, error) {
-	required := resourceread.ReadRoleV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/role.yaml"))
+	required := resourceread.ReadRoleV1OrDie(bindata.MustAsset("assets/kube-descheduler/role.yaml"))
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
@@ -157,7 +157,7 @@ func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDesch
 }
 
 func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
-	required := resourceread.ReadRoleBindingV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/rolebinding.yaml"))
+	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/rolebinding.yaml"))
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
@@ -172,7 +172,7 @@ func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.Ku
 }
 
 func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDescheduler) (*v1.Service, bool, error) {
-	required := resourceread.ReadServiceV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/service.yaml"))
+	required := resourceread.ReadServiceV1OrDie(bindata.MustAsset("assets/kube-descheduler/service.yaml"))
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
@@ -187,11 +187,11 @@ func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDe
 }
 
 func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
-	return resourceapply.ApplyServiceMonitor(c.dynamicClient, c.eventRecorder, v410_00_assets.MustAsset("v4.1.0/kube-descheduler/servicemonitor.yaml"))
+	return resourceapply.ApplyServiceMonitor(c.dynamicClient, c.eventRecorder, bindata.MustAsset("assets/kube-descheduler/servicemonitor.yaml"))
 }
 
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
-	required := resourceread.ReadConfigMapV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/configmap.yaml"))
+	required := resourceread.ReadConfigMapV1OrDie(bindata.MustAsset("assets/kube-descheduler/configmap.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -210,7 +210,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	profiles := sets.NewString()
 	policy := &deschedulerapi.DeschedulerPolicy{}
 	for _, profileName := range descheduler.Spec.Profiles {
-		p := v410_00_assets.MustAsset("v4.1.0/profiles/" + string(profileName) + ".yaml")
+		p := bindata.MustAsset("assets/profiles/" + string(profileName) + ".yaml")
 		profile := &deschedulerapi.DeschedulerPolicy{}
 		if err := yaml.Unmarshal(p, profile); err != nil {
 			return nil, false, err
@@ -264,7 +264,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 }
 
 func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
-	required := resourceread.ReadDeploymentV1OrDie(v410_00_assets.MustAsset("v4.1.0/kube-descheduler/deployment.yaml"))
+	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
