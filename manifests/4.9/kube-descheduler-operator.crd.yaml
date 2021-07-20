@@ -15,79 +15,106 @@ spec:
     schema:
       openAPIV3Schema:
         description: KubeDescheduler is the Schema for the deschedulers API
+        type: object
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
           spec:
             description: spec holds user settable values for configuration
+            type: object
             properties:
               deschedulingIntervalSeconds:
-                description: DeschedulingIntervalSeconds is the number of seconds between descheduler runs
-                format: int32
+                description: DeschedulingIntervalSeconds is the number of seconds
+                  between descheduler runs
                 type: integer
+                format: int32
               logLevel:
+                description: "logLevel is an intent based logging for an overall component.
+                  \ It does not give fine grained control, but it is a simple way
+                  to manage coarse grained logging choices that operators have to
+                  interpret for their operands. \n Valid values are: \"Normal\", \"Debug\",
+                  \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                type: string
                 default: Normal
-                description: "logLevel is an intent based logging for an overall component.  It does not give fine grained control, but it is a simple way to manage coarse grained logging choices that operators have to interpret for their operands. \n Valid values are: \"Normal\", \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
                 enum:
                 - ""
                 - Normal
                 - Debug
                 - Trace
                 - TraceAll
-                type: string
               managementState:
-                description: managementState indicates whether and how the operator should manage the component
-                pattern: ^(Managed|Unmanaged|Force|Removed)$
+                description: managementState indicates whether and how the operator
+                  should manage the component
                 type: string
+                pattern: ^(Managed|Unmanaged|Force|Removed)$
               observedConfig:
-                description: observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because it is an input to the level for the operator
-                nullable: true
+                description: observedConfig holds a sparse config that controller
+                  has observed from the cluster state.  It exists in spec because
+                  it is an input to the level for the operator
                 type: object
+                nullable: true
                 x-kubernetes-preserve-unknown-fields: true
               operatorLogLevel:
+                description: "operatorLogLevel is an intent based logging for the
+                  operator itself.  It does not give fine grained control, but it
+                  is a simple way to manage coarse grained logging choices that operators
+                  have to interpret for themselves. \n Valid values are: \"Normal\",
+                  \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                type: string
                 default: Normal
-                description: "operatorLogLevel is an intent based logging for the operator itself.  It does not give fine grained control, but it is a simple way to manage coarse grained logging choices that operators have to interpret for themselves. \n Valid values are: \"Normal\", \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
                 enum:
                 - ""
                 - Normal
                 - Debug
                 - Trace
                 - TraceAll
-                type: string
               profiles:
-                description: Profiles sets which descheduler strategy profiles are enabled
+                description: Profiles sets which descheduler strategy profiles are
+                  enabled
+                type: array
                 items:
-                  description: DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
+                  description: DeschedulerProfile allows configuring the enabled strategy
+                    profiles for the descheduler it allows multiple profiles to be
+                    enabled at once, which will have cumulative effects on the cluster.
+                  type: string
                   enum:
                   - AffinityAndTaints
                   - TopologyAndDuplicates
                   - LifecycleAndUtilization
                   - DevPreviewLongLifecycle
-                  type: string
-                type: array
               unsupportedConfigOverrides:
-                description: 'unsupportedConfigOverrides holds a sparse config that will override any previously set options.  It only needs to be the fields to override it will end up overlaying in the following order: 1. hardcoded defaults 2. observedConfig 3. unsupportedConfigOverrides'
-                nullable: true
+                description: 'unsupportedConfigOverrides holds a sparse config that
+                  will override any previously set options.  It only needs to be the
+                  fields to override it will end up overlaying in the following order:
+                  1. hardcoded defaults 2. observedConfig 3. unsupportedConfigOverrides'
                 type: object
+                nullable: true
                 x-kubernetes-preserve-unknown-fields: true
-            type: object
           status:
-            description: status holds observed values from the cluster. They may not be overridden.
+            description: status holds observed values from the cluster. They may not
+              be overridden.
+            type: object
             properties:
               conditions:
                 description: conditions is a list of conditions and their status
+                type: array
                 items:
                   description: OperatorCondition is just the standard condition fields.
+                  type: object
                   properties:
                     lastTransitionTime:
-                      format: date-time
                       type: string
+                      format: date-time
                     message:
                       type: string
                     reason:
@@ -96,23 +123,28 @@ spec:
                       type: string
                     type:
                       type: string
-                  type: object
-                type: array
               generations:
-                description: generations are used to determine when an item needs to be reconciled or has changed in a way that needs a reaction.
+                description: generations are used to determine when an item needs
+                  to be reconciled or has changed in a way that needs a reaction.
+                type: array
                 items:
-                  description: GenerationStatus keeps track of the generation for a given resource so that decisions about forced updates can be made.
+                  description: GenerationStatus keeps track of the generation for
+                    a given resource so that decisions about forced updates can be
+                    made.
+                  type: object
                   properties:
                     group:
                       description: group is the group of the thing you're tracking
                       type: string
                     hash:
-                      description: hash is an optional field set for resources without generation that are content sensitive like secrets and configmaps
+                      description: hash is an optional field set for resources without
+                        generation that are content sensitive like secrets and configmaps
                       type: string
                     lastGeneration:
-                      description: lastGeneration is the last generation of the workload controller involved
-                      format: int64
+                      description: lastGeneration is the last generation of the workload
+                        controller involved
                       type: integer
+                      format: int64
                     name:
                       description: name is the name of the thing you're tracking
                       type: string
@@ -120,23 +152,22 @@ spec:
                       description: namespace is where the thing you're tracking is
                       type: string
                     resource:
-                      description: resource is the resource type of the thing you're tracking
+                      description: resource is the resource type of the thing you're
+                        tracking
                       type: string
-                  type: object
-                type: array
               observedGeneration:
-                description: observedGeneration is the last generation change you've dealt with
+                description: observedGeneration is the last generation change you've
+                  dealt with
+                type: integer
                 format: int64
-                type: integer
               readyReplicas:
-                description: readyReplicas indicates how many replicas are ready and at the desired state
-                format: int32
+                description: readyReplicas indicates how many replicas are ready and
+                  at the desired state
                 type: integer
+                format: int32
               version:
                 description: version is the level this availability applies to
                 type: string
-            type: object
-        type: object
     served: true
     storage: true
     subresources:

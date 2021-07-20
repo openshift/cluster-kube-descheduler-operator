@@ -17,7 +17,7 @@ IMAGE_REGISTRY :=registry.svc.ci.openshift.org
 
 CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/cluster-kube-descheduler-operator/pkg/generated
 CODEGEN_API_PACKAGE :=github.com/openshift/cluster-kube-descheduler-operator/pkg/apis
-CODEGEN_GROUPS_VERSION :=descheduler:v1beta1
+CODEGEN_GROUPS_VERSION :=descheduler:v1
 
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
 # $0 - macro name
@@ -39,7 +39,7 @@ generate: update-codegen-crds generate-clients
 .PHONY: generate
 
 generate-clients:
-	bash ./vendor/k8s.io/code-generator/generate-groups.sh all github.com/openshift/cluster-kube-descheduler-operator/pkg/generated github.com/openshift/cluster-kube-descheduler-operator/pkg/apis descheduler:v1beta1
+	bash ./vendor/k8s.io/code-generator/generate-groups.sh all github.com/openshift/cluster-kube-descheduler-operator/pkg/generated github.com/openshift/cluster-kube-descheduler-operator/pkg/apis descheduler:v1
 .PHONY: generate-clients
 
 clean:
