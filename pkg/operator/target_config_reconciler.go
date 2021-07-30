@@ -153,7 +153,7 @@ func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDesch
 		},
 	}
 
-	return resourceapply.ApplyRole(c.kubeClient.RbacV1(), c.eventRecorder, required)
+	return resourceapply.ApplyRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
@@ -168,7 +168,7 @@ func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.Ku
 		},
 	}
 
-	return resourceapply.ApplyRoleBinding(c.kubeClient.RbacV1(), c.eventRecorder, required)
+	return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDescheduler) (*v1.Service, bool, error) {
@@ -183,11 +183,13 @@ func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDe
 		},
 	}
 
-	return resourceapply.ApplyService(c.kubeClient.CoreV1(), c.eventRecorder, required)
+	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
-	return resourceapply.ApplyServiceMonitor(c.dynamicClient, c.eventRecorder, bindata.MustAsset("assets/kube-descheduler/servicemonitor.yaml"))
+	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/servicemonitor.yaml"))
+	_, changed, err := resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+	return changed, err
 }
 
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
@@ -245,7 +247,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		return nil, false, err
 	}
 	required.Data = map[string]string{"policy.yaml": string(policyBytes)}
-	return resourceapply.ApplyConfigMap(c.kubeClient.CoreV1(), c.eventRecorder, required)
+	return resourceapply.ApplyConfigMap(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
 // checkProfileConflicts ensures that multiple profiles aren't redeclared
@@ -318,6 +320,7 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 	}
 	// FIXME: this method will disappear in 4.6 so we need to fix this ASAP
 	return resourceapply.ApplyDeploymentWithForce(
+		c.ctx,
 		c.kubeClient.AppsV1(),
 		c.eventRecorder,
 		required,
