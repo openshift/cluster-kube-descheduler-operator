@@ -4,6 +4,8 @@ metadata:
   # The version value is substituted by the ART pipeline
   name: clusterkubedescheduleroperator.v4.9.0
   namespace: openshift-kube-descheduler-operator
+  labels:
+    operatorframework.io/arch.amd64: supported
   annotations:
     alm-examples: |
       [
