@@ -58,7 +58,10 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 	return c.tracker
 }
 
-var _ clientset.Interface = &Clientset{}
+var (
+	_ clientset.Interface = &Clientset{}
+	_ testing.FakeClient  = &Clientset{}
+)
 
 // KubedeschedulersV1 retrieves the KubedeschedulersV1Client
 func (c *Clientset) KubedeschedulersV1() kubedeschedulersv1.KubedeschedulersV1Interface {
