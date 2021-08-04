@@ -3,7 +3,6 @@ package operator
 import (
 	"context"
 	"fmt"
-	configlistersv1 "github.com/openshift/client-go/config/listers/config/v1"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	configlistersv1 "github.com/openshift/client-go/config/listers/config/v1"
 	"github.com/openshift/cluster-kube-descheduler-operator/bindata"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
@@ -97,6 +97,7 @@ func NewTargetConfigReconciler(
 		targetImagePullSpec:   targetImagePullSpec,
 		configSchedulerLister: configInformer.Config().V1().Schedulers().Lister(),
 	}
+	configInformer.Config().V1().Schedulers().Informer().AddEventHandler(c.eventHandler())
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 
 	return c
@@ -114,8 +115,27 @@ func (c TargetConfigReconciler) sync() error {
 	}
 
 	forceDeployment := false
+	replicas := int32(1)
 	_, forceDeployment, err = c.manageConfigMap(descheduler)
 	if err != nil {
+		// if we returned an error from the configmap AND want to force a deployment
+		// it means we want to scale the deployment to 0
+		if forceDeployment {
+			replicas = 0
+			deployment, _, err := c.manageDeployment(descheduler, forceDeployment, &replicas)
+			if err != nil {
+				klog.ErrorS(err, "Unable to scale descheduler operand deployment")
+			}
+			_, _, err = v1helpers.UpdateStatus(c.deschedulerClient,
+				v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
+					Type:   "TargetConfigControllerDegraded",
+					Status: operatorv1.ConditionTrue,
+				}),
+				func(status *operatorv1.OperatorStatus) error {
+					resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
+					return nil
+				})
+		}
 		return err
 	}
 
@@ -135,7 +155,7 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	deployment, _, err := c.manageDeployment(descheduler, forceDeployment)
+	deployment, _, err := c.manageDeployment(descheduler, forceDeployment, &replicas)
 	if err != nil {
 		return err
 	}
@@ -249,6 +269,13 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		mergo.Merge(policy, profile, mergo.WithAppendSlice)
 	}
 
+	// Check for conflicting kube-scheduler config
+	if scheduler.Spec.Profile == configv1.HighNodeUtilization &&
+		(profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) || profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle))) {
+		// force a new deployment so we can scale it to 0
+		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
+	}
+
 	// ignore PVC pods by default
 	ignorePVCPods := true
 	policy.IgnorePVCPods = &ignorePVCPods
@@ -273,15 +300,10 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LifecycleAndUtilization)
 	}
-
-	if scheduler.Spec.Profile == configv1.HighNodeUtilization &&
-		(profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) || profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle))) {
-		return fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
-	}
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool, replicas *int32) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace
@@ -293,6 +315,7 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 			UID:        descheduler.UID,
 		},
 	}
+	required.Spec.Replicas = replicas
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
 	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
