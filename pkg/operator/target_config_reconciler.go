@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"reflect"
 	"strconv"
 	"strings"
@@ -115,26 +116,33 @@ func (c TargetConfigReconciler) sync() error {
 	}
 
 	forceDeployment := false
-	replicas := int32(1)
 	_, forceDeployment, err = c.manageConfigMap(descheduler)
 	if err != nil {
 		// if we returned an error from the configmap AND want to force a deployment
 		// it means we want to scale the deployment to 0
 		if forceDeployment {
-			replicas = 0
-			deployment, _, err := c.manageDeployment(descheduler, forceDeployment, &replicas)
+			klog.ErrorS(err, "Error managing targetConfig")
+			_, err = c.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).UpdateScale(
+				c.ctx,
+				descheduler.Name,
+				&autoscalingv1.Scale{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      descheduler.Name,
+						Namespace: operatorclient.OperatorNamespace,
+					},
+					Spec: autoscalingv1.ScaleSpec{
+						Replicas: 0,
+					},
+				},
+				metav1.UpdateOptions{})
 			if err != nil {
-				klog.ErrorS(err, "Unable to scale descheduler operand deployment")
+				return err
 			}
 			_, _, err = v1helpers.UpdateStatus(c.deschedulerClient,
 				v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
 					Type:   "TargetConfigControllerDegraded",
 					Status: operatorv1.ConditionTrue,
-				}),
-				func(status *operatorv1.OperatorStatus) error {
-					resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
-					return nil
-				})
+				}))
 		}
 		return err
 	}
@@ -155,15 +163,20 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	deployment, _, err := c.manageDeployment(descheduler, forceDeployment, &replicas)
+	deployment, _, err := c.manageDeployment(descheduler, forceDeployment)
 	if err != nil {
 		return err
 	}
 
-	_, _, err = v1helpers.UpdateStatus(c.deschedulerClient, func(status *operatorv1.OperatorStatus) error {
-		resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
-		return nil
-	})
+	_, _, err = v1helpers.UpdateStatus(c.deschedulerClient,
+		v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
+			Type:   "TargetConfigControllerDegraded",
+			Status: operatorv1.ConditionFalse,
+		}),
+		func(status *operatorv1.OperatorStatus) error {
+			resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
+			return nil
+		})
 	return err
 }
 
@@ -307,7 +320,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool, replicas *int32) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
 	required.Name = descheduler.Name
 	required.Namespace = descheduler.Namespace
@@ -319,7 +332,8 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 			UID:        descheduler.UID,
 		},
 	}
-	required.Spec.Replicas = replicas
+	replicas := int32(1)
+	required.Spec.Replicas = &replicas
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
 	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name

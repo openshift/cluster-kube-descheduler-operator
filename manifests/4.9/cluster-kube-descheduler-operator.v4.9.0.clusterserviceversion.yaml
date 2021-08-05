@@ -108,6 +108,14 @@ spec:
           verbs:
           - "*"
         - apiGroups:
+          - config.openshift.io
+          resources:
+          - schedulers
+          verbs:
+          - get
+          - watch
+          - list
+        - apiGroups:
           - monitoring.coreos.com
           resources:
           - servicemonitors
@@ -151,6 +159,7 @@ spec:
           - apps
           resources:
           - deployments
+          - deployments/scale
           - replicasets
           verbs:
           - "*"
