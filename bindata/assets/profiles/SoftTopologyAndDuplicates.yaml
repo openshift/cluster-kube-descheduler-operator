@@ -1,0 +1,9 @@
+apiVersion: "descheduler/v1alpha1"
+kind: "DeschedulerPolicy"
+strategies:
+  "RemovePodsViolatingTopologySpreadConstraint":
+    enabled: true
+    params:
+      includeSoftConstraints: true
+  "RemoveDuplicates":
+    enabled: true

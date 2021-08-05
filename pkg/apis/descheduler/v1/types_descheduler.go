@@ -38,7 +38,7 @@ type KubeDeschedulerSpec struct {
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
 // it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
-// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;SoftTopologyAndDuplicates
 type DeschedulerProfile string
 
 var (
@@ -49,6 +49,10 @@ var (
 	// TopologyAndDuplicates attempts to spread pods evenly among nodes based on topology spread
 	// constraints and duplicate replicas on the same node.
 	TopologyAndDuplicates DeschedulerProfile = "TopologyAndDuplicates"
+
+	// SoftTopologyAndDuplicates attempts to spread pods evenly similar to TopologyAndDuplicates, but includes
+	// soft ("ScheduleAnyway") topology spread constraints
+	SoftTopologyAndDuplicates DeschedulerProfile = "SoftTopologyAndDuplicates"
 
 	// LifecycleAndUtilization attempts to balance pods based on node resource usage, pod age, and pod restarts
 	LifecycleAndUtilization DeschedulerProfile = "LifecycleAndUtilization"
