@@ -10,6 +10,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
+	configv1client "github.com/openshift/client-go/config/clientset/versioned"
+	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
@@ -27,6 +29,13 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	if err != nil {
 		return err
 	}
+
+	openshiftConfigClient, err := configv1client.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+
+	configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
 
 	dynamicClient, err := dynamic.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
@@ -57,6 +66,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		deschedulerClient,
 		kubeClient,
 		dynamicClient,
+		configInformers,
 		cc.EventRecorder,
 	)
 
