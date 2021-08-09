@@ -276,6 +276,14 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
 	}
 
+	// set PodLifetime if non-default
+	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.PodLifetime != nil {
+		seconds := uint(descheduler.Spec.ProfileCustomizations.PodLifetime.Seconds())
+		if strategy, ok := policy.Strategies["PodLifetime"]; ok {
+			strategy.Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
+		}
+	}
+
 	// ignore PVC pods by default
 	ignorePVCPods := true
 	policy.IgnorePVCPods = &ignorePVCPods
