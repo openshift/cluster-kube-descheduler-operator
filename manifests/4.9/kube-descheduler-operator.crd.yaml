@@ -82,6 +82,8 @@ spec:
                       - LifecycleAndUtilization
                       - DevPreviewLongLifecycle
                       - SoftTopologyAndDuplicates
+                      - EvictPodsWithLocalStorage
+                      - DoNotEvictPodsWithPVC
                 unsupportedConfigOverrides:
                   description: 'unsupportedConfigOverrides holds a sparse config that will override any previously set options.  It only needs to be the fields to override it will end up overlaying in the following order: 1. hardcoded defaults 2. observedConfig 3. unsupportedConfigOverrides'
                   type: object
