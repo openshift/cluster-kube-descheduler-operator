@@ -10,6 +10,14 @@ rules:
   verbs:
   - "*"
 - apiGroups:
+  - config.openshift.io
+  resources:
+  - schedulers
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - servicemonitors
@@ -53,6 +61,7 @@ rules:
   - apps
   resources:
   - deployments
+  - deployments/scale
   - replicasets
   verbs:
   - "*"

@@ -74,6 +74,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
+	configInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
 
 	klog.Infof("Starting log level controller")
