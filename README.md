@@ -61,6 +61,9 @@ spec:
   deschedulingIntervalSeconds: 1800
   profiles:
   - AffinityAndTaints
+  - LifecycleAndUtilization
+  profileCustomizations:
+    podLifetime: 5m
 ```
 
 The operator spec provides a `profiles` field, which allows users to set one or more descheduling profiles to enable.
@@ -107,6 +110,14 @@ may be made available through the operator for these strategies based on user fe
 ### DevPreviewLongLifecycle
 This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running 
 clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
+
+## Profile Customizations
+Some profiles expose options which may be used to configure the underlying Descheduler strategy parameters. These are available under
+the `profileCustomizations` field:
+
+|Name|Type|Description|
+|---|---|---|
+|`podLifetime`|`time.Duration`|Sets the lifetime value for pods evicted by the `LifecycleAndUtilization` profile|
 
 ## How does the descheduler operator work?
 
