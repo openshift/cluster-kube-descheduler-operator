@@ -1,8 +1,6 @@
 package v1
 
 import (
-	"time"
-
 	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -45,7 +43,8 @@ type KubeDeschedulerSpec struct {
 type ProfileCustomizations struct {
 	// PodLifetime is the length of time after which pods should be evicted
 	// This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
-	PodLifetime *time.Duration `json:"podLifetime,omitempty"`
+	// +kubebuilder:validation:Format=duration
+	PodLifetime *metav1.Duration `json:"podLifetime,omitempty"`
 }
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
