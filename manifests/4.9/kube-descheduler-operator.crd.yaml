@@ -68,8 +68,8 @@ spec:
                   properties:
                     podLifetime:
                       description: PodLifetime is the length of time after which pods should be evicted This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
-                      type: integer
-                      format: int64
+                      type: string
+                      format: duration
                 profiles:
                   description: Profiles sets which descheduler strategy profiles are enabled
                   type: array
