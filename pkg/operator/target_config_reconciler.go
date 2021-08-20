@@ -292,8 +292,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	// set PodLifetime if non-default
 	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.PodLifetime != nil {
 		seconds := uint(descheduler.Spec.ProfileCustomizations.PodLifetime.Seconds())
-		if strategy, ok := policy.Strategies["PodLifetime"]; ok {
-			strategy.Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
+		if _, ok := policy.Strategies["PodLifeTime"]; ok {
+			policy.Strategies["PodLifeTime"].Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
 		}
 	}
 
