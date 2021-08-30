@@ -26,8 +26,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -37,6 +39,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	deschedulerapi "sigs.k8s.io/descheduler/pkg/api/v1alpha1"
+	migrationv1alpha1 "sigs.k8s.io/kube-storage-version-migrator/pkg/apis/migration/v1alpha1"
+	migrationclient "sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset"
+	migrationscheme "sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset/scheme"
 )
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
@@ -55,6 +60,8 @@ type TargetConfigReconciler struct {
 	eventRecorder       events.Recorder
 	queue               workqueue.RateLimitingInterface
 	excludedNamespaces  []string
+	apiExtensionsClient *clientset.Clientset
+	migrationsClient    *migrationclient.Clientset
 }
 
 func NewTargetConfigReconciler(
@@ -66,6 +73,8 @@ func NewTargetConfigReconciler(
 	kubeClient kubernetes.Interface,
 	dynamicClient dynamic.Interface,
 	eventRecorder events.Recorder,
+	apiExtensionsClient *clientset.Clientset,
+	migrationsClient *migrationclient.Clientset,
 ) *TargetConfigReconciler {
 	// make sure our list of excluded system namespaces is up to date
 	allNamespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
@@ -90,10 +99,52 @@ func NewTargetConfigReconciler(
 		queue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
 		excludedNamespaces:  excludedNamespaces,
 		targetImagePullSpec: targetImagePullSpec,
+		apiExtensionsClient: apiExtensionsClient,
+		migrationsClient:    migrationsClient,
 	}
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 
 	return c
+}
+
+// (4.8 only): Perform CRD v1beta1->v1 migration and update stored versions
+// See https://bugzilla.redhat.com/show_bug.cgi?id=1992478
+func (c TargetConfigReconciler) migrateStorageVersion() error {
+	existingMigration, err := c.migrationsClient.MigrationV1alpha1().StorageVersionMigrations().Get(c.ctx, "operator-kubedescheduler-storage-version-migration", metav1.GetOptions{})
+	// if the migration already exists, return nil
+	// if we get any error (besides IsNotFound) return the error
+	// otherwise, proceed
+	if (err != nil && !apierrors.IsNotFound(err)) || existingMigration != nil {
+		return err
+	}
+
+	// first, create the storage version migration to update existing objects to v1
+	migrationBytes := v410_00_assets.MustAsset("v4.1.0/kube-descheduler/v1-migration.yaml")
+	requiredObj, err := runtime.Decode(migrationscheme.Codecs.UniversalDecoder(migrationv1alpha1.SchemeGroupVersion), migrationBytes)
+	if err != nil {
+		return err
+	}
+	migration := requiredObj.(*migrationv1alpha1.StorageVersionMigration)
+	_, err = c.migrationsClient.MigrationV1alpha1().StorageVersionMigrations().Create(c.ctx, migration, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	// now update the CRD itself to remove v1beta1 from storage version if necessary
+	crd, err := c.apiExtensionsClient.ApiextensionsV1().CustomResourceDefinitions().Get(c.ctx, "kubedeschedulers.operator.openshift.io", metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	storedVersions := sets.NewString(crd.Status.StoredVersions...)
+	if !storedVersions.Has("v1beta1") && storedVersions.Has("v1") {
+		// nothing to do
+		return nil
+	}
+	crd.Status.StoredVersions = []string{"v1"}
+	_, err = c.apiExtensionsClient.ApiextensionsV1().CustomResourceDefinitions().UpdateStatus(c.ctx, crd, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c TargetConfigReconciler) sync() error {
@@ -105,6 +156,10 @@ func (c TargetConfigReconciler) sync() error {
 
 	if descheduler.Spec.DeschedulingIntervalSeconds == nil {
 		return fmt.Errorf("descheduler should have an interval set")
+	}
+
+	if err := c.migrateStorageVersion(); err != nil {
+		return err
 	}
 
 	forceDeployment := false

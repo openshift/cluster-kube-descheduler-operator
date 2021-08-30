@@ -12,10 +12,12 @@ require (
 	github.com/prometheus/client_golang v1.7.1
 	github.com/spf13/cobra v1.1.1
 	k8s.io/api v0.21.0-rc.0
+	k8s.io/apiextensions-apiserver v0.21.0-rc.0
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
 	k8s.io/code-generator v0.21.0-rc.0
 	k8s.io/klog/v2 v2.8.0
 	sigs.k8s.io/controller-tools v0.2.8
 	sigs.k8s.io/descheduler v0.20.1-0.20210127064140-241f1325c968
+	sigs.k8s.io/kube-storage-version-migrator v0.0.3
 )

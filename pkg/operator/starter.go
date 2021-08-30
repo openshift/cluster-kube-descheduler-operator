@@ -7,8 +7,10 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	migrationclient "sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset"
 
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
@@ -29,6 +31,16 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	}
 
 	dynamicClient, err := dynamic.NewForConfig(cc.ProtoKubeConfig)
+	if err != nil {
+		return err
+	}
+
+	// only for 4.8, so v1beta1->v1 stored version migration can run
+	apiExtensionsClient, err := clientset.NewForConfig(cc.ProtoKubeConfig)
+	if err != nil {
+		return err
+	}
+	migrationsClient, err := migrationclient.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return err
 	}
@@ -58,6 +70,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		kubeClient,
 		dynamicClient,
 		cc.EventRecorder,
+		apiExtensionsClient,
+		migrationsClient,
 	)
 
 	logLevelController := loglevel.NewClusterOperatorLoggingController(deschedulerClient, cc.EventRecorder)
