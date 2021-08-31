@@ -59,7 +59,10 @@ spec:
 
       * AffinityAndTaints
       * TopologyAndDuplicates
+      * SoftTopologyAndDuplicates
       * LifecycleAndUtilization
+      * DoNotEvictPodsWithPVC
+      * EvictPodsWithLocalStorage
 
       These profiles are documented in detail in the [descheduler operator README](https://github.com/openshift/cluster-kube-descheduler-operator#profiles).
 
@@ -68,6 +71,7 @@ spec:
       In addition to the profiles, the following parameters can be configured:
 
       * `deschedulingIntervalSeconds` - Set the number of seconds between descheduler runs. A value of `0` in this field runs the descheduler once and exits.
+      * `profileCustomizations` - Allows certain profile parameters to be tweaked, such as `podLifetime` (see [README](https://github.com/openshift/cluster-kube-descheduler-operator#profile-customizations) for more info).
   displayName: Kube Descheduler Operator
   keywords: ["scheduling", "descheduler", "workload"]
   provider:

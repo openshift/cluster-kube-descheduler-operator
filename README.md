@@ -76,7 +76,10 @@ any that are enabled will be merged.
 The following profiles are currently provided:
 * [`AffinityAndTaints`](#AffinityAndTaints)
 * [`TopologyAndDuplicates`](#TopologyAndDuplicates)
+* [`SoftTopologyAndDuplicates`](#SoftTopologyAndDuplicates)
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
+* [`DoNotEvictPodsWithPVC`](#DoNotEvictPodsWithPVC)
+* [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
   
 Along with the following profiles, which are in development and may change:
 * [`DevPreviewLongLifecycle`](#DevPreviewLongLifecycle)
@@ -96,6 +99,10 @@ This profile attempts to balance pod distribution based on topology constraint d
 of the same pod running on the same node. It enables the [`RemovePodsViolatingTopologySpreadConstraints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingtopologyspreadconstraint)
 and [`RemoveDuplicates`](https://github.com/kubernetes-sigs/descheduler/#removeduplicates) strategies.
 
+### SoftTopologyAndDuplicates
+This profile is the same as `TopologyAndDuplicates`, however it will also consider pods with "soft" topology constraints
+for eviction (ie, `whenUnsatisfiable: ScheduleAnyway`)
+
 ### LifecycleAndUtilization
 This profile focuses on pod lifecycles and node resource consumption. It will evict any running pod older than 24 hours
 and attempts to evict pods from "high utilization" nodes that can fit onto "low utilization" nodes. A high utilization
@@ -110,6 +117,15 @@ may be made available through the operator for these strategies based on user fe
 ### DevPreviewLongLifecycle
 This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running 
 clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
+
+### DoNotEvictPodsWithPVC
+This profile is intended to be used in combination with any of the above profiles to prevent
+them from evicting pods that have PVCs. Without this profile, these pods are eligible
+to be evicted by any profile.
+
+### EvictPodsWithLocalStorage
+By default, pods with local storage are not eligible to be considered for eviction by any
+profile. Using this profile allows them to be evicted if necessary.
 
 ## Profile Customizations
 Some profiles expose options which may be used to configure the underlying Descheduler strategy parameters. These are available under
