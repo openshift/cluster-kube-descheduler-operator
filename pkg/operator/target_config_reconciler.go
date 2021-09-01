@@ -255,6 +255,10 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	}
 	profiles := sets.NewString()
 	policy := &deschedulerapi.DeschedulerPolicy{}
+
+	// ignore PVC pods by default
+	ignorePVCPods := true
+	policy.IgnorePVCPods = &ignorePVCPods
 	for _, profileName := range descheduler.Spec.Profiles {
 		p := bindata.MustAsset("assets/profiles/" + string(profileName) + ".yaml")
 		profile := &deschedulerapi.DeschedulerPolicy{}
@@ -279,7 +283,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			strategy.Params.Namespaces = &deschedulerapi.Namespaces{Exclude: c.excludedNamespaces}
 			profile.Strategies[name] = strategy
 		}
-		mergo.Merge(policy, profile, mergo.WithAppendSlice)
+		mergo.Merge(policy, profile, mergo.WithAppendSlice, mergo.WithOverride)
 	}
 
 	// Check for conflicting kube-scheduler config
@@ -296,10 +300,6 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			policy.Strategies["PodLifeTime"].Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
 		}
 	}
-
-	// ignore PVC pods by default
-	ignorePVCPods := true
-	policy.IgnorePVCPods = &ignorePVCPods
 
 	policyBytes, err := yaml.Marshal(policy)
 	if err != nil {

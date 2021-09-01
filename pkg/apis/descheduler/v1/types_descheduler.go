@@ -49,7 +49,7 @@ type ProfileCustomizations struct {
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
 // it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
-// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;DoNotEvictPodsWithPVC
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC
 type DeschedulerProfile string
 
 var (
@@ -71,8 +71,8 @@ var (
 	// EvictPodsWithLocalStorage enables pods with local storage to be evicted by the descheduler by all other profiles
 	EvictPodsWithLocalStorage DeschedulerProfile = "EvictPodsWithLocalStorage"
 
-	// DoNotEvictPodsWithPVC prevents pods with PVCs from being evicted by all other profiles
-	DoNotEvictPodsWithPVC DeschedulerProfile = "DoNotEvictPodsWithPVC"
+	// EvictPodsWithPVC prevents pods with PVCs from being evicted by all other profiles
+	EvictPodsWithPVC DeschedulerProfile = "EvictPodsWithPVC"
 
 	// DevPreviewLongLifecycle handles cluster lifecycle over a long term
 	DevPreviewLongLifecycle DeschedulerProfile = "DevPreviewLongLifecycle"
