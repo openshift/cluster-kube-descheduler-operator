@@ -78,7 +78,7 @@ The following profiles are currently provided:
 * [`TopologyAndDuplicates`](#TopologyAndDuplicates)
 * [`SoftTopologyAndDuplicates`](#SoftTopologyAndDuplicates)
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
-* [`DoNotEvictPodsWithPVC`](#DoNotEvictPodsWithPVC)
+* [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
   
 Along with the following profiles, which are in development and may change:
@@ -118,10 +118,10 @@ may be made available through the operator for these strategies based on user fe
 This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running 
 clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
 
-### DoNotEvictPodsWithPVC
-This profile is intended to be used in combination with any of the above profiles to prevent
-them from evicting pods that have PVCs. Without this profile, these pods are eligible
-to be evicted by any profile.
+### EvictPodsWithPVC
+By default, the operator prevents pods with PVCs from being evicted. Enabling this 
+profile in combination with any of the above profiles allows pods with PVCs to be 
+eligible for eviction.
 
 ### EvictPodsWithLocalStorage
 By default, pods with local storage are not eligible to be considered for eviction by any

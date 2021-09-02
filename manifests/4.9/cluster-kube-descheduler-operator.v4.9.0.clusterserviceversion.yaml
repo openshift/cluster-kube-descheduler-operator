@@ -61,7 +61,7 @@ spec:
       * TopologyAndDuplicates
       * SoftTopologyAndDuplicates
       * LifecycleAndUtilization
-      * DoNotEvictPodsWithPVC
+      * EvictPodsWithPVC
       * EvictPodsWithLocalStorage
 
       These profiles are documented in detail in the [descheduler operator README](https://github.com/openshift/cluster-kube-descheduler-operator#profiles).

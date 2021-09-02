@@ -65,6 +65,51 @@ strategies:
       thresholdPriorityClassName: ""
 `
 
+const evictPvcPodsConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: false
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces: null
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 50
+          memory: 50
+          pods: 50
+        thresholds:
+          cpu: 20
+          memory: 20
+          pods: 20
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  PodLifeTime:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces:
+        exclude: null
+        include: null
+      podLifeTime:
+        maxPodLifeTimeSeconds: 86400
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces:
+        exclude: null
+        include: null
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+`
+
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
@@ -95,6 +140,26 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": podLifeTimeConfig},
+			},
+		},
+		{
+			name: "PvcPods",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization", "EvictPodsWithPVC"},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": evictPvcPodsConfig},
 			},
 		},
 	}
