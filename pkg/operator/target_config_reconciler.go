@@ -79,7 +79,7 @@ func NewTargetConfigReconciler(
 		klog.ErrorS(err, "error listing namespaces")
 		return nil
 	}
-	excludedNamespaces := []string{"kube-system"}
+	excludedNamespaces := []string{"kube-system", "hypershift"}
 	for _, ns := range allNamespaces.Items {
 		if strings.HasPrefix(ns.Name, "openshift-") {
 			excludedNamespaces = append(excludedNamespaces, ns.Name)
