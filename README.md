@@ -125,7 +125,10 @@ eligible for eviction.
 
 ### EvictPodsWithLocalStorage
 By default, pods with local storage are not eligible to be considered for eviction by any
-profile. Using this profile allows them to be evicted if necessary.
+profile. Using this profile allows them to be evicted if necessary. A pod is defined as using 
+local storage if any of its volumes have `HostPath` or `EmptyDir` set (note that a pod that only 
+uses PVCs does not fit this definition, and will need the `EvictPodsWithPVC` profile instead. Pods 
+that use both will need both profiles to be evicted).
 
 ## Profile Customizations
 Some profiles expose options which may be used to configure the underlying Descheduler strategy parameters. These are available under
