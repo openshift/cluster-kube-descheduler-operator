@@ -1,0 +1,9 @@
+apiVersion: migration.k8s.io/v1alpha1
+kind: StorageVersionMigration
+metadata:
+  name: operator-kubedescheduler-storage-version-migration
+spec:
+  resource:
+    group: operator.openshift.io
+    resource: kubedeschedulers
+    version: v1beta1

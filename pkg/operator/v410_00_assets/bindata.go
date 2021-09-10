@@ -6,6 +6,7 @@
 // bindata/v4.1.0/kube-descheduler/rolebinding.yaml
 // bindata/v4.1.0/kube-descheduler/service.yaml
 // bindata/v4.1.0/kube-descheduler/servicemonitor.yaml
+// bindata/v4.1.0/kube-descheduler/v1-migration.yaml
 // bindata/v4.1.0/profiles/AffinityAndTaints.yaml
 // bindata/v4.1.0/profiles/DevPreviewLongLifecycle.yaml
 // bindata/v4.1.0/profiles/LifecycleAndUtilization.yaml
@@ -310,6 +311,32 @@ func v410KubeDeschedulerServicemonitorYaml() (*asset, error) {
 	return a, nil
 }
 
+var _v410KubeDeschedulerV1MigrationYaml = []byte(`apiVersion: migration.k8s.io/v1alpha1
+kind: StorageVersionMigration
+metadata:
+  name: operator-kubedescheduler-storage-version-migration
+spec:
+  resource:
+    group: operator.openshift.io
+    resource: kubedeschedulers
+    version: v1beta1
+`)
+
+func v410KubeDeschedulerV1MigrationYamlBytes() ([]byte, error) {
+	return _v410KubeDeschedulerV1MigrationYaml, nil
+}
+
+func v410KubeDeschedulerV1MigrationYaml() (*asset, error) {
+	bytes, err := v410KubeDeschedulerV1MigrationYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "v4.1.0/kube-descheduler/v1-migration.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _v410ProfilesAffinityandtaintsYaml = []byte(`apiVersion: "descheduler/v1alpha1"
 kind: "DeschedulerPolicy"
 strategies:
@@ -502,6 +529,7 @@ var _bindata = map[string]func() (*asset, error){
 	"v4.1.0/kube-descheduler/rolebinding.yaml":     v410KubeDeschedulerRolebindingYaml,
 	"v4.1.0/kube-descheduler/service.yaml":         v410KubeDeschedulerServiceYaml,
 	"v4.1.0/kube-descheduler/servicemonitor.yaml":  v410KubeDeschedulerServicemonitorYaml,
+	"v4.1.0/kube-descheduler/v1-migration.yaml":    v410KubeDeschedulerV1MigrationYaml,
 	"v4.1.0/profiles/AffinityAndTaints.yaml":       v410ProfilesAffinityandtaintsYaml,
 	"v4.1.0/profiles/DevPreviewLongLifecycle.yaml": v410ProfilesDevpreviewlonglifecycleYaml,
 	"v4.1.0/profiles/LifecycleAndUtilization.yaml": v410ProfilesLifecycleandutilizationYaml,
@@ -557,6 +585,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 			"rolebinding.yaml":    {v410KubeDeschedulerRolebindingYaml, map[string]*bintree{}},
 			"service.yaml":        {v410KubeDeschedulerServiceYaml, map[string]*bintree{}},
 			"servicemonitor.yaml": {v410KubeDeschedulerServicemonitorYaml, map[string]*bintree{}},
+			"v1-migration.yaml":   {v410KubeDeschedulerV1MigrationYaml, map[string]*bintree{}},
 		}},
 		"profiles": {nil, map[string]*bintree{
 			"AffinityAndTaints.yaml":       {v410ProfilesAffinityandtaintsYaml, map[string]*bintree{}},

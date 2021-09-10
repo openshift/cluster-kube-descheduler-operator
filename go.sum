@@ -935,6 +935,7 @@ sigs.k8s.io/controller-tools v0.2.8 h1:UmYsnu89dn8/wBhjKL3lkGyaDGRnPDYUx2+iwXRny
 sigs.k8s.io/controller-tools v0.2.8/go.mod h1:9VKHPszmf2DHz/QmHkcfZoewO6BL7pPs9uAiBVsaJSE=
 sigs.k8s.io/descheduler v0.20.1-0.20210127064140-241f1325c968 h1:1fCHvRLtV95hWr1JW4o+7WkNo0SVUVYt01CYsm4wzOo=
 sigs.k8s.io/descheduler v0.20.1-0.20210127064140-241f1325c968/go.mod h1:HuBj29XiVootYmjattg6h5kAp1CT7zMSveTFY1EoDAc=
+sigs.k8s.io/kube-storage-version-migrator v0.0.3 h1:IclhkKtl1zwS7awsqsQuxrvXrP2VamhcWeZDzsEz6/Q=
 sigs.k8s.io/kube-storage-version-migrator v0.0.3/go.mod h1:mXfSLkx9xbJHQsgNDDUZK/iQTs2tMbx/hsJlWe6Fthw=
 sigs.k8s.io/structured-merge-diff v0.0.0-20190525122527-15d366b2352e/go.mod h1:wWxsB5ozmmv/SG7nM11ayaAW51xMvak/t1r0CSlcokI=
 sigs.k8s.io/structured-merge-diff v1.0.1-0.20191108220359-b1b620dd3f06 h1:zD2IemQ4LmOcAumeiyDWXKUI2SO0NYDe3H6QGvPOVgU=
