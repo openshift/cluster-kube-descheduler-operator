@@ -152,6 +152,12 @@ spec:
           - replicasets
           verbs:
           - "*"
+        - apiGroups:
+          - migration.k8s.io
+          resources:
+          - "storageversionmigrations"
+          verbs:
+          - "*"
       deployments:
       - name: descheduler-operator
         spec:
