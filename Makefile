@@ -55,3 +55,13 @@ generate-clients:
 clean:
 	$(RM) ./cluster-kube-descheduler-operator
 .PHONY: clean
+
+update-codegen-crds-descheduler-prerelease:
+	go run k8s.io/code-generator/cmd/prerelease-lifecycle-gen --go-header-file $(shell mktemp) --input-dirs ./pkg/apis/descheduler/v1beta1 --output-base ./
+
+update-codegen-crds-descheduler: update-codegen-crds-descheduler-prerelease
+
+verify-codegen-crds-descheduler-prerelease:
+	go run k8s.io/code-generator/cmd/prerelease-lifecycle-gen --go-header-file $(shell mktemp) --input-dirs ./pkg/apis/descheduler/v1beta1 --output-base ./ --verify-only
+
+verify-codegen-crds-descheduler: verify-codegen-crds-descheduler-prerelease
