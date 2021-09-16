@@ -11,6 +11,10 @@ import (
 // +k8s:openapi-gen=true
 // +genclient
 // +kubebuilder:subresource:status
+// +k8s:prerelease-lifecycle-gen:introduced=1.13
+// +k8s:prerelease-lifecycle-gen:to-be-deprecated=1.21
+// +k8s:prerelease-lifecycle-gen:to-be-removed=1.22
+// +k8s:prerelease-lifecycle-gen:replacement=operator.openshift.io,v1,KubeDescheduler
 type KubeDescheduler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -88,6 +92,10 @@ type KubeDeschedulerStatus struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:prerelease-lifecycle-gen:introduced=1.13
+// +k8s:prerelease-lifecycle-gen:to-be-deprecated=1.21
+// +k8s:prerelease-lifecycle-gen:to-be-removed=1.22
+// +k8s:prerelease-lifecycle-gen:replacement=operator.openshift.io,v1,KubeDeschedulerList
 
 // KubeDeschedulerList contains a list of KubeDescheduler
 type KubeDeschedulerList struct {

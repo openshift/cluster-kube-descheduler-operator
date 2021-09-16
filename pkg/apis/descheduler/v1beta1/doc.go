@@ -4,4 +4,5 @@
 // +groupName=operator.openshift.io
 // +groupGoName=Kubedeschedulers
 // +kubebuilder:validation:Optional
+// +k8s:prerelease-lifecycle-gen=true
 package v1beta1
