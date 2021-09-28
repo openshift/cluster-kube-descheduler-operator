@@ -110,11 +110,11 @@ func NewTargetConfigReconciler(
 // (4.8 only): Perform CRD v1beta1->v1 migration and update stored versions
 // See https://bugzilla.redhat.com/show_bug.cgi?id=1992478
 func (c TargetConfigReconciler) migrateStorageVersion() error {
-	existingMigration, err := c.migrationsClient.MigrationV1alpha1().StorageVersionMigrations().Get(c.ctx, "operator-kubedescheduler-storage-version-migration", metav1.GetOptions{})
-	// if the migration already exists, return nil
+	_, err := c.migrationsClient.MigrationV1alpha1().StorageVersionMigrations().Get(c.ctx, "operator-kubedescheduler-storage-version-migration", metav1.GetOptions{})
+	// if the migration already exists (err==nil), return nil(err)
 	// if we get any error (besides IsNotFound) return the error
 	// otherwise, proceed
-	if (err != nil && !apierrors.IsNotFound(err)) || existingMigration != nil {
+	if err == nil || !apierrors.IsNotFound(err) {
 		return err
 	}
 
