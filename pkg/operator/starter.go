@@ -40,7 +40,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	if err != nil {
 		return err
 	}
-	migrationsClient, err := migrationclient.NewForConfig(cc.ProtoKubeConfig)
+	migrationsClient, err := migrationclient.NewForConfig(cc.KubeConfig)
 	if err != nil {
 		return err
 	}
