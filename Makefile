@@ -29,7 +29,7 @@ $(call build-image,ocp-cluster-kube-descheduler-operator,$(IMAGE_REGISTRY)/ocp/4
 
 $(call verify-golang-versions,Dockerfile.rhel7)
 
-$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests/4.9,./manifests/4.9)
+$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests/4.10,./manifests/4.10)
 
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 test-e2e: test-unit
