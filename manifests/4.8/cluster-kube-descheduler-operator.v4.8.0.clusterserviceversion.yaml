@@ -158,6 +158,12 @@ spec:
           - "storageversionmigrations"
           verbs:
           - "*"
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - "customresourcedefinitions"
+          verbs:
+          - "*"
       deployments:
       - name: descheduler-operator
         spec:
