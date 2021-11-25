@@ -6,8 +6,6 @@ metadata:
     include.release.openshift.io/single-node-developer: "true"
     service.alpha.openshift.io/serving-cert-secret-name: kube-descheduler-serving-cert
     exclude.release.openshift.io/internal-openshift-hosted: "true"
-    prometheus.io/scrape: "true"
-    prometheus.io/scheme: https
   labels:
     app: descheduler
   name: metrics
