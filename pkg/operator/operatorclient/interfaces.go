@@ -31,8 +31,8 @@ func (c *DeschedulerClient) GetOperatorState() (spec *operatorv1.OperatorSpec, s
 	return &instance.Spec.OperatorSpec, &instance.Status.OperatorStatus, instance.ResourceVersion, nil
 }
 
-func (c *DeschedulerClient) UpdateOperatorSpec(resourceVersion string, spec *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
-	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
+func (c *DeschedulerClient) UpdateOperatorSpec(ctx context.Context, resourceVersion string, spec *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
+	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -40,7 +40,7 @@ func (c *DeschedulerClient) UpdateOperatorSpec(resourceVersion string, spec *ope
 	copy.ResourceVersion = resourceVersion
 	copy.Spec.OperatorSpec = *spec
 
-	ret, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Update(c.Ctx, copy, v1.UpdateOptions{})
+	ret, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Update(ctx, copy, v1.UpdateOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -48,8 +48,8 @@ func (c *DeschedulerClient) UpdateOperatorSpec(resourceVersion string, spec *ope
 	return &ret.Spec.OperatorSpec, ret.ResourceVersion, nil
 }
 
-func (c *DeschedulerClient) UpdateOperatorStatus(resourceVersion string, status *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
-	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
+func (c *DeschedulerClient) UpdateOperatorStatus(ctx context.Context, resourceVersion string, status *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
+	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (c *DeschedulerClient) UpdateOperatorStatus(resourceVersion string, status 
 	copy.ResourceVersion = resourceVersion
 	copy.Status.OperatorStatus = *status
 
-	ret, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).UpdateStatus(c.Ctx, copy, v1.UpdateOptions{})
+	ret, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).UpdateStatus(ctx, copy, v1.UpdateOptions{})
 	if err != nil {
 		return nil, err
 	}

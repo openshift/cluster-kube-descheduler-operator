@@ -138,7 +138,7 @@ func (c TargetConfigReconciler) sync() error {
 			if err != nil {
 				return err
 			}
-			_, _, err = v1helpers.UpdateStatus(c.deschedulerClient,
+			_, _, err = v1helpers.UpdateStatus(c.ctx, c.deschedulerClient,
 				v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
 					Type:   "TargetConfigControllerDegraded",
 					Status: operatorv1.ConditionTrue,
@@ -168,7 +168,7 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	_, _, err = v1helpers.UpdateStatus(c.deschedulerClient,
+	_, _, err = v1helpers.UpdateStatus(c.ctx, c.deschedulerClient,
 		v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
 			Type:   "TargetConfigControllerDegraded",
 			Status: operatorv1.ConditionFalse,
