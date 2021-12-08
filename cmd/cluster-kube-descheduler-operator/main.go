@@ -1,20 +1,19 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"k8s.io/component-base/cli"
 
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/cmd/operator"
 )
 
 func main() {
 	command := NewDeschedulerOperatorCommand()
-	if err := command.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	code := cli.Run(command)
+	os.Exit(code)
 }
 
 func NewDeschedulerOperatorCommand() *cobra.Command {
