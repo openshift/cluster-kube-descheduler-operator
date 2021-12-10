@@ -242,6 +242,10 @@ func (f *fakeRecorder) WithComponentSuffix(componentNameSuffix string) events.Re
 	return *(*(events.Recorder))(unsafe.Pointer(f))
 }
 
+func (f *fakeRecorder) WithContext(ctx context.Context) events.Recorder {
+	return *(*(events.Recorder))(unsafe.Pointer(f))
+}
+
 func (f *fakeRecorder) ComponentName() string {
 	return ""
 }
