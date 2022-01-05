@@ -12,6 +12,8 @@ spec:
       app: "descheduler"
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: openshift-descheduler
       labels:
         app: "descheduler"
     spec:
