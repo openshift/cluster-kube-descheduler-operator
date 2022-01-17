@@ -7,9 +7,9 @@ require (
 	github.com/google/go-cmp v0.5.6
 	github.com/imdario/mergo v0.3.7
 	github.com/openshift/api v0.0.0-20211209173311-a19f3b9052a6
-	github.com/openshift/build-machinery-go v0.0.0-20210922160744-a9caf93aef90
+	github.com/openshift/build-machinery-go v0.0.0-20211213093930-7e33a7eb4ce3
 	github.com/openshift/client-go v0.0.0-20211209144617-7385dd6338e3
-	github.com/openshift/library-go v0.0.0-20211209153216-ed9bc958bd8a
+	github.com/openshift/library-go v0.0.0-20220117141918-17ce0045e35e
 	github.com/prometheus/client_golang v1.11.0
 	github.com/spf13/cobra v1.2.1
 	k8s.io/api v0.23.0
