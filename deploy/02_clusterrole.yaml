@@ -65,3 +65,22 @@ rules:
   - replicasets
   verbs:
   - "*"
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - watch
+  - list
+  - create
+  - update
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - infrastructures
+  - apiservers
+  verbs:
+  - get
+  - watch
+  - list
