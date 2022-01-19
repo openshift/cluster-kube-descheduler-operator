@@ -167,6 +167,12 @@ spec:
           - replicasets
           verbs:
           - "*"
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - "*"
       deployments:
       - name: descheduler-operator
         spec:
