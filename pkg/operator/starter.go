@@ -14,7 +14,9 @@ import (
 	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation/configobservercontroller"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/resourcesynccontroller"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
@@ -58,6 +60,24 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
 	}
 
+	resourceSyncController, err := resourcesynccontroller.NewResourceSyncController(
+		deschedulerClient,
+		kubeInformersForNamespaces,
+		kubeClient,
+		cc.EventRecorder,
+	)
+	if err != nil {
+		return err
+	}
+
+	configObserver := configobservercontroller.NewConfigObserver(
+		deschedulerClient,
+		kubeInformersForNamespaces,
+		configInformers,
+		resourceSyncController,
+		cc.EventRecorder,
+	)
+
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
 		os.Getenv("IMAGE"),
@@ -81,6 +101,9 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	go logLevelController.Run(ctx, 1)
 	klog.Infof("Starting target config reconciler")
 	go targetConfigReconciler.Run(1, ctx.Done())
+
+	go resourceSyncController.Run(ctx, 1)
+	go configObserver.Run(ctx, 1)
 
 	<-ctx.Done()
 	return nil
