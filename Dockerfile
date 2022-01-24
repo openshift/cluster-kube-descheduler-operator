@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 # image-references file is not recognized by OLM
 RUN rm manifests/4*/image-references
-RUN go build -o cluster-kube-descheduler-operator ./cmd/cluster-kube-descheduler-operator
+RUN make build --warn-undefined-variables
 
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/

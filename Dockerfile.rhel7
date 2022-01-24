@@ -1,7 +1,7 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.16-openshift-4.9 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
-RUN go build -o cluster-kube-descheduler-operator ./cmd/cluster-kube-descheduler-operator
+RUN make build --warn-undefined-variables
 
 FROM registry.ci.openshift.org/ocp/4.9:base
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
