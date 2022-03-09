@@ -3,11 +3,12 @@ package operator
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/google/go-cmp/cmp"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
 	configv1 "github.com/openshift/api/config/v1"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
@@ -65,6 +66,96 @@ strategies:
       thresholdPriorityClassName: ""
 `
 
+const podLifeTimeWithThresholdPriorityClassNameConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: true
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces: null
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 50
+          memory: 50
+          pods: 50
+        thresholds:
+          cpu: 20
+          memory: 20
+          pods: 20
+      thresholdPriority: null
+      thresholdPriorityClassName: className
+  PodLifeTime:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces:
+        exclude: null
+        include: null
+      podLifeTime:
+        maxPodLifeTimeSeconds: 86400
+      thresholdPriority: null
+      thresholdPriorityClassName: className
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces:
+        exclude: null
+        include: null
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: null
+      thresholdPriorityClassName: className
+`
+
+const podLifeTimeWithThresholdPriorityConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: true
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces: null
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 50
+          memory: 50
+          pods: 50
+        thresholds:
+          cpu: 20
+          memory: 20
+          pods: 20
+      thresholdPriority: 1000
+      thresholdPriorityClassName: ""
+  PodLifeTime:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces:
+        exclude: null
+        include: null
+      podLifeTime:
+        maxPodLifeTimeSeconds: 86400
+      thresholdPriority: 1000
+      thresholdPriorityClassName: ""
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includeSoftConstraints: false
+      namespaces:
+        exclude: null
+        include: null
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: 1000
+      thresholdPriorityClassName: ""
+`
+
 const evictPvcPodsConfig = `apiVersion: descheduler/v1alpha1
 ignorePvcPods: false
 kind: DeschedulerPolicy
@@ -113,6 +204,7 @@ strategies:
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
+	priority := int32(1000)
 
 	fakeRecorder := NewFakeRecorder(1024)
 	tests := []struct {
@@ -160,6 +252,48 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": evictPvcPodsConfig},
+			},
+		},
+		{
+			name: "ThresholdPriorityClassName",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriorityClassName: "className"},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": podLifeTimeWithThresholdPriorityClassNameConfig},
+			},
+		},
+		{
+			name: "ThresholdPriority",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": podLifeTimeWithThresholdPriorityConfig},
 			},
 		},
 	}

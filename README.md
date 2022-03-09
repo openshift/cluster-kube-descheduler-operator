@@ -80,7 +80,7 @@ The following profiles are currently provided:
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
 * [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
-  
+
 Along with the following profiles, which are in development and may change:
 * [`DevPreviewLongLifecycle`](#DevPreviewLongLifecycle)
 
@@ -110,24 +110,24 @@ node is any node consuming more than 50% its available cpu, memory, *or* pod cap
 with less than 20% of its available cpu, memory, *and* pod capacity.
 
 This profile enables the [`LowNodeUtilizaition`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization),
-[`RemovePodsHavingTooManyRestarts`](https://github.com/kubernetes-sigs/descheduler/#removepodshavingtoomanyrestarts) and 
+[`RemovePodsHavingTooManyRestarts`](https://github.com/kubernetes-sigs/descheduler/#removepodshavingtoomanyrestarts) and
 [`PodLifeTime`](https://github.com/kubernetes-sigs/descheduler/#podlifetime) strategies. In the future, more configuration
 may be made available through the operator for these strategies based on user feedback.
 
 ### DevPreviewLongLifecycle
-This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running 
+This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running
 clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
 
 ### EvictPodsWithPVC
-By default, the operator prevents pods with PVCs from being evicted. Enabling this 
-profile in combination with any of the above profiles allows pods with PVCs to be 
+By default, the operator prevents pods with PVCs from being evicted. Enabling this
+profile in combination with any of the above profiles allows pods with PVCs to be
 eligible for eviction.
 
 ### EvictPodsWithLocalStorage
 By default, pods with local storage are not eligible to be considered for eviction by any
-profile. Using this profile allows them to be evicted if necessary. A pod is defined as using 
-local storage if any of its volumes have `HostPath` or `EmptyDir` set (note that a pod that only 
-uses PVCs does not fit this definition, and will need the `EvictPodsWithPVC` profile instead. Pods 
+profile. Using this profile allows them to be evicted if necessary. A pod is defined as using
+local storage if any of its volumes have `HostPath` or `EmptyDir` set (note that a pod that only
+uses PVCs does not fit this definition, and will need the `EvictPodsWithPVC` profile instead. Pods
 that use both will need both profiles to be evicted).
 
 ## Profile Customizations
@@ -137,6 +137,8 @@ the `profileCustomizations` field:
 |Name|Type|Description|
 |---|---|---|
 |`podLifetime`|`time.Duration`|Sets the lifetime value for pods evicted by the `LifecycleAndUtilization` profile|
+|`thresholdPriorityClassName`|`string`|Sets the priority class threshold by name for all strategies|
+|`thresholdPriority`|`string`|Sets the priority class threshold by value for all strategies|
 
 ## How does the descheduler operator work?
 

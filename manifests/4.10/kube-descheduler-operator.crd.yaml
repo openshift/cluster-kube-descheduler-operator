@@ -70,6 +70,13 @@ spec:
                       description: PodLifetime is the length of time after which pods should be evicted This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
                       type: string
                       format: duration
+                    thresholdPriority:
+                      description: ThresholdPriority when set will reject eviction of any pod with priority equal or higher It is invalid to set it alongside ThresholdPriorityClassName
+                      type: integer
+                      format: int32
+                    thresholdPriorityClassName:
+                      description: ThresholdPriorityClassName when set will reject eviction of any pod with priority equal or higher It is invalid to set it alongside ThresholdPriority
+                      type: string
                 profiles:
                   description: Profiles sets which descheduler strategy profiles are enabled
                   type: array
