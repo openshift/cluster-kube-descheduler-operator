@@ -1,0 +1,15 @@
+FROM registry.ci.openshift.org/openshift/release:golang-1.17 AS builder
+WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
+COPY . .
+
+
+FROM registry.ci.openshift.org/openshift/origin-v4.0:base
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests/4.10 /manifests
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
+RUN rm /manifests/image-references
+
+LABEL io.k8s.display-name="OpenShift Kube Descheduler Operator metadata" \
+      io.k8s.description="This is a component of OpenShift and manages the kube descheduler metadata" \
+      io.openshift.tags="openshift,cluster-kube-descheduler-operator,metadata" \
+      com.redhat.delivery.appregistry=true \
+      maintainer="AOS workloads team, <aos-workloads@redhat.com>"

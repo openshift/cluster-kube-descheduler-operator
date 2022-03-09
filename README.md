@@ -14,16 +14,27 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 
 This process refers to building the operator in a way that it can be installed locally via the OperatorHub with a custom index image
 
-1. build and push the image to a registry (e.g. https://quay.io):
+1. Build and push the operator image to a registry:
    ```sh
-   $ podman build -t quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest -f Dockerfile .
-   $ podman push quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest
+   export QUAY_USER=${your_quay_user_id}
+   export IMAGE_TAG=${your_image_tag}
+   podman build -t quay.io/${QUAY_USER}/cluster-kube-descheduler-operator:${IMAGE_TAG} -f Dockerfile.rhel7
+   podman login quay.io -u ${QUAY_USER}
+   podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator:${IMAGE_TAG}
+   ```
+
+1. Update the `.spec.install.spec.deployments[0].spec.template.spec.containers[0].image` field in the SSO CSV under `manifests/4.10/cluster-kube-descheduler-operator.v4.10.0.clusterserviceversion.yaml` to point to the newly built image.
+
+1. build and push the metadata image to a registry (e.g. https://quay.io):
+   ```sh
+   podman build -t quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-metadata:${IMAGE_TAG} -f Dockerfile.metadata .
+   podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-metadata:${IMAGE_TAG}
    ```
 
 1. build and push image index for operator-registry (pull and build https://github.com/operator-framework/operator-registry/ to get the `opm` binary)
    ```sh
-   $ ./bin/linux-amd64-opm index add --bundles quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle:latest --tag quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle-index:1.0.0
-   $ podman push quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle-index:1.0.0
+   opm index add --bundles quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-metadata:${IMAGE_TAG} --tag quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
+   podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
    ```
 
    Don't forget to increase the number of open files, .e.g. `ulimit -n 100000` in case the current limit is insufficient.
@@ -37,7 +48,7 @@ This process refers to building the operator in a way that it can be installed l
      namespace: openshift-marketplace
    spec:
      sourceType: grpc
-     image: quay.io/<username>/ose-cluster-kube-descheduler-operator-bundle-index:1.0.0
+     image: quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
    ```
 
 1. create `cluster-kube-descheduler-operator` namespace:
