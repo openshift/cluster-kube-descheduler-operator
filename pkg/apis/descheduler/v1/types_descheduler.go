@@ -45,6 +45,14 @@ type ProfileCustomizations struct {
 	// This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
 	// +kubebuilder:validation:Format=duration
 	PodLifetime *metav1.Duration `json:"podLifetime,omitempty"`
+
+	// ThresholdPriority when set will reject eviction of any pod with priority equal or higher
+	// It is invalid to set it alongside ThresholdPriorityClassName
+	ThresholdPriority *int32 `json:"thresholdPriority,omitempty"`
+
+	// ThresholdPriorityClassName when set will reject eviction of any pod with priority equal or higher
+	// It is invalid to set it alongside ThresholdPriority
+	ThresholdPriorityClassName string `json:"thresholdPriorityClassName,omitempty"`
 }
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler

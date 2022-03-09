@@ -80,7 +80,7 @@ func NewTargetConfigReconciler(
 		klog.ErrorS(err, "error listing namespaces")
 		return nil
 	}
-	excludedNamespaces := []string{"kube-system"}
+	excludedNamespaces := []string{"kube-system", "hypershift"}
 	for _, ns := range allNamespaces.Items {
 		if strings.HasPrefix(ns.Name, "openshift-") {
 			excludedNamespaces = append(excludedNamespaces, ns.Name)
@@ -294,11 +294,33 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
 	}
 
-	// set PodLifetime if non-default
-	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.PodLifetime != nil {
-		seconds := uint(descheduler.Spec.ProfileCustomizations.PodLifetime.Seconds())
-		if _, ok := policy.Strategies["PodLifeTime"]; ok {
-			policy.Strategies["PodLifeTime"].Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
+	if descheduler.Spec.ProfileCustomizations != nil {
+		// set PodLifetime if non-default
+		if descheduler.Spec.ProfileCustomizations.PodLifetime != nil {
+			seconds := uint(descheduler.Spec.ProfileCustomizations.PodLifetime.Seconds())
+			if _, ok := policy.Strategies["PodLifeTime"]; ok {
+				policy.Strategies["PodLifeTime"].Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
+			}
+		}
+
+		// set priority class threshold if customized
+		if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil && descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
+			return nil, false, fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields")
+		}
+
+		if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil || descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
+			for name, strategy := range policy.Strategies {
+				if strategy.Params == nil {
+					strategy.Params = &deschedulerapi.StrategyParameters{}
+				}
+				if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil {
+					priority := *descheduler.Spec.ProfileCustomizations.ThresholdPriority
+					policy.Strategies[name].Params.ThresholdPriority = &priority
+				}
+				if descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
+					policy.Strategies[name].Params.ThresholdPriorityClassName = descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName
+				}
+			}
 		}
 	}
 
