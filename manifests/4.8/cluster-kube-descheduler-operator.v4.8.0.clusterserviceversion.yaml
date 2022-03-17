@@ -164,6 +164,12 @@ spec:
           - "customresourcedefinitions"
           verbs:
           - "*"
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions/status
+          verbs:
+          - update
       deployments:
       - name: descheduler-operator
         spec:
