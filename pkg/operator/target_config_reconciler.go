@@ -353,7 +353,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 
 func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
-	required.Name = descheduler.Name
+	required.Name = operatorclient.OperandName
 	required.Namespace = descheduler.Namespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		{
@@ -419,7 +419,7 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 	}
 
 	if !forceDeployment {
-		existingDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, descheduler.Name, metav1.GetOptions{})
+		existingDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, operatorclient.OperandName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				forceDeployment = true
