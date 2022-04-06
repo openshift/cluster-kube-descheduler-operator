@@ -48,4 +48,4 @@ spec:
               name: "policy-volume"
             - mountPath: "/certs-dir"
               name: certs-dir
-      serviceAccountName: "openshift-descheduler"
+      serviceAccountName: "openshift-descheduler-operand"
