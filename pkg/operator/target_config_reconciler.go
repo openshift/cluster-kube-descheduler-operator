@@ -152,6 +152,18 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	if _, _, err := c.manageServiceAccount(descheduler); err != nil {
+		return err
+	}
+
+	if _, _, err := c.manageClusterRole(descheduler); err != nil {
+		return err
+	}
+
+	if _, _, err := c.manageClusterRoleBinding(descheduler); err != nil {
+		return err
+	}
+
 	if _, _, err := c.manageRole(descheduler); err != nil {
 		return err
 	}
@@ -179,6 +191,34 @@ func (c TargetConfigReconciler) sync() error {
 			return nil
 		})
 	return err
+}
+
+func (c *TargetConfigReconciler) manageClusterRole(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRole, bool, error) {
+	required := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandclusterrole.yaml"))
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
+	}
+
+	return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRoleBinding, bool, error) {
+	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandclusterrolebinding.yaml"))
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
+	}
+
+	return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.Role, bool, error) {
@@ -209,6 +249,21 @@ func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.Ku
 	}
 
 	return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageServiceAccount(descheduler *deschedulerv1.KubeDescheduler) (*v1.ServiceAccount, bool, error) {
+	required := resourceread.ReadServiceAccountV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandserviceaccount.yaml"))
+	required.Namespace = descheduler.Namespace
+	required.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1",
+			Kind:       "KubeDescheduler",
+			Name:       descheduler.Name,
+			UID:        descheduler.UID,
+		},
+	}
+
+	return resourceapply.ApplyServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDescheduler) (*v1.Service, bool, error) {

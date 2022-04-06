@@ -107,12 +107,6 @@ spec:
       - serviceAccountName: openshift-descheduler
         rules:
         - apiGroups:
-          - operator.openshift.io
-          resources:
-          - "*"
-          verbs:
-          - "*"
-        - apiGroups:
           - config.openshift.io
           resources:
           - schedulers
@@ -127,35 +121,44 @@ spec:
           verbs:
           - "*"
         - apiGroups:
-          - kubedeschedulers.operator.openshift.io
+          - operator.openshift.io
           resources:
-          - "*"
+          - kubedeschedulers
+          - kubedeschedulers/status
           verbs:
           - "*"
         - apiGroups:
           - ""
           resources:
           - services
-          - pods
           - configmaps
           - secrets
-          - namespaces
-          - nodes
-          - pods/eviction
           - events
+          - serviceaccounts
           verbs:
           - "*"
         - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - pods
+          verbs:
+          - get
+          - watch
+          - list
+        - apiGroups:
           - rbac.authorization.k8s.io
           resources:
+          - clusterroles
+          - clusterrolebindings
           - roles
           - rolebindings
           verbs:
           - '*'
         - apiGroups:
-          - scheduling.k8s.io
+          - apps
           resources:
-          - priorityclasses
+          - replicasets
           verbs:
           - get
           - watch
@@ -165,7 +168,6 @@ spec:
           resources:
           - deployments
           - deployments/scale
-          - replicasets
           verbs:
           - "*"
         - apiGroups:
@@ -224,5 +226,4 @@ spec:
                     - name: IMAGE
                       value: quay.io/openshift/origin-descheduler:4.11
               serviceAccountName: openshift-descheduler
-              serviceAccount: openshift-descheduler
     strategy: deployment
