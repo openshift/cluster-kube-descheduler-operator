@@ -51,9 +51,9 @@ This process refers to building the operator in a way that it can be installed l
      image: quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
    ```
 
-1. create `cluster-kube-descheduler-operator` namespace:
+1. create `openshift-kube-descheduler-operator` namespace:
    ```
-   $ oc create ns cluster-kube-descheduler-operator
+   $ oc create ns openshift-kube-descheduler-operator
    ```
 
 1. open the console Operators -> OperatorHub, search for `descheduler operator` and install the operator
