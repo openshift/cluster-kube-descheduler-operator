@@ -128,6 +128,11 @@ func (in *ProfileCustomizations) DeepCopyInto(out *ProfileCustomizations) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.ThresholdPriority != nil {
+		in, out := &in.ThresholdPriority, &out.ThresholdPriority
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
