@@ -59,7 +59,7 @@ type TargetConfigReconciler struct {
 	dynamicClient         dynamic.Interface
 	eventRecorder         events.Recorder
 	queue                 workqueue.RateLimitingInterface
-	excludedNamespaces    []string
+	protectedNamespaces   []string
 	configSchedulerLister configlistersv1.SchedulerLister
 }
 
@@ -80,10 +80,10 @@ func NewTargetConfigReconciler(
 		klog.ErrorS(err, "error listing namespaces")
 		return nil
 	}
-	excludedNamespaces := []string{"kube-system", "hypershift"}
+	protectedNamespaces := []string{"kube-system", "hypershift"}
 	for _, ns := range allNamespaces.Items {
 		if strings.HasPrefix(ns.Name, "openshift-") {
-			excludedNamespaces = append(excludedNamespaces, ns.Name)
+			protectedNamespaces = append(protectedNamespaces, ns.Name)
 		}
 	}
 
@@ -95,7 +95,7 @@ func NewTargetConfigReconciler(
 		dynamicClient:         dynamicClient,
 		eventRecorder:         eventRecorder,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
-		excludedNamespaces:    excludedNamespaces,
+		protectedNamespaces:   protectedNamespaces,
 		targetImagePullSpec:   targetImagePullSpec,
 		configSchedulerLister: configInformer.Config().V1().Schedulers().Lister(),
 	}
@@ -305,6 +305,28 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		return nil, false, err
 	}
 
+	// override the included/excluded namespace
+	excludedNamespaces := c.protectedNamespaces
+	protectedNamespacesSet := sets.NewString(c.protectedNamespaces...)
+	includedNamespaces := []string{}
+	if descheduler.Spec.ProfileCustomizations != nil {
+		if len(descheduler.Spec.ProfileCustomizations.Namespaces.Excluded) > 0 && len(descheduler.Spec.ProfileCustomizations.Namespaces.Included) > 0 {
+			return nil, false, fmt.Errorf("It is forbidden to combine both included and excluded namespaces")
+		}
+		if len(descheduler.Spec.ProfileCustomizations.Namespaces.Included) > 0 {
+			for _, ns := range descheduler.Spec.ProfileCustomizations.Namespaces.Included {
+				if protectedNamespacesSet.Has(ns) {
+					return nil, false, fmt.Errorf("Protected namespace %v included. It is forbidden to include any of the protected namespaces from %v", ns, c.protectedNamespaces)
+				}
+				includedNamespaces = append(includedNamespaces, ns)
+			}
+			excludedNamespaces = []string{}
+		}
+		for _, ns := range descheduler.Spec.ProfileCustomizations.Namespaces.Excluded {
+			excludedNamespaces = append(excludedNamespaces, ns)
+		}
+	}
+
 	// parse whatever profiles are set into their policy representations then merge them into one file
 	if len(descheduler.Spec.Profiles) == 0 {
 		return nil, false, fmt.Errorf("descheduler should have at least 1 profile enabled")
@@ -336,7 +358,10 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			if strategy.Params == nil {
 				strategy.Params = &deschedulerapi.StrategyParameters{}
 			}
-			strategy.Params.Namespaces = &deschedulerapi.Namespaces{Exclude: c.excludedNamespaces}
+			strategy.Params.Namespaces = &deschedulerapi.Namespaces{
+				Exclude: excludedNamespaces,
+				Include: includedNamespaces,
+			}
 			profile.Strategies[name] = strategy
 		}
 		mergo.Merge(policy, profile, mergo.WithAppendSlice, mergo.WithOverride)

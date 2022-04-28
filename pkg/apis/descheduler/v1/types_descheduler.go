@@ -58,6 +58,17 @@ type ProfileCustomizations struct {
 	// ThresholdPriorityClassName when set will reject eviction of any pod with priority equal or higher
 	// It is invalid to set it alongside ThresholdPriority
 	ThresholdPriorityClassName string `json:"thresholdPriorityClassName,omitempty"`
+
+	// Namespaces overrides included and excluded namespaces while keeping
+	// the default exclusion of all openshift-*, kube-system and hypershift namespaces
+	Namespaces Namespaces `json:"namespaces"`
+}
+
+// Namespaces overrides included and excluded namespaces while keeping
+// the default exclusion of all openshift-*, kube-system and hypershift namespaces
+type Namespaces struct {
+	Included []string `json:"included"`
+	Excluded []string `json:"excluded"`
 }
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
