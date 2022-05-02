@@ -448,6 +448,18 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 
 	required.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name = descheduler.Name
 
+	if len(descheduler.Spec.Mode) > 0 {
+		switch descheduler.Spec.Mode {
+		case deschedulerv1.Automatic:
+			// No additional flags/configuration for now
+		case deschedulerv1.Predictive:
+			// Run the simulator in the dry mode (metrics are enabled by default)
+			required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, "--dry-run=true")
+		default:
+			return nil, false, fmt.Errorf("descheduler mode %v not recognized", descheduler.Spec.Mode)
+		}
+	}
+
 	images := map[string]string{
 		"${IMAGE}": c.targetImagePullSpec,
 	}

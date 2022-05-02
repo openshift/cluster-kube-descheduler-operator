@@ -47,6 +47,13 @@ spec:
                   description: managementState indicates whether and how the operator should manage the component
                   type: string
                   pattern: ^(Managed|Unmanaged|Force|Removed)$
+                mode:
+                  description: Modes configures the descheduler to either evict pods or to simulate the eviction
+                  type: string
+                  default: Predictive
+                  enum:
+                    - Automatic
+                    - Predictive
                 observedConfig:
                   description: observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because it is an input to the level for the operator
                   type: object

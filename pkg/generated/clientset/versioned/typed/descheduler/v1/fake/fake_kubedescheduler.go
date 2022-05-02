@@ -101,7 +101,7 @@ func (c *FakeKubeDeschedulers) UpdateStatus(ctx context.Context, kubeDescheduler
 // Delete takes name of the kubeDescheduler and deletes it. Returns an error if one occurs.
 func (c *FakeKubeDeschedulers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(kubedeschedulersResource, c.ns, name), &deschedulerv1.KubeDescheduler{})
+		Invokes(testing.NewDeleteActionWithOptions(kubedeschedulersResource, c.ns, name, opts), &deschedulerv1.KubeDescheduler{})
 
 	return err
 }

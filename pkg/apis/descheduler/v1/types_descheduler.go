@@ -37,6 +37,11 @@ type KubeDeschedulerSpec struct {
 
 	// ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
 	ProfileCustomizations *ProfileCustomizations `json:"profileCustomizations,omitempty"`
+
+	// Modes configures the descheduler to either evict pods or to simulate the eviction
+	// +optional
+	// +kubebuilder:default=Predictive
+	Mode Mode `json:"mode"`
 }
 
 // ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
@@ -84,6 +89,19 @@ var (
 
 	// DevPreviewLongLifecycle handles cluster lifecycle over a long term
 	DevPreviewLongLifecycle DeschedulerProfile = "DevPreviewLongLifecycle"
+)
+
+// DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
+// it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
+// +kubebuilder:validation:Enum=Automatic;Predictive
+type Mode string
+
+var (
+	// Automatic mode evicts pods from the cluster
+	Automatic Mode = "Automatic"
+
+	// Predictive mode simulates eviction of pods
+	Predictive Mode = "Predictive"
 )
 
 // KubeDeschedulerStatus defines the observed state of KubeDescheduler
