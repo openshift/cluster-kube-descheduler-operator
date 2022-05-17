@@ -17,6 +17,10 @@ spec:
       labels:
         app: "descheduler"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       volumes:
         - name: "policy-volume"
           configMap:
@@ -28,6 +32,10 @@ spec:
       restartPolicy: "Always"
       containers:
         - name: "openshift-descheduler"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           image: ${IMAGE}
           resources:
             limits:
