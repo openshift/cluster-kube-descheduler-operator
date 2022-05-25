@@ -19,6 +19,7 @@ metadata:
           "spec": {
             "deschedulingIntervalSeconds": 3600,
             "managementState": "Managed",
+            "mode": "Predictive",
             "profiles": ["AffinityAndTaints"]
           }
         }
