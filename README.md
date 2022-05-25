@@ -151,6 +151,17 @@ the `profileCustomizations` field:
 |`thresholdPriorityClassName`|`string`|Sets the priority class threshold by name for all strategies|
 |`thresholdPriority`|`string`|Sets the priority class threshold by value for all strategies|
 
+## Descheduling modes
+The operator provides two modes of eviction:
+- `Predictive`: configures the descheduler to only simulate eviction
+- `Automatic`: configures the descheduler to evict pods
+
+The predictive mode is the default mode.
+The descheduler in either of the modes still produces metrics (unless the metrics are disabled).
+When the predictive mode is configured, the reported metrics can serve as an estimation
+of evicted pods in the cluster.
+
+
 ## How does the descheduler operator work?
 
 Descheduler operator at a high level is responsible for watching the above CR
@@ -182,5 +193,7 @@ apiVersion: descheduler/v1alpha1
 ## Parameters
 The Descheduler operator exposes the following parameters in its CRD:
 
-* `deschedulingIntervalSeconds` - this sets the number of seconds between descheduler runs
-* `profiles` - which descheduler profiles that are enabled
+* `deschedulingIntervalSeconds` - sets the number of seconds between descheduler runs
+* `profiles` - sets which descheduler strategy profiles are enabled
+* `profileCustomizations` - contains various parameters for modifying the default behavior of certain profiles
+* `mode` - configures the descheduler to either evict pods or to simulate the eviction
