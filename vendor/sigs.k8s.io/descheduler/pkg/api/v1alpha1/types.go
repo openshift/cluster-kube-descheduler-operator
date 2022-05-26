@@ -32,14 +32,23 @@ type DeschedulerPolicy struct {
 	// NodeSelector for a set of nodes to operate over
 	NodeSelector *string `json:"nodeSelector,omitempty"`
 
+	// EvictFailedBarePods allows pods without ownerReferences and in failed phase to be evicted.
+	EvictFailedBarePods *bool `json:"evictFailedBarePods,omitempty"`
+
 	// EvictLocalStoragePods allows pods using local storage to be evicted.
 	EvictLocalStoragePods *bool `json:"evictLocalStoragePods,omitempty"`
+
+	// EvictSystemCriticalPods allows eviction of pods of any priority (including Kubernetes system pods)
+	EvictSystemCriticalPods *bool `json:"evictSystemCriticalPods,omitempty"`
 
 	// IgnorePVCPods prevents pods with PVCs from being evicted.
 	IgnorePVCPods *bool `json:"ignorePvcPods,omitempty"`
 
 	// MaxNoOfPodsToEvictPerNode restricts maximum of pods to be evicted per node.
 	MaxNoOfPodsToEvictPerNode *int `json:"maxNoOfPodsToEvictPerNode,omitempty"`
+
+	// MaxNoOfPodsToEvictPerNamespace restricts maximum of pods to be evicted per namespace.
+	MaxNoOfPodsToEvictPerNamespace *int `json:"maxNoOfPodsToEvictPerNamespace,omitempty"`
 }
 
 type StrategyName string
@@ -70,19 +79,25 @@ type StrategyParameters struct {
 	PodsHavingTooManyRestarts         *PodsHavingTooManyRestarts         `json:"podsHavingTooManyRestarts,omitempty"`
 	PodLifeTime                       *PodLifeTime                       `json:"podLifeTime,omitempty"`
 	RemoveDuplicates                  *RemoveDuplicates                  `json:"removeDuplicates,omitempty"`
+	FailedPods                        *FailedPods                        `json:"failedPods,omitempty"`
 	IncludeSoftConstraints            bool                               `json:"includeSoftConstraints"`
 	Namespaces                        *Namespaces                        `json:"namespaces"`
 	ThresholdPriority                 *int32                             `json:"thresholdPriority"`
 	ThresholdPriorityClassName        string                             `json:"thresholdPriorityClassName"`
+	LabelSelector                     *metav1.LabelSelector              `json:"labelSelector"`
+	NodeFit                           bool                               `json:"nodeFit"`
+	IncludePreferNoSchedule           bool                               `json:"includePreferNoSchedule"`
+	ExcludedTaints                    []string                           `json:"excludedTaints,omitempty"`
 }
 
 type Percentage float64
 type ResourceThresholds map[v1.ResourceName]Percentage
 
 type NodeResourceUtilizationThresholds struct {
-	Thresholds       ResourceThresholds `json:"thresholds,omitempty"`
-	TargetThresholds ResourceThresholds `json:"targetThresholds,omitempty"`
-	NumberOfNodes    int                `json:"numberOfNodes,omitempty"`
+	UseDeviationThresholds bool               `json:"useDeviationThresholds,omitempty"`
+	Thresholds             ResourceThresholds `json:"thresholds,omitempty"`
+	TargetThresholds       ResourceThresholds `json:"targetThresholds,omitempty"`
+	NumberOfNodes          int                `json:"numberOfNodes,omitempty"`
 }
 
 type PodsHavingTooManyRestarts struct {
@@ -97,4 +112,11 @@ type RemoveDuplicates struct {
 type PodLifeTime struct {
 	MaxPodLifeTimeSeconds *uint    `json:"maxPodLifeTimeSeconds,omitempty"`
 	PodStatusPhases       []string `json:"podStatusPhases,omitempty"`
+}
+
+type FailedPods struct {
+	ExcludeOwnerKinds       []string `json:"excludeOwnerKinds,omitempty"`
+	MinPodLifetimeSeconds   *uint    `json:"minPodLifetimeSeconds,omitempty"`
+	Reasons                 []string `json:"reasons,omitempty"`
+	IncludingInitContainers bool     `json:"includingInitContainers,omitempty"`
 }

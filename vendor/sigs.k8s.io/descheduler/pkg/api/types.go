@@ -32,14 +32,23 @@ type DeschedulerPolicy struct {
 	// NodeSelector for a set of nodes to operate over
 	NodeSelector *string
 
+	// EvictFailedBarePods allows pods without ownerReferences and in failed phase to be evicted.
+	EvictFailedBarePods *bool
+
 	// EvictLocalStoragePods allows pods using local storage to be evicted.
 	EvictLocalStoragePods *bool
+
+	// EvictSystemCriticalPods allows eviction of pods of any priority (including Kubernetes system pods)
+	EvictSystemCriticalPods *bool
 
 	// IgnorePVCPods prevents pods with PVCs from being evicted.
 	IgnorePVCPods *bool
 
 	// MaxNoOfPodsToEvictPerNode restricts maximum of pods to be evicted per node.
-	MaxNoOfPodsToEvictPerNode *int
+	MaxNoOfPodsToEvictPerNode *uint
+
+	// MaxNoOfPodsToEvictPerNamespace restricts maximum of pods to be evicted per namespace.
+	MaxNoOfPodsToEvictPerNamespace *uint
 }
 
 type StrategyName string
@@ -72,19 +81,25 @@ type StrategyParameters struct {
 	PodsHavingTooManyRestarts         *PodsHavingTooManyRestarts
 	PodLifeTime                       *PodLifeTime
 	RemoveDuplicates                  *RemoveDuplicates
+	FailedPods                        *FailedPods
 	IncludeSoftConstraints            bool
 	Namespaces                        *Namespaces
 	ThresholdPriority                 *int32
 	ThresholdPriorityClassName        string
+	LabelSelector                     *metav1.LabelSelector
+	NodeFit                           bool
+	IncludePreferNoSchedule           bool
+	ExcludedTaints                    []string
 }
 
 type Percentage float64
 type ResourceThresholds map[v1.ResourceName]Percentage
 
 type NodeResourceUtilizationThresholds struct {
-	Thresholds       ResourceThresholds
-	TargetThresholds ResourceThresholds
-	NumberOfNodes    int
+	UseDeviationThresholds bool
+	Thresholds             ResourceThresholds
+	TargetThresholds       ResourceThresholds
+	NumberOfNodes          int
 }
 
 type PodsHavingTooManyRestarts struct {
@@ -99,4 +114,11 @@ type RemoveDuplicates struct {
 type PodLifeTime struct {
 	MaxPodLifeTimeSeconds *uint
 	PodStatusPhases       []string
+}
+
+type FailedPods struct {
+	ExcludeOwnerKinds       []string
+	MinPodLifetimeSeconds   *uint
+	Reasons                 []string
+	IncludingInitContainers bool
 }
