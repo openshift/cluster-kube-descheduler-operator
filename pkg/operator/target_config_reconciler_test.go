@@ -28,8 +28,11 @@ strategies:
   LowNodeUtilization:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces: null
+      nodeFit: false
       nodeResourceUtilizationThresholds:
         targetThresholds:
           cpu: 50
@@ -44,10 +47,13 @@ strategies:
   PodLifeTime:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 300
       thresholdPriority: null
@@ -55,10 +61,13 @@ strategies:
   RemovePodsHavingTooManyRestarts:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
         podRestartThreshold: 100
@@ -73,8 +82,11 @@ strategies:
   LowNodeUtilization:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces: null
+      nodeFit: false
       nodeResourceUtilizationThresholds:
         targetThresholds:
           cpu: 50
@@ -89,10 +101,13 @@ strategies:
   PodLifeTime:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
       thresholdPriority: null
@@ -100,10 +115,13 @@ strategies:
   RemovePodsHavingTooManyRestarts:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
         podRestartThreshold: 100
@@ -118,8 +136,11 @@ strategies:
   LowNodeUtilization:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces: null
+      nodeFit: false
       nodeResourceUtilizationThresholds:
         targetThresholds:
           cpu: 50
@@ -134,10 +155,13 @@ strategies:
   PodLifeTime:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
       thresholdPriority: 1000
@@ -145,10 +169,13 @@ strategies:
   RemovePodsHavingTooManyRestarts:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
         podRestartThreshold: 100
@@ -163,8 +190,11 @@ strategies:
   LowNodeUtilization:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces: null
+      nodeFit: false
       nodeResourceUtilizationThresholds:
         targetThresholds:
           cpu: 50
@@ -179,10 +209,13 @@ strategies:
   PodLifeTime:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
       thresholdPriority: null
@@ -190,10 +223,13 @@ strategies:
   RemovePodsHavingTooManyRestarts:
     enabled: true
     params:
+      includePreferNoSchedule: false
       includeSoftConstraints: false
+      labelSelector: null
       namespaces:
         exclude: null
         include: null
+      nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
         podRestartThreshold: 100
