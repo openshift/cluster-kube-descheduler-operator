@@ -38,7 +38,7 @@ type KubeDeschedulerSpec struct {
 	// ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
 	ProfileCustomizations *ProfileCustomizations `json:"profileCustomizations,omitempty"`
 
-	// Modes configures the descheduler to either evict pods or to simulate the eviction
+	// Mode configures the descheduler to either evict pods (Automatic) or to simulate the eviction (Predictive)
 	// +optional
 	// +kubebuilder:default=Predictive
 	Mode Mode `json:"mode"`

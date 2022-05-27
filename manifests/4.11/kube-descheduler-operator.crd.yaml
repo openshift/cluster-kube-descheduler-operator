@@ -48,7 +48,7 @@ spec:
                   type: string
                   pattern: ^(Managed|Unmanaged|Force|Removed)$
                 mode:
-                  description: Modes configures the descheduler to either evict pods or to simulate the eviction
+                  description: Mode configures the descheduler to either evict pods (Automatic) or to simulate the eviction (Predictive)
                   type: string
                   default: Predictive
                   enum:
