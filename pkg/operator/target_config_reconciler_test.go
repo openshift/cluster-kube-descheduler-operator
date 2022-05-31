@@ -52,7 +52,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 300
@@ -66,7 +66,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -106,7 +106,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -120,7 +120,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -160,7 +160,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -174,7 +174,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -214,7 +214,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -228,7 +228,7 @@ strategies:
       labelSelector: null
       namespaces:
         exclude: null
-        include: null
+        include: []
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true

@@ -75,6 +75,10 @@ spec:
   - LifecycleAndUtilization
   profileCustomizations:
     podLifetime: 5m
+    namespaces:
+      included:
+      - ns1
+      - ns2
 ```
 
 The operator spec provides a `profiles` field, which allows users to set one or more descheduling profiles to enable.
@@ -150,6 +154,7 @@ the `profileCustomizations` field:
 |`podLifetime`|`time.Duration`|Sets the lifetime value for pods evicted by the `LifecycleAndUtilization` profile|
 |`thresholdPriorityClassName`|`string`|Sets the priority class threshold by name for all strategies|
 |`thresholdPriority`|`string`|Sets the priority class threshold by value for all strategies|
+|`namespaces.included`, `namespaces.excluded`|`[]string`| Sets the included/excluded namespaces for all strategies (included namespaces are not allowed to include protected namespaces which consist of `kube-system`, `hypershift` and all `openshift-` prefixed namespaces)|
 
 ## Descheduling modes
 The operator provides two modes of eviction:
