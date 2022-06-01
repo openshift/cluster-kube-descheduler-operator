@@ -202,8 +202,16 @@ spec:
               labels:
                 name: descheduler-operator
             spec:
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
               containers:
                 - name: descheduler-operator
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                      drop: ["ALL"]
                   image: quay.io/openshift/origin-cluster-kube-descheduler-operator:4.11
                   resources:
                     requests:
