@@ -351,16 +351,64 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 
 		// exclude openshift namespaces from descheduling
 		for name, strategy := range profile.Strategies {
-			// skip strategies which don't support namespace exclusion yet
-			if name == "LowNodeUtilization" {
-				continue
-			}
 			if strategy.Params == nil {
 				strategy.Params = &deschedulerapi.StrategyParameters{}
 			}
-			strategy.Params.Namespaces = &deschedulerapi.Namespaces{
-				Exclude: excludedNamespaces,
-				Include: includedNamespaces,
+			// skip strategies which don't support namespace exclusion yet
+			if name == "LowNodeUtilization" {
+				if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds != nil {
+					if strategy.Params == nil {
+						strategy.Params = &deschedulerapi.StrategyParameters{}
+					}
+					switch *descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds {
+					case deschedulerv1.LowThreshold:
+						strategy.Params.NodeResourceUtilizationThresholds = &deschedulerapi.NodeResourceUtilizationThresholds{
+							Thresholds: map[v1.ResourceName]deschedulerapi.Percentage{
+								"cpu":    10,
+								"memory": 10,
+								"pods":   10,
+							},
+							TargetThresholds: map[v1.ResourceName]deschedulerapi.Percentage{
+								"cpu":    30,
+								"memory": 30,
+								"pods":   30,
+							},
+						}
+					case deschedulerv1.MediumThreshold:
+						strategy.Params.NodeResourceUtilizationThresholds = &deschedulerapi.NodeResourceUtilizationThresholds{
+							Thresholds: map[v1.ResourceName]deschedulerapi.Percentage{
+								"cpu":    20,
+								"memory": 20,
+								"pods":   20,
+							},
+							TargetThresholds: map[v1.ResourceName]deschedulerapi.Percentage{
+								"cpu":    50,
+								"memory": 50,
+								"pods":   50,
+							},
+						}
+					case deschedulerv1.HighThreshold:
+						strategy.Params.NodeResourceUtilizationThresholds = &deschedulerapi.NodeResourceUtilizationThresholds{
+							Thresholds: map[v1.ResourceName]deschedulerapi.Percentage{
+								"cpu":    40,
+								"memory": 40,
+								"pods":   40,
+							},
+							TargetThresholds: map[v1.ResourceName]deschedulerapi.Percentage{
+								"cpu":    70,
+								"memory": 70,
+								"pods":   70,
+							},
+						}
+					default:
+						return nil, false, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds)
+					}
+				}
+			} else {
+				strategy.Params.Namespaces = &deschedulerapi.Namespaces{
+					Exclude: excludedNamespaces,
+					Include: includedNamespaces,
+				}
 			}
 			profile.Strategies[name] = strategy
 		}

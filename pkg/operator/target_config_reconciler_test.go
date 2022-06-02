@@ -237,6 +237,168 @@ strategies:
       thresholdPriorityClassName: ""
 `
 
+const lowNodeUtilizationLowConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: true
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces: null
+      nodeFit: false
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 30
+          memory: 30
+          pods: 30
+        thresholds:
+          cpu: 10
+          memory: 10
+          pods: 10
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  PodLifeTime:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces:
+        exclude: null
+        include: []
+      nodeFit: false
+      podLifeTime:
+        maxPodLifeTimeSeconds: 86400
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces:
+        exclude: null
+        include: []
+      nodeFit: false
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+`
+
+const lowNodeUtilizationMediumConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: true
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces: null
+      nodeFit: false
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 50
+          memory: 50
+          pods: 50
+        thresholds:
+          cpu: 20
+          memory: 20
+          pods: 20
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  PodLifeTime:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces:
+        exclude: null
+        include: []
+      nodeFit: false
+      podLifeTime:
+        maxPodLifeTimeSeconds: 86400
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces:
+        exclude: null
+        include: []
+      nodeFit: false
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+`
+
+const lowNodeUtilizationHighConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: true
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces: null
+      nodeFit: false
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 70
+          memory: 70
+          pods: 70
+        thresholds:
+          cpu: 40
+          memory: 40
+          pods: 40
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  PodLifeTime:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces:
+        exclude: null
+        include: []
+      nodeFit: false
+      podLifeTime:
+        maxPodLifeTimeSeconds: 86400
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces:
+        exclude: null
+        include: []
+      nodeFit: false
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+`
+
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
@@ -330,6 +492,89 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": podLifeTimeWithThresholdPriorityConfig},
+			},
+		},
+		{
+			name: "LowNodeUtilizationLow",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": lowNodeUtilizationLowConfig},
+			},
+		},
+		{
+			name: "LowNodeUtilizationMedium",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": lowNodeUtilizationMediumConfig},
+			},
+		},
+		{
+			name: "LowNodeUtilizationNoCustomization",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": lowNodeUtilizationMediumConfig},
+			},
+		},
+		{
+			name: "LowNodeUtilizationHigh",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": lowNodeUtilizationHighConfig},
 			},
 		},
 	}

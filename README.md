@@ -155,6 +155,7 @@ the `profileCustomizations` field:
 |`thresholdPriorityClassName`|`string`|Sets the priority class threshold by name for all strategies|
 |`thresholdPriority`|`string`|Sets the priority class threshold by value for all strategies|
 |`namespaces.included`, `namespaces.excluded`|`[]string`| Sets the included/excluded namespaces for all strategies (included namespaces are not allowed to include protected namespaces which consist of `kube-system`, `hypershift` and all `openshift-` prefixed namespaces)|
+| `devLowNodeUtilizationThresholds` | `string` | Sets experimental thresholds for the [LowNodeUtilization](https://github.com/kubernetes-sigs/descheduler#lownodeutilization) strategy of the `LifecycleAndUtilization` profile in the following ratios: `Low` for 10%:30%, `Medium` for 20%:50%, `High` for 40%:70%|
 
 ## Descheduling modes
 The operator provides two modes of eviction:
