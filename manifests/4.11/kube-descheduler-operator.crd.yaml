@@ -73,6 +73,22 @@ spec:
                   description: ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
                   type: object
                   properties:
+                    devLowNodeUtilizationThresholds:
+                      description: LowNodeUtilizationThresholds enumerates predefined experimental thresholds
+                      type: string
+                      default: Medium
+                    namespaces:
+                      description: Namespaces overrides included and excluded namespaces while keeping the default exclusion of all openshift-*, kube-system and hypershift namespaces
+                      type: object
+                      properties:
+                        excluded:
+                          type: array
+                          items:
+                            type: string
+                        included:
+                          type: array
+                          items:
+                            type: string
                     podLifetime:
                       description: PodLifetime is the length of time after which pods should be evicted This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
                       type: string

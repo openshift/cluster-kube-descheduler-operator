@@ -62,7 +62,24 @@ type ProfileCustomizations struct {
 	// Namespaces overrides included and excluded namespaces while keeping
 	// the default exclusion of all openshift-*, kube-system and hypershift namespaces
 	Namespaces Namespaces `json:"namespaces"`
+
+	// LowNodeUtilizationThresholds enumerates predefined experimental thresholds
+	// +kubebuilder:default=Medium
+	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
 }
+
+type LowNodeUtilizationThresholdsType string
+
+var (
+	// LowThreshold sets thresholds:targetThresholds in 10%/30% ratio
+	LowThreshold LowNodeUtilizationThresholdsType = "Low"
+
+	// MediumThreshold sets thresholds:targetThresholds in 20%/50% ratio
+	MediumThreshold LowNodeUtilizationThresholdsType = "Medium"
+
+	// HighThreshold sets thresholds:targetThresholds in 40%/70% ratio
+	HighThreshold LowNodeUtilizationThresholdsType = "High"
+)
 
 // Namespaces overrides included and excluded namespaces while keeping
 // the default exclusion of all openshift-*, kube-system and hypershift namespaces
