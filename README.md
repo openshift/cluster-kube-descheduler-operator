@@ -23,7 +23,13 @@ This process refers to building the operator in a way that it can be installed l
    podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator:${IMAGE_TAG}
    ```
 
-1. Update the `.spec.install.spec.deployments[0].spec.template.spec.containers[0].image` field in the SSO CSV under `manifests/4.10/cluster-kube-descheduler-operator.v4.10.0.clusterserviceversion.yaml` to point to the newly built image.
+1. Export your desired/current version:
+
+   ```sh
+   export OPERATOR_VERSION=${your_version}
+   ```
+
+1. Update the `.spec.install.spec.deployments[0].spec.template.spec.containers[0].image` field in the SSO CSV under `./manifests/${OPERATOR_VERSION}/cluster-kube-descheduler-operator.v${OPERATOR_VERSION}.0.clusterserviceversion.yaml` to point to the newly built image.
 
 1. build and push the metadata image to a registry (e.g. https://quay.io):
    ```sh
@@ -39,7 +45,7 @@ This process refers to building the operator in a way that it can be installed l
 
    Don't forget to increase the number of open files, .e.g. `ulimit -n 100000` in case the current limit is insufficient.
 
-1. create and apply catalogsource manifest:
+1. create and apply catalogsource manifest (remember to change <<QUAY_USER>> and <<IMAGE_TAG>> to your own values):
    ```yaml
    apiVersion: operators.coreos.com/v1alpha1
    kind: CatalogSource
@@ -48,7 +54,7 @@ This process refers to building the operator in a way that it can be installed l
      namespace: openshift-marketplace
    spec:
      sourceType: grpc
-     image: quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
+     image: quay.io/<<QUAY_USER>>/cluster-kube-descheduler-operator-index:<<IMAGE_TAG>>
    ```
 
 1. create `openshift-kube-descheduler-operator` namespace:
@@ -57,6 +63,7 @@ This process refers to building the operator in a way that it can be installed l
    ```
 
 1. open the console Operators -> OperatorHub, search for `descheduler operator` and install the operator
+
 
 ## Sample CR
 
