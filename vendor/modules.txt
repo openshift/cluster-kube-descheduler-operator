@@ -236,6 +236,7 @@ github.com/openshift/library-go/pkg/config/clusterstatus
 github.com/openshift/library-go/pkg/config/configdefaults
 github.com/openshift/library-go/pkg/config/leaderelection
 github.com/openshift/library-go/pkg/config/serving
+github.com/openshift/library-go/pkg/controller
 github.com/openshift/library-go/pkg/controller/controllercmd
 github.com/openshift/library-go/pkg/controller/factory
 github.com/openshift/library-go/pkg/controller/fileobserver
