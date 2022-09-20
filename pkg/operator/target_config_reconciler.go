@@ -3,7 +3,6 @@ package operator
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -31,7 +30,6 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -117,8 +115,11 @@ func (c TargetConfigReconciler) sync() error {
 		return fmt.Errorf("descheduler should have an interval set")
 	}
 
-	forceDeployment := false
-	_, forceDeployment, err = c.manageConfigMap(descheduler)
+	specAnnotations := map[string]string{
+		"kubedeschedulers.operator.openshift.io/cluster": strconv.FormatInt(descheduler.Generation, 10),
+	}
+
+	configMap, forceDeployment, err := c.manageConfigMap(descheduler)
 	if err != nil {
 		// if we returned an error from the configmap AND want to force a deployment
 		// it means we want to scale the deployment to 0
@@ -147,37 +148,79 @@ func (c TargetConfigReconciler) sync() error {
 				}))
 		}
 		return err
+	} else {
+		resourceVersion := "0"
+		if configMap != nil { // SyncConfigMap can return nil
+			resourceVersion = configMap.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["configmaps/cluster"] = resourceVersion
 	}
 
-	if _, _, err := c.manageService(descheduler); err != nil {
+	if service, _, err := c.manageService(descheduler); err != nil {
 		return err
+	} else {
+		resourceVersion := "0"
+		if service != nil { // SyncConfigMap can return nil
+			resourceVersion = service.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["services/metrics"] = resourceVersion
 	}
 
-	if _, _, err := c.manageServiceAccount(descheduler); err != nil {
+	if sa, _, err := c.manageServiceAccount(descheduler); err != nil {
 		return err
+	} else {
+		resourceVersion := "0"
+		if sa != nil { // SyncConfigMap can return nil
+			resourceVersion = sa.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["serviceaccounts/openshift-descheduler-operand"] = resourceVersion
 	}
 
-	if _, _, err := c.manageClusterRole(descheduler); err != nil {
+	if clusterRole, _, err := c.manageClusterRole(descheduler); err != nil {
 		return err
+	} else {
+		resourceVersion := "0"
+		if clusterRole != nil { // SyncConfigMap can return nil
+			resourceVersion = clusterRole.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["clusterroles/openshift-descheduler-operand"] = resourceVersion
 	}
 
-	if _, _, err := c.manageClusterRoleBinding(descheduler); err != nil {
+	if clusterRoleBinding, _, err := c.manageClusterRoleBinding(descheduler); err != nil {
 		return err
+	} else {
+		resourceVersion := "0"
+		if clusterRoleBinding != nil { // SyncConfigMap can return nil
+			resourceVersion = clusterRoleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["clusterrolebindings/openshift-descheduler-operand"] = resourceVersion
 	}
 
-	if _, _, err := c.manageRole(descheduler); err != nil {
+	if role, _, err := c.manageRole(descheduler); err != nil {
 		return err
+	} else {
+		resourceVersion := "0"
+		if role != nil { // SyncConfigMap can return nil
+			resourceVersion = role.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["roles/prometheus-k8s"] = resourceVersion
 	}
 
-	if _, _, err := c.manageRoleBinding(descheduler); err != nil {
+	if roleBinding, _, err := c.manageRoleBinding(descheduler); err != nil {
 		return err
+	} else {
+		resourceVersion := "0"
+		if roleBinding != nil { // SyncConfigMap can return nil
+			resourceVersion = roleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["rolebindings/prometheus-k8s"] = resourceVersion
 	}
 
 	if _, err := c.manageServiceMonitor(descheduler); err != nil {
 		return err
 	}
 
-	deployment, _, err := c.manageDeployment(descheduler, forceDeployment)
+	deployment, _, err := c.manageDeployment(descheduler, specAnnotations)
 	if err != nil {
 		return err
 	}
@@ -494,7 +537,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, forceDeployment bool) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
 	required.Name = operatorclient.OperandName
 	required.Namespace = descheduler.Namespace
@@ -575,36 +618,14 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("-v=%d", 2))
 	}
 
-	if !forceDeployment {
-		existingDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, operatorclient.OperandName, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				forceDeployment = true
-			} else {
-				return nil, false, err
-			}
-		} else {
-			forceDeployment = deploymentChanged(existingDeployment, required)
-		}
-	}
-	// FIXME: this method will disappear in 4.6 so we need to fix this ASAP
-	return resourceapply.ApplyDeploymentWithForce(
+	resourcemerge.MergeMap(resourcemerge.BoolPtr(false), &required.Spec.Template.Annotations, specAnnotations)
+
+	return resourceapply.ApplyDeployment(
 		c.ctx,
 		c.kubeClient.AppsV1(),
 		c.eventRecorder,
 		required,
-		resourcemerge.ExpectedDeploymentGeneration(required, descheduler.Status.Generations),
-		forceDeployment)
-}
-
-func deploymentChanged(existing, new *appsv1.Deployment) bool {
-	newArgs := sets.NewString(new.Spec.Template.Spec.Containers[0].Args...)
-	existingArgs := sets.NewString(existing.Spec.Template.Spec.Containers[0].Args...)
-	return existing.Name != new.Name ||
-		existing.Namespace != new.Namespace ||
-		existing.Spec.Template.Spec.Containers[0].Image != new.Spec.Template.Spec.Containers[0].Image ||
-		existing.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name != new.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name ||
-		!reflect.DeepEqual(newArgs, existingArgs)
+		resourcemerge.ExpectedDeploymentGeneration(required, descheduler.Status.Generations))
 }
 
 // Run starts the kube-scheduler and blocks until stopCh is closed.
