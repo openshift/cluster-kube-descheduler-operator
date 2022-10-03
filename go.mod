@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.18
+go 1.19
 
 require (
 	github.com/ghodss/yaml v1.0.0
