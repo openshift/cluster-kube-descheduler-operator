@@ -47,7 +47,6 @@ spec:
           command: ["/bin/descheduler"]
           args:
             - --policy-config-file=/policy-dir/policy.yaml
-            - --v=2
             - --logging-format=text
             - --tls-cert-file=/certs-dir/tls.crt
             - --tls-private-key-file=/certs-dir/tls.key
