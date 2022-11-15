@@ -1,5 +1,5 @@
 updates:
-  - file: "{MAJOR}.{MINOR}/cluster-kube-descheduler-operator.v{MAJOR}.{MINOR}.0.clusterserviceversion.yaml" # relative to this file
+  - file: "stable/cluster-kube-descheduler-operator.v{MAJOR}.{MINOR}.0.clusterserviceversion.yaml" # relative to this file
     update_list:
     # replace metadata.name value
     - search: "clusterkubedescheduleroperator.v{MAJOR}.{MINOR}.0"
