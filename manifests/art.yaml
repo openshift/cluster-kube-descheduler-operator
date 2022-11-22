@@ -3,7 +3,7 @@ updates:
     update_list:
     # replace metadata.name value
     - search: "clusterkubedescheduleroperator.v{MAJOR}.{MINOR}.0"
-      replace: "clusterkubedescheduleroperator.{FULL_VER}"
+      replace: "clusterkubedescheduleroperator.v{FULL_VER}"
     # replace entire version line, otherwise would replace {MAJOR}.{MINOR}.0 anywhere
     - search: "version: {MAJOR}.{MINOR}.0"
       replace: "version: {FULL_VER}"
