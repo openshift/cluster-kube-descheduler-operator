@@ -1,5 +1,5 @@
 updates:
-  - file: "{MAJOR}.{MINOR}/cluster-kube-descheduler-operator.v{MAJOR}.{MINOR}.0.clusterserviceversion.yaml" # relative to this file
+  - file: "stable/cluster-kube-descheduler-operator.v{MAJOR}.{MINOR}.0.clusterserviceversion.yaml" # relative to this file
     update_list:
     # replace metadata.name value
     - search: "clusterkubedescheduleroperator.v{MAJOR}.{MINOR}.0"
@@ -7,8 +7,8 @@ updates:
     # replace entire version line, otherwise would replace {MAJOR}.{MINOR}.0 anywhere
     - search: "version: {MAJOR}.{MINOR}.0"
       replace: "version: {FULL_VER}"
-    - search: 'olm.skipRange: ">=4.9.0 <{MAJOR}.{MINOR}.0"'
-      replace: 'olm.skipRange: ">=4.9.0 <{FULL_VER}"'
+    - search: 'olm.skipRange: ">=4.10.0 <{MAJOR}.{MINOR}.0"'
+      replace: 'olm.skipRange: ">=4.10.0 <{FULL_VER}"'
   - file: "cluster-kube-descheduler-operator.package.yaml"
     update_list:
     - search: "currentCSV: cluster-kube-descheduler-operator.v{MAJOR}.{MINOR}.0"
