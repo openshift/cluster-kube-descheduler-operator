@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openshift-descheduler-operator
+rules:
+- apiGroups:
+  - operator.openshift.io
+  resources:
+  - kubedeschedulers
+  - kubedeschedulers/status
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - configmaps
+  - events
+  verbs:
+  - "*"
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - "*"
