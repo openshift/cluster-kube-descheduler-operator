@@ -37,4 +37,4 @@ spec:
         - name: OPERATOR_NAME
           value: "descheduler-operator"
         - name: IMAGE
-          value: set in e2e
+          value: # set in e2e
