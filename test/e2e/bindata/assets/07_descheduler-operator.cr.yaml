@@ -8,3 +8,8 @@ spec:
   deschedulingIntervalSeconds: 3600
   profiles:
     - AffinityAndTaints
+    - TopologyAndDuplicates
+    - LifecycleAndUtilization
+    - EvictPodsWithPVC
+    - EvictPodsWithLocalStorage
+    - DevPreviewLongLifecycle
