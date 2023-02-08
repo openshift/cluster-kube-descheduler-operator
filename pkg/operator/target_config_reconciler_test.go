@@ -50,9 +50,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 300
@@ -64,9 +62,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -104,9 +100,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -118,9 +112,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -158,9 +150,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -172,9 +162,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -212,9 +200,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -226,9 +212,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -266,9 +250,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -280,9 +262,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -320,9 +300,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -334,9 +312,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
@@ -374,9 +350,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podLifeTime:
         maxPodLifeTimeSeconds: 86400
@@ -388,9 +362,7 @@ strategies:
       includePreferNoSchedule: false
       includeSoftConstraints: false
       labelSelector: null
-      namespaces:
-        exclude: null
-        include: []
+      namespaces: null
       nodeFit: false
       podsHavingTooManyRestarts:
         includingInitContainers: true
