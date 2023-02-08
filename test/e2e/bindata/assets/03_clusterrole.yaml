@@ -1,32 +1,89 @@
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: openshift-descheduler-operator
+  name: descheduler-operator
 rules:
 - apiGroups:
   - operator.openshift.io
   resources:
-  - kubedeschedulers
-  - kubedeschedulers/status
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - schedulers
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - "*"
+- apiGroups:
+  - kubedeschedulers.operator.openshift.io
+  resources:
+  - "*"
   verbs:
   - "*"
 - apiGroups:
   - ""
   resources:
+  - services
   - serviceaccounts
+  - pods
   - configmaps
+  - secrets
+  - namespaces
+  - nodes
+  - pods/eviction
   - events
   verbs:
   - "*"
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
+  - clusterroles
   - clusterrolebindings
+  - roles
+  - rolebindings
   verbs:
   - '*'
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - get
+  - watch
+  - list
 - apiGroups:
   - apps
   resources:
   - deployments
+  - deployments/scale
+  - replicasets
   verbs:
   - "*"
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - watch
+  - list
+  - create
+  - update
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - infrastructures
+  - apiservers
+  verbs:
+  - get
+  - watch
+  - list
