@@ -32,8 +32,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if os.Getenv("IMAGE_FORMAT") == "" {
-		klog.Errorf("IMAGE_FORMAT environment variable not set")
+	if os.Getenv("RELEASE_IMAGE_LATEST") == "" {
+		klog.Errorf("RELEASE_IMAGE_LATEST environment variable not set")
 		os.Exit(1)
 	}
 
@@ -103,8 +103,8 @@ func TestMain(m *testing.M) {
 				required := resourceread.ReadDeploymentV1OrDie(objBytes)
 				// override the operator image with the one built in the CI
 
-				// E.g. IMAGE_FORMAT=registry.build03.ci.openshift.org/ci-op-52fj47p4/stable:${component}
-				registry := strings.Split(os.Getenv("IMAGE_FORMAT"), "/")[0]
+				// E.g. RELEASE_IMAGE_LATEST=registry.build03.ci.openshift.org/ci-op-52fj47p4/stable:${component}
+				registry := strings.Split(os.Getenv("RELEASE_IMAGE_LATEST"), "/")[0]
 
 				required.Spec.Template.Spec.Containers[0].Image = registry + "/" + os.Getenv("NAMESPACE") + "/pipeline:cluster-kube-descheduler-operator"
 				// OPERAND_IMAGE env
