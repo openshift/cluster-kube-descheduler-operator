@@ -412,8 +412,11 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			if strategy.Params == nil {
 				strategy.Params = &deschedulerapi.StrategyParameters{}
 			}
-			// skip strategies which don't support namespace exclusion yet
 			if name == "LowNodeUtilization" {
+				if len(includedNamespaces) > 0 {
+					return nil, false, fmt.Errorf("only namespace exclusion supported with LowNodeUtilization")
+				}
+
 				if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds != nil {
 					if strategy.Params == nil {
 						strategy.Params = &deschedulerapi.StrategyParameters{}
@@ -462,12 +465,14 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 						return nil, false, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds)
 					}
 				}
-			} else {
+			}
+			if len(excludedNamespaces) > 0 || len(includedNamespaces) > 0 {
 				strategy.Params.Namespaces = &deschedulerapi.Namespaces{
 					Exclude: excludedNamespaces,
 					Include: includedNamespaces,
 				}
 			}
+
 			profile.Strategies[name] = strategy
 		}
 		mergo.Merge(policy, profile, mergo.WithAppendSlice, mergo.WithOverride)
