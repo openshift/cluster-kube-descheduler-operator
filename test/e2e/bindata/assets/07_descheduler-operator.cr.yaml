@@ -6,6 +6,7 @@ metadata:
 spec:
   managementState: Managed
   deschedulingIntervalSeconds: 3600
+  mode: "Predictive"
   profiles:
     - AffinityAndTaints
     - TopologyAndDuplicates
