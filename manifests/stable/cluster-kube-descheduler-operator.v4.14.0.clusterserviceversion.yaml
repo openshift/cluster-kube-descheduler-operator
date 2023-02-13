@@ -30,7 +30,7 @@ metadata:
     certified: "false"
     containerImage: quay.io/openshift/origin-cluster-kube-descheduler-operator:4.14
     createdAt: 2021/10/13
-    olm.skipRange: ">=4.10.0 <4.14.0"
+    olm.skipRange: ">=4.11.0 <4.14.0"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
