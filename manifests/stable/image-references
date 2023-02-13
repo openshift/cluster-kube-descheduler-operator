@@ -6,7 +6,7 @@ spec:
   - name: cluster-kube-descheduler-operator
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-cluster-kube-descheduler-operator:4.13
+      name: quay.io/openshift/origin-cluster-kube-descheduler-operator:4.14
   - name: descheduler
     from:
       kind: DockerImage
