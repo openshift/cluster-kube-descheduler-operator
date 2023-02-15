@@ -236,6 +236,6 @@ spec:
                     - name: OPERATOR_NAME
                       value: "descheduler-operator"
                     - name: IMAGE
-                      value: quay.io/openshift/origin-descheduler:4.13
+                      value: quay.io/openshift/origin-descheduler:4.14
               serviceAccountName: openshift-descheduler
     strategy: deployment
