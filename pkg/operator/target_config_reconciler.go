@@ -414,7 +414,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			}
 			if name == "LowNodeUtilization" {
 				if len(includedNamespaces) > 0 {
-					return nil, false, fmt.Errorf("only namespace exclusion supported with LowNodeUtilization")
+					// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
+					klog.Warning("LowNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime)")
 				}
 
 				if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds != nil {
@@ -467,9 +468,17 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 				}
 			}
 			if len(excludedNamespaces) > 0 || len(includedNamespaces) > 0 {
-				strategy.Params.Namespaces = &deschedulerapi.Namespaces{
-					Exclude: excludedNamespaces,
-					Include: includedNamespaces,
+				// LowNodeUtilization can only support namespace exclusion
+				if name == "LowNodeUtilization" {
+					strategy.Params.Namespaces = &deschedulerapi.Namespaces{
+						Exclude: excludedNamespaces,
+					}
+					// Other strategies support both exclusions and inclusions
+				} else {
+					strategy.Params.Namespaces = &deschedulerapi.Namespaces{
+						Exclude: excludedNamespaces,
+						Include: includedNamespaces,
+					}
 				}
 			}
 
