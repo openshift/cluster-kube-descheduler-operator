@@ -5,12 +5,12 @@ metadata:
   namespace: openshift-kube-descheduler-operator
 spec:
   managementState: Managed
-  deschedulingIntervalSeconds: 3600
-  mode: "Predictive"
+  deschedulingIntervalSeconds: 30
+  mode: "Automatic"
   profiles:
-    - AffinityAndTaints
-    - TopologyAndDuplicates
     - LifecycleAndUtilization
-    - EvictPodsWithPVC
-    - EvictPodsWithLocalStorage
-    - DevPreviewLongLifecycle
+  profileCustomizations:
+    podLifetime: 10s
+    namespaces:
+      included:
+      - e2e-testdescheduling

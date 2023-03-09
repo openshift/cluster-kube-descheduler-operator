@@ -47,3 +47,4 @@ spec:
               value: "descheduler-operator"
             - name: IMAGE
               value: # set in e2e
+      serviceAccountName: openshift-descheduler

@@ -8,5 +8,5 @@ roleRef:
   name: openshift-descheduler-operator
 subjects:
   - kind: ServiceAccount
-    name: openshift-descheduler-operator
+    name: openshift-descheduler
     namespace: openshift-kube-descheduler-operator
