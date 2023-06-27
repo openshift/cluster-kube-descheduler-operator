@@ -259,7 +259,7 @@ func TestDescheduling(t *testing.T) {
 						},
 						Name:            "pause",
 						ImagePullPolicy: "Always",
-						Image:           "kubernetes/pause",
+						Image:           "registry.k8s.io/pause",
 						Ports:           []corev1.ContainerPort{{ContainerPort: 80}},
 					}},
 				},
