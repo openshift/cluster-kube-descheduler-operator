@@ -28,8 +28,10 @@ var (
 )
 
 // GroupName is the group name used in this package
-const GroupName = "descheduler"
-const GroupVersion = "v1alpha1"
+const (
+	GroupName    = "descheduler"
+	GroupVersion = "v1alpha1"
+)
 
 // SchemeGroupVersion is group version used to register these objects
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: GroupVersion}
@@ -48,7 +50,7 @@ func init() {
 	// We only register manually written functions here. The registration of the
 	// generated functions takes place in the generated files. The separation
 	// makes the code compile even when the generated files are missing.
-	localSchemeBuilder.Register(addKnownTypes, addDefaultingFuncs)
+	localSchemeBuilder.Register(addKnownTypes, addDefaultingFuncs, RegisterConversions)
 }
 
 func addKnownTypes(scheme *runtime.Scheme) error {
