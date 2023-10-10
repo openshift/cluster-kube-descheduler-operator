@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 				// OPERAND_IMAGE env
 				for i, env := range required.Spec.Template.Spec.Containers[0].Env {
 					if env.Name == "IMAGE" {
-						required.Spec.Template.Spec.Containers[0].Env[i].Value = "registry.ci.openshift.org/ocp/4.14:descheduler"
+						required.Spec.Template.Spec.Containers[0].Env[i].Value = "registry.ci.openshift.org/ocp/4.15:descheduler"
 						break
 					}
 				}
