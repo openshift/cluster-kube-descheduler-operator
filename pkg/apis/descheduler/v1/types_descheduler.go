@@ -46,6 +46,10 @@ type KubeDeschedulerSpec struct {
 
 // ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
 type ProfileCustomizations struct {
+
+	// EnablePodLifetime when set to false will disable the PodLifetime strategy
+	EnablePodLifetime *bool `json:"enablePodLifetime,omitempty"`
+
 	// PodLifetime is the length of time after which pods should be evicted
 	// This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
 	// +kubebuilder:validation:Format=duration
