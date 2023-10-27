@@ -6,21 +6,21 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.9
 	github.com/imdario/mergo v0.3.7
-	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
-	github.com/openshift/build-machinery-go v0.0.0-20230306181456-d321ffa04533
-	github.com/openshift/client-go v0.0.0-20230503144108-75015d2347cb
-	github.com/openshift/library-go v0.0.0-20230508110756-9b7abe2c9cbf
+	github.com/openshift/api v0.0.0-20231012190404-7b36cb38c7d0
+	github.com/openshift/build-machinery-go v0.0.0-20230816154005-5a38e1bfd880
+	github.com/openshift/client-go v0.0.0-20230807132528-be5346fb33cb
+	github.com/openshift/library-go v0.0.0-20231020125025-211b32f1a1f2
 	github.com/prometheus/client_golang v1.14.0
-	github.com/spf13/cobra v1.6.0
-	k8s.io/api v0.27.1
-	k8s.io/apiextensions-apiserver v0.27.1
-	k8s.io/apimachinery v0.27.1
-	k8s.io/client-go v0.27.1
-	k8s.io/code-generator v0.27.1
-	k8s.io/component-base v0.27.1
-	k8s.io/klog/v2 v2.90.1
-	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
-	sigs.k8s.io/controller-tools v0.2.8
+	github.com/spf13/cobra v1.6.1
+	k8s.io/api v0.27.7
+	k8s.io/apiextensions-apiserver v0.27.7
+	k8s.io/apimachinery v0.27.7
+	k8s.io/client-go v0.27.7
+	k8s.io/code-generator v0.27.7
+	k8s.io/component-base v0.27.7
+	k8s.io/klog/v2 v2.100.1
+	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	sigs.k8s.io/controller-tools v0.4.1
 	sigs.k8s.io/descheduler v0.25.0
 )
 
@@ -40,7 +40,7 @@ require (
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.1 // indirect
@@ -109,14 +109,14 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiserver v0.27.1 // indirect
+	k8s.io/apiserver v0.27.7 // indirect
 	k8s.io/gengo v0.0.0-20220913193501-391367153a38 // indirect
-	k8s.io/kms v0.27.1 // indirect
-	k8s.io/kube-aggregator v0.27.1 // indirect
+	k8s.io/kms v0.27.7 // indirect
+	k8s.io/kube-aggregator v0.27.7 // indirect
 	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.1.2 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/kube-storage-version-migrator v0.0.4 // indirect
+	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
