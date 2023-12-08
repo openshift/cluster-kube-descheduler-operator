@@ -45,6 +45,6 @@ spec:
                   fieldPath: metadata.namespace
             - name: OPERATOR_NAME
               value: "descheduler-operator"
-            - name: IMAGE
+            - name: RELATED_IMAGE_OPERAND_IMAGE
               value: # set in e2e
       serviceAccountName: openshift-descheduler
