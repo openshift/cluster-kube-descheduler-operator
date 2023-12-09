@@ -89,7 +89,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
-		os.Getenv("IMAGE"),
+		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
 		operatorConfigClient.KubedeschedulersV1(),
 		operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
 		deschedulerClient,
