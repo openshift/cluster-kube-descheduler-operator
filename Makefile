@@ -12,6 +12,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 
 # Exclude e2e tests from unit testing
 GO_TEST_PACKAGES :=./pkg/... ./cmd/...
+GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY :=registry.svc.ci.openshift.org
 
