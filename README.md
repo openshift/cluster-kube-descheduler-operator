@@ -2,7 +2,7 @@
 
 Run the descheduler in your OpenShift cluster to move pods based on specific strategies.
 
-## Releases
+##  Releases
 
 | kdo version | ocp version | k8s version | golang |
 | ----------- | ----------- | ----------- | ------ |
