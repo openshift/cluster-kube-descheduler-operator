@@ -38,6 +38,7 @@ metadata:
     categories: OpenShift Optional
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
 spec:
+  replaces: clusterkubedescheduleroperator.4.14.0-202402081809
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
