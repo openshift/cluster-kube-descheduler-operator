@@ -36,9 +36,9 @@ metadata:
     support: Red Hat, Inc.
     capabilities: Basic Install
     categories: OpenShift Optional
-    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift Platform Plus"]'
 spec:
-  replaces: clusterkubedescheduleroperator.4.14.0-202401292111
+  replaces: clusterkubedescheduleroperator.4.14.0-202311021650
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
