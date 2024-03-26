@@ -71,6 +71,55 @@ strategies:
       thresholdPriorityClassName: ""
 `
 
+const disablePodLifeTimeConfig = `apiVersion: descheduler/v1alpha1
+ignorePvcPods: true
+kind: DeschedulerPolicy
+strategies:
+  LowNodeUtilization:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces: null
+      nodeFit: false
+      nodeResourceUtilizationThresholds:
+        targetThresholds:
+          cpu: 50
+          memory: 50
+          pods: 50
+        thresholds:
+          cpu: 20
+          memory: 20
+          pods: 20
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  PodLifeTime:
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces: null
+      nodeFit: false
+      podLifeTime:
+        maxPodLifeTimeSeconds: 300
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+  RemovePodsHavingTooManyRestarts:
+    enabled: true
+    params:
+      includePreferNoSchedule: false
+      includeSoftConstraints: false
+      labelSelector: null
+      namespaces: null
+      nodeFit: false
+      podsHavingTooManyRestarts:
+        includingInitContainers: true
+        podRestartThreshold: 100
+      thresholdPriority: null
+      thresholdPriorityClassName: ""
+`
+
 const podLifeTimeWithThresholdPriorityClassNameConfig = `apiVersion: descheduler/v1alpha1
 ignorePvcPods: true
 kind: DeschedulerPolicy
@@ -375,6 +424,7 @@ func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
 	priority := int32(1000)
+	EnablePodlifetime := false
 
 	fakeRecorder := NewFakeRecorder(1024)
 	tests := []struct {
@@ -402,6 +452,27 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": podLifeTimeConfig},
+			},
+		},
+		{
+			name: "DisablePodlifetime",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{PodLifetime: &fiveMinutes, EnablePodLifetime: &EnablePodlifetime},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": disablePodLifeTimeConfig},
 			},
 		},
 		{

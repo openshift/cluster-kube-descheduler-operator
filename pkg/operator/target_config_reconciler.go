@@ -503,6 +503,15 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			}
 		}
 
+		if descheduler.Spec.ProfileCustomizations.EnablePodLifetime != nil {
+			if !*descheduler.Spec.ProfileCustomizations.EnablePodLifetime {
+				if strategy, ok := policy.Strategies["PodLifeTime"]; ok {
+					strategy.Enabled = false
+					policy.Strategies["PodLifeTime"] = strategy
+				}
+			}
+		}
+
 		// set priority class threshold if customized
 		if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil && descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
 			return nil, false, fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields")
