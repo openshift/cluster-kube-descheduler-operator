@@ -15,6 +15,11 @@ spec:
     spec:
       containers:
         - name: descheduler-operator
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem': true
+            capabilities:
+              drop: ["ALL"]
           image: quay.io/openshift/origin-cluster-kube-descheduler-operator:latest
           ports:
           - containerPort: 60000
