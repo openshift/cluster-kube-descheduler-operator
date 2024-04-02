@@ -224,6 +224,7 @@ spec:
                 - name: descheduler-operator
                   securityContext:
                     allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem': true
                     capabilities:
                       drop: ["ALL"]
                   image: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
