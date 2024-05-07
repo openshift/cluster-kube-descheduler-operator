@@ -4,7 +4,7 @@ COPY . .
 
 
 FROM registry.ci.openshift.org/openshift/origin-v4.0:base
-COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests/4.11 /manifests
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests/stable /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
 RUN rm /manifests/image-references
 
