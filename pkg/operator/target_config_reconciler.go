@@ -127,10 +127,10 @@ func (c TargetConfigReconciler) sync() error {
 			klog.ErrorS(err, "Error managing targetConfig")
 			_, err = c.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).UpdateScale(
 				c.ctx,
-				descheduler.Name,
+				operatorclient.OperandName,
 				&autoscalingv1.Scale{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      descheduler.Name,
+						Name:      operatorclient.OperandName,
 						Namespace: operatorclient.OperatorNamespace,
 					},
 					Spec: autoscalingv1.ScaleSpec{
