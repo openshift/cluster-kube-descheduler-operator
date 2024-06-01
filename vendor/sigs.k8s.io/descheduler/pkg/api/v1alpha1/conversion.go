@@ -103,6 +103,8 @@ func (hi *handleImpl) Evictor() frameworktypes.Evictor {
 }
 
 func Convert_v1alpha1_DeschedulerPolicy_To_api_DeschedulerPolicy(in *DeschedulerPolicy, out *api.DeschedulerPolicy, s conversion.Scope) error {
+	klog.V(1).Info("Warning: v1alpha1 API is deprecated and will be removed in a future release. Use v1alpha2 API instead.")
+
 	err := V1alpha1ToInternal(in, pluginregistry.PluginRegistry, out, s)
 	if err != nil {
 		return err
@@ -134,6 +136,14 @@ func V1alpha1ToInternal(
 		evictSystemCriticalPods = *deschedulerPolicy.EvictSystemCriticalPods
 		if evictSystemCriticalPods {
 			klog.V(1).Info("Warning: EvictSystemCriticalPods is set to True. This could cause eviction of Kubernetes system pods.")
+		}
+	}
+
+	evictDaemonSetPods := false
+	if deschedulerPolicy.EvictDaemonSetPods != nil {
+		evictDaemonSetPods = *deschedulerPolicy.EvictDaemonSetPods
+		if evictDaemonSetPods {
+			klog.V(1).Info("Warning: EvictDaemonSetPods is set to True. This could cause eviction of Kubernetes DaemonSet pods.")
 		}
 	}
 
@@ -191,6 +201,7 @@ func V1alpha1ToInternal(
 							Name: defaultevictor.PluginName,
 							Args: &defaultevictor.DefaultEvictorArgs{
 								EvictLocalStoragePods:   evictLocalStoragePods,
+								EvictDaemonSetPods:      evictDaemonSetPods,
 								EvictSystemCriticalPods: evictSystemCriticalPods,
 								IgnorePvcPods:           ignorePvcPods,
 								EvictFailedBarePods:     evictBarePods,
