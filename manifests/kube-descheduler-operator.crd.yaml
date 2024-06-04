@@ -139,6 +139,7 @@ spec:
                   - TopologyAndDuplicates
                   - LifecycleAndUtilization
                   - DevPreviewLongLifecycle
+                  - LongLifecycle
                   - SoftTopologyAndDuplicates
                   - EvictPodsWithLocalStorage
                   - EvictPodsWithPVC
