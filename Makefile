@@ -30,11 +30,17 @@ $(call build-image,ocp-cluster-kube-descheduler-operator,$(IMAGE_REGISTRY)/ocp/4
 
 $(call verify-golang-versions,Dockerfile.rhel7)
 
-$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests/4.11,./manifests/4.11)
+$(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests,./manifests)
 
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 test-e2e: test-unit
 .PHONY: test-e2e
+
+regen-crd:
+	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
+	cp manifests/kube-descheduler-operator.crd.yaml manifests/operator.openshift.io_kubedeschedulers.yaml
+	./_output/tools/bin/controller-gen crd paths=./pkg/apis/descheduler/v1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	mv manifests/operator.openshift.io_kubedeschedulers.yaml manifests/kube-descheduler-operator.crd.yaml
 
 generate: update-codegen-crds generate-clients
 .PHONY: generate
