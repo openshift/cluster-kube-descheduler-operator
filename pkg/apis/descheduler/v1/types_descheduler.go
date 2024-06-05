@@ -90,7 +90,7 @@ type Namespaces struct {
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
 // it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
-// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;LongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC
 type DeschedulerProfile string
 
 var (
@@ -116,7 +116,11 @@ var (
 	EvictPodsWithPVC DeschedulerProfile = "EvictPodsWithPVC"
 
 	// DevPreviewLongLifecycle handles cluster lifecycle over a long term
+	// Deprecated: use LongLifecycle instead
 	DevPreviewLongLifecycle DeschedulerProfile = "DevPreviewLongLifecycle"
+
+	// LongLifecycle handles cluster lifecycle over a long term
+	LongLifecycle DeschedulerProfile = "LongLifecycle"
 )
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
