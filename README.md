@@ -30,13 +30,7 @@ This process refers to building the operator in a way that it can be installed l
    podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator:${IMAGE_TAG}
    ```
 
-1. Export your desired/current version:
-
-   ```sh
-   export OPERATOR_VERSION=${your_version}
-   ```
-
-1. Update the `.spec.install.spec.deployments[0].spec.template.spec.containers[0].image` field in the SSO CSV under `./manifests/${OPERATOR_VERSION}/cluster-kube-descheduler-operator.v${OPERATOR_VERSION}.0.clusterserviceversion.yaml` to point to the newly built image.
+1. Update the `.spec.install.spec.deployments[0].spec.template.spec.containers[0].image` field in the KDO CSV under `./manifests/cluster-kube-descheduler-operator.clusterserviceversion.yaml` to point to the newly built image.
 
 1. build and push the metadata image to a registry (e.g. https://quay.io):
    ```sh
