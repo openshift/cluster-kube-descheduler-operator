@@ -4,9 +4,8 @@ COPY . .
 
 
 FROM registry.ci.openshift.org/openshift/origin-v4.0:base
-COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests/4.11 /manifests
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
-RUN rm /manifests/image-references
 
 LABEL io.k8s.display-name="OpenShift Kube Descheduler Operator metadata" \
       io.k8s.description="This is a component of OpenShift and manages the kube descheduler metadata" \

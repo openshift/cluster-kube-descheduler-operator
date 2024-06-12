@@ -253,5 +253,11 @@ spec:
                       value: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
                     - name: OPERAND_VERSION
                       value: 5.0.1
+                  volumeMounts:
+                  - name: tmp
+                    mountPath: "/tmp"
               serviceAccountName: openshift-descheduler
+              volumes:
+              - name: tmp
+                emptyDir: {}
     strategy: deployment
