@@ -8,7 +8,13 @@ rules:
   resources:
   - "events"
   verbs:
-  - "*"
+  - "get"
+  - "watch"
+  - "list"
+  - "create"
+  - "update"
+  - "patch"
+  - "delete"
 - apiGroups:
   - ""
   resources:

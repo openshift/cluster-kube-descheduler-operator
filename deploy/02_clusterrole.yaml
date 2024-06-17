@@ -8,7 +8,13 @@ rules:
   resources:
   - "*"
   verbs:
-  - "*"
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - config.openshift.io
   resources:
@@ -22,13 +28,25 @@ rules:
   resources:
   - servicemonitors
   verbs:
-  - "*"
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - kubedeschedulers.operator.openshift.io
   resources:
   - "*"
   verbs:
-  - "*"
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - ""
   resources:
@@ -42,7 +60,13 @@ rules:
   - pods/eviction
   - events
   verbs:
-  - "*"
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
@@ -51,7 +75,13 @@ rules:
   - roles
   - rolebindings
   verbs:
-  - '*'
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - scheduling.k8s.io
   resources:
@@ -67,7 +97,13 @@ rules:
   - deployments/scale
   - replicasets
   verbs:
-  - "*"
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - coordination.k8s.io
   resources:
@@ -78,6 +114,8 @@ rules:
   - list
   - create
   - update
+  - patch
+  - delete
 - apiGroups:
   - config.openshift.io
   resources:
@@ -87,3 +125,15 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete
