@@ -38,5 +38,11 @@ spec:
               value: "descheduler-operator"
             - name: IMAGE
               value: quay.io/openshift/origin-descheduler:4.9
+          volumeMounts:
+          - name: tmp
+            mountPath: "/tmp"
       serviceAccountName: openshift-descheduler
       serviceAccount: openshift-descheduler
+      volumes:
+      - name: tmp
+        emptyDir: {}

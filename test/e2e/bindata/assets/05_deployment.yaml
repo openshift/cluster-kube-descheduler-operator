@@ -23,6 +23,7 @@ spec:
         - name: descheduler-operator
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           image: # set in e2e
@@ -47,4 +48,10 @@ spec:
               value: "descheduler-operator"
             - name: RELATED_IMAGE_OPERAND_IMAGE
               value: # set in e2e
+          volumeMounts:
+          - name: tmp
+            mountPath: "/tmp"
       serviceAccountName: openshift-descheduler
+      volumes:
+      - name: tmp
+        emptyDir: {}
