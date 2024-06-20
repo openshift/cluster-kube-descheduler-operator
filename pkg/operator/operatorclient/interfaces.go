@@ -32,6 +32,10 @@ func (c *DeschedulerClient) GetOperatorState() (spec *operatorv1.OperatorSpec, s
 	return &instance.Spec.OperatorSpec, &instance.Status.OperatorStatus, instance.ResourceVersion, nil
 }
 
+func (c *DeschedulerClient) GetOperatorStateWithQuorum(ctx context.Context) (*operatorv1.OperatorSpec, *operatorv1.OperatorStatus, string, error) {
+	return c.GetOperatorState()
+}
+
 func (c *DeschedulerClient) UpdateOperatorSpec(ctx context.Context, resourceVersion string, spec *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
 	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
