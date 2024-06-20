@@ -134,14 +134,28 @@ spec:
           resources:
           - servicemonitors
           verbs:
-          - "*"
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
+          - deletecollection
         - apiGroups:
           - operator.openshift.io
           resources:
           - kubedeschedulers
           - kubedeschedulers/status
           verbs:
-          - "*"
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
+          - deletecollection
         - apiGroups:
           - ""
           resources:
@@ -151,7 +165,14 @@ spec:
           - events
           - serviceaccounts
           verbs:
-          - "*"
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
+          - deletecollection
         - apiGroups:
           - ""
           resources:
@@ -169,7 +190,14 @@ spec:
           - roles
           - rolebindings
           verbs:
-          - '*'
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
+          - deletecollection
         - apiGroups:
           - apps
           resources:
@@ -184,7 +212,14 @@ spec:
           - deployments
           - deployments/scale
           verbs:
-          - "*"
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
+          - deletecollection
         - apiGroups:
           - coordination.k8s.io
           resources:
@@ -195,6 +230,20 @@ spec:
           - list
           - create
           - update
+          - patch
+          - delete
+        - apiGroups:
+          - events.k8s.io
+          resources:
+          - events
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
         - apiGroups:
           - config.openshift.io
           resources:
