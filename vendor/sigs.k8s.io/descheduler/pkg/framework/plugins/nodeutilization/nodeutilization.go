@@ -18,6 +18,7 @@ package nodeutilization
 
 import (
 	"context"
+	"math"
 	"sort"
 
 	"sigs.k8s.io/descheduler/pkg/api"
@@ -163,6 +164,10 @@ func resourceThreshold(nodeCapacity v1.ResourceList, resourceName v1.ResourceNam
 	return resource.NewQuantity(resourceCapacityFraction(resourceCapacityQuantity.Value()), defaultFormat)
 }
 
+func roundTo2Decimals(percentage float64) float64 {
+	return math.Round(percentage*100) / 100
+}
+
 func resourceUsagePercentages(nodeUsage NodeUsage) map[v1.ResourceName]float64 {
 	nodeCapacity := nodeUsage.node.Status.Capacity
 	if len(nodeUsage.node.Status.Allocatable) > 0 {
@@ -174,6 +179,7 @@ func resourceUsagePercentages(nodeUsage NodeUsage) map[v1.ResourceName]float64 {
 		cap := nodeCapacity[resourceName]
 		if !cap.IsZero() {
 			resourceUsagePercentage[resourceName] = 100 * float64(resourceUsage.MilliValue()) / float64(cap.MilliValue())
+			resourceUsagePercentage[resourceName] = roundTo2Decimals(resourceUsagePercentage[resourceName])
 		}
 	}
 
@@ -216,6 +222,7 @@ func evictPodsFromSourceNodes(
 	evictableNamespaces *api.Namespaces,
 	sourceNodes, destinationNodes []NodeInfo,
 	podEvictor frameworktypes.Evictor,
+	evictOptions evictions.EvictOptions,
 	podFilter func(pod *v1.Pod) bool,
 	resourceNames []v1.ResourceName,
 	continueEviction continueEvictionCond,
@@ -267,7 +274,7 @@ func evictPodsFromSourceNodes(
 		klog.V(1).InfoS("Evicting pods based on priority, if they have same priority, they'll be evicted based on QoS tiers")
 		// sort the evictable Pods based on priority. This also sorts them based on QoS. If there are multiple pods with same priority, they are sorted based on QoS tiers.
 		podutil.SortPodsBasedOnPriorityLowToHigh(removablePods)
-		evictPods(ctx, evictableNamespaces, removablePods, node, totalAvailableUsage, taintsOfDestinationNodes, podEvictor, continueEviction)
+		evictPods(ctx, evictableNamespaces, removablePods, node, totalAvailableUsage, taintsOfDestinationNodes, podEvictor, evictOptions, continueEviction)
 
 	}
 }
@@ -280,6 +287,7 @@ func evictPods(
 	totalAvailableUsage map[v1.ResourceName]*resource.Quantity,
 	taintsOfLowNodes map[string][]v1.Taint,
 	podEvictor frameworktypes.Evictor,
+	evictOptions evictions.EvictOptions,
 	continueEviction continueEvictionCond,
 ) {
 	var excludedNamespaces sets.Set[string]
@@ -304,7 +312,7 @@ func evictPods(
 			}
 
 			if preEvictionFilterWithOptions(pod) {
-				if podEvictor.Evict(ctx, pod, evictions.EvictOptions{}) {
+				if podEvictor.Evict(ctx, pod, evictOptions) {
 					klog.V(3).InfoS("Evicted pods", "pod", klog.KObj(pod))
 
 					for name := range totalAvailableUsage {

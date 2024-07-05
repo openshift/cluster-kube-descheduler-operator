@@ -57,6 +57,10 @@ type podOwner struct {
 	imagesHash            string
 }
 
+func (po podOwner) String() string {
+	return fmt.Sprintf("%s/%s/%s/%s", po.namespace, po.kind, po.name, po.imagesHash)
+}
+
 // New builds plugin from its arguments while passing a handle
 func New(args runtime.Object, handle frameworktypes.Handle) (frameworktypes.Plugin, error) {
 	removeDuplicatesArgs, ok := args.(*RemoveDuplicatesArgs)
@@ -206,7 +210,7 @@ func (r *RemoveDuplicates) Balance(ctx context.Context, nodes []*v1.Node) *frame
 				// It's assumed all duplicated pods are in the same priority class
 				// TODO(jchaloup): check if the pod has a different node to lend to
 				for _, pod := range pods[upperAvg-1:] {
-					r.handle.Evictor().Evict(ctx, pod, evictions.EvictOptions{})
+					r.handle.Evictor().Evict(ctx, pod, evictions.EvictOptions{StrategyName: PluginName})
 					if r.handle.Evictor().NodeLimitExceeded(nodeMap[nodeName]) {
 						continue loop
 					}
@@ -234,7 +238,7 @@ func getTargetNodes(podNodes map[string][]*v1.Pod, nodes []*v1.Node) []*v1.Node 
 					utils.NodeSelectorsEqual(getNodeAffinityNodeSelector(pod), getNodeAffinityNodeSelector(dp)) &&
 					reflect.DeepEqual(pod.Spec.NodeSelector, dp.Spec.NodeSelector) {
 					duplicated = true
-					continue
+					break
 				}
 			}
 			if duplicated {
