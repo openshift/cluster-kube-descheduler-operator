@@ -1,0 +1,68 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: LifecycleAndUtilization
+  pluginConfig:
+  - args:
+      labelSelector: null
+      maxPodLifeTimeSeconds: 86400
+      namespaces: null
+      states: null
+    name: PodLifeTime
+  - args:
+      includingInitContainers: true
+      labelSelector: null
+      namespaces: null
+      podRestartThreshold: 100
+      states: null
+    name: RemovePodsHavingTooManyRestarts
+  - args:
+      evictableNamespaces: null
+      numberOfNodes: 0
+      targetThresholds:
+        cpu: 50
+        memory: 50
+        pods: 50
+      thresholds:
+        cpu: 20
+        memory: 20
+        pods: 20
+      useDeviationThresholds: false
+    name: LowNodeUtilization
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold:
+        name: className
+        value: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - LowNodeUtilization
+    deschedule:
+      disabled: null
+      enabled:
+      - PodLifeTime
+      - RemovePodsHavingTooManyRestarts
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

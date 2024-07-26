@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
-	"github.com/imdario/mergo"
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
@@ -32,6 +31,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -40,7 +40,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	deschedulerapi "sigs.k8s.io/descheduler/pkg/api/v1alpha1"
+	utilptr "k8s.io/utils/ptr"
+
+	deschedulerapi "sigs.k8s.io/descheduler/pkg/api"
+	"sigs.k8s.io/descheduler/pkg/api/v1alpha2"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/defaultevictor"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/nodeutilization"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/podlifetime"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removeduplicates"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodshavingtoomanyrestarts"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatinginterpodantiaffinity"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatingnodeaffinity"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatingnodetaints"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatingtopologyspreadconstraint"
 )
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
@@ -343,6 +355,313 @@ func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1
 	return changed, err
 }
 
+func defaultEvictorOverrides(profileCustomizations *deschedulerv1.ProfileCustomizations, pluginConfig *v1alpha2.PluginConfig) error {
+	// set priority class threshold if customized
+	if profileCustomizations.ThresholdPriority != nil && profileCustomizations.ThresholdPriorityClassName != "" {
+		return fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields")
+	}
+
+	if profileCustomizations.ThresholdPriority != nil || profileCustomizations.ThresholdPriorityClassName != "" {
+		pluginConfig.Args.Object.(*defaultevictor.DefaultEvictorArgs).PriorityThreshold = &deschedulerapi.PriorityThreshold{
+			Value: profileCustomizations.ThresholdPriority,
+			Name:  profileCustomizations.ThresholdPriorityClassName,
+		}
+	}
+
+	return nil
+}
+
+func affinityAndTaintsProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile := &v1alpha2.DeschedulerProfile{
+		Name: string(deschedulerv1.AffinityAndTaints),
+		PluginConfigs: []v1alpha2.PluginConfig{
+			{
+				Name: removepodsviolatinginterpodantiaffinity.PluginName,
+				Args: runtime.RawExtension{
+					Object: &removepodsviolatinginterpodantiaffinity.RemovePodsViolatingInterPodAntiAffinityArgs{},
+				},
+			},
+			{
+				Name: removepodsviolatingnodetaints.PluginName,
+				Args: runtime.RawExtension{
+					Object: &removepodsviolatingnodetaints.RemovePodsViolatingNodeTaintsArgs{},
+				},
+			},
+			{
+				Name: removepodsviolatingnodeaffinity.PluginName,
+				Args: runtime.RawExtension{
+					Object: &removepodsviolatingnodeaffinity.RemovePodsViolatingNodeAffinityArgs{
+						NodeAffinityType: []string{"requiredDuringSchedulingIgnoredDuringExecution"},
+					},
+				},
+			},
+			{
+				Name: defaultevictor.PluginName,
+				Args: runtime.RawExtension{
+					Object: &defaultevictor.DefaultEvictorArgs{
+						IgnorePvcPods:         ignorePVCPods,
+						EvictLocalStoragePods: evictLocalStoragePods,
+					},
+				},
+			},
+		},
+		Plugins: v1alpha2.Plugins{
+			Filter: v1alpha2.PluginSet{
+				Enabled: []string{
+					defaultevictor.PluginName,
+				},
+			},
+			Deschedule: v1alpha2.PluginSet{
+				Enabled: []string{
+					removepodsviolatinginterpodantiaffinity.PluginName,
+					removepodsviolatingnodetaints.PluginName,
+					removepodsviolatingnodeaffinity.PluginName,
+				},
+			},
+		},
+	}
+
+	// exclude openshift namespaces from descheduling
+	if len(includedNamespaces) > 0 || len(excludedNamespaces) > 0 {
+		profile.PluginConfigs[0].Args.Object.(*removepodsviolatinginterpodantiaffinity.RemovePodsViolatingInterPodAntiAffinityArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+		profile.PluginConfigs[1].Args.Object.(*removepodsviolatingnodetaints.RemovePodsViolatingNodeTaintsArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+		profile.PluginConfigs[2].Args.Object.(*removepodsviolatingnodeaffinity.RemovePodsViolatingNodeAffinityArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+	}
+
+	if profileCustomizations == nil {
+		return profile, nil
+	}
+
+	if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[3]); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
+func topologyAndDuplicatesProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile := &v1alpha2.DeschedulerProfile{
+		Name: string(deschedulerv1.TopologyAndDuplicates),
+		PluginConfigs: []v1alpha2.PluginConfig{
+			{
+				Name: removepodsviolatingtopologyspreadconstraint.PluginName,
+				Args: runtime.RawExtension{
+					Object: &removepodsviolatingtopologyspreadconstraint.RemovePodsViolatingTopologySpreadConstraintArgs{
+						Constraints: []v1.UnsatisfiableConstraintAction{v1.DoNotSchedule},
+					},
+				},
+			},
+			{
+				Name: removeduplicates.PluginName,
+				Args: runtime.RawExtension{
+					Object: &removeduplicates.RemoveDuplicatesArgs{},
+				},
+			},
+			{
+				Name: defaultevictor.PluginName,
+				Args: runtime.RawExtension{
+					Object: &defaultevictor.DefaultEvictorArgs{
+						IgnorePvcPods:         ignorePVCPods,
+						EvictLocalStoragePods: evictLocalStoragePods,
+					},
+				},
+			},
+		},
+		Plugins: v1alpha2.Plugins{
+			Filter: v1alpha2.PluginSet{
+				Enabled: []string{
+					defaultevictor.PluginName,
+				},
+			},
+			Balance: v1alpha2.PluginSet{
+				Enabled: []string{
+					removepodsviolatingtopologyspreadconstraint.PluginName,
+					removeduplicates.PluginName,
+				},
+			},
+		},
+	}
+
+	// exclude openshift namespaces from descheduling
+	if len(includedNamespaces) > 0 || len(excludedNamespaces) > 0 {
+		profile.PluginConfigs[0].Args.Object.(*removepodsviolatingtopologyspreadconstraint.RemovePodsViolatingTopologySpreadConstraintArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+		profile.PluginConfigs[1].Args.Object.(*removeduplicates.RemoveDuplicatesArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+	}
+
+	if profileCustomizations == nil {
+		return profile, nil
+	}
+
+	if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[2]); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
+func softTopologyAndDuplicatesProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile, err := topologyAndDuplicatesProfile(profileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+	profile.Name = string(deschedulerv1.SoftTopologyAndDuplicates)
+	profile.PluginConfigs[0].Args.Object.(*removepodsviolatingtopologyspreadconstraint.RemovePodsViolatingTopologySpreadConstraintArgs).Constraints = []v1.UnsatisfiableConstraintAction{v1.DoNotSchedule, v1.ScheduleAnyway}
+	return profile, err
+}
+
+func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile := &v1alpha2.DeschedulerProfile{
+		Name: string(deschedulerv1.LifecycleAndUtilization),
+		PluginConfigs: []v1alpha2.PluginConfig{
+			{
+				Name: podlifetime.PluginName,
+				Args: runtime.RawExtension{
+					Object: &podlifetime.PodLifeTimeArgs{
+						MaxPodLifeTimeSeconds: utilptr.To[uint](86400), // 24 hours
+					},
+				},
+			},
+			{
+				Name: removepodshavingtoomanyrestarts.PluginName,
+				Args: runtime.RawExtension{
+					Object: &removepodshavingtoomanyrestarts.RemovePodsHavingTooManyRestartsArgs{
+						PodRestartThreshold:     100,
+						IncludingInitContainers: true,
+					},
+				},
+			},
+			{
+				Name: nodeutilization.LowNodeUtilizationPluginName,
+				Args: runtime.RawExtension{
+					Object: &nodeutilization.LowNodeUtilizationArgs{
+						Thresholds: deschedulerapi.ResourceThresholds{
+							v1.ResourceCPU:    20,
+							v1.ResourceMemory: 20,
+							v1.ResourcePods:   20,
+						},
+						TargetThresholds: deschedulerapi.ResourceThresholds{
+							v1.ResourceCPU:    50,
+							v1.ResourceMemory: 50,
+							v1.ResourcePods:   50,
+						},
+					},
+				},
+			},
+			{
+				Name: defaultevictor.PluginName,
+				Args: runtime.RawExtension{
+					Object: &defaultevictor.DefaultEvictorArgs{
+						IgnorePvcPods:         ignorePVCPods,
+						EvictLocalStoragePods: evictLocalStoragePods,
+					},
+				},
+			},
+		},
+		Plugins: v1alpha2.Plugins{
+			Filter: v1alpha2.PluginSet{
+				Enabled: []string{
+					defaultevictor.PluginName,
+				},
+			},
+			Deschedule: v1alpha2.PluginSet{
+				Enabled: []string{
+					podlifetime.PluginName,
+					removepodshavingtoomanyrestarts.PluginName,
+				},
+			},
+			Balance: v1alpha2.PluginSet{
+				Enabled: []string{
+					nodeutilization.LowNodeUtilizationPluginName,
+				},
+			},
+		},
+	}
+
+	// exclude openshift namespaces from descheduling
+	if len(includedNamespaces) > 0 || len(excludedNamespaces) > 0 {
+		profile.PluginConfigs[0].Args.Object.(*podlifetime.PodLifeTimeArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+		profile.PluginConfigs[1].Args.Object.(*removepodshavingtoomanyrestarts.RemovePodsHavingTooManyRestartsArgs).Namespaces = &deschedulerapi.Namespaces{
+			Include: includedNamespaces,
+			Exclude: excludedNamespaces,
+		}
+		if len(includedNamespaces) > 0 {
+			// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
+			klog.Warning("LowNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime)")
+		}
+		if len(excludedNamespaces) > 0 {
+			profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs).EvictableNamespaces = &deschedulerapi.Namespaces{
+				Exclude: excludedNamespaces,
+			}
+		}
+	}
+
+	if profileCustomizations == nil {
+		return profile, nil
+	}
+
+	if profileCustomizations.PodLifetime != nil {
+		profile.PluginConfigs[0].Args.Object.(*podlifetime.PodLifeTimeArgs).MaxPodLifeTimeSeconds = utilptr.To[uint](uint(profileCustomizations.PodLifetime.Seconds()))
+	}
+
+	if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+		args := profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+		switch *profileCustomizations.DevLowNodeUtilizationThresholds {
+		case deschedulerv1.LowThreshold:
+			args.Thresholds[v1.ResourceCPU] = 10
+			args.Thresholds[v1.ResourceMemory] = 10
+			args.Thresholds[v1.ResourcePods] = 10
+			args.TargetThresholds[v1.ResourceCPU] = 30
+			args.TargetThresholds[v1.ResourceMemory] = 30
+			args.TargetThresholds[v1.ResourcePods] = 30
+		case deschedulerv1.MediumThreshold:
+			args.Thresholds[v1.ResourceCPU] = 20
+			args.Thresholds[v1.ResourceMemory] = 20
+			args.Thresholds[v1.ResourcePods] = 20
+			args.TargetThresholds[v1.ResourceCPU] = 50
+			args.TargetThresholds[v1.ResourceMemory] = 50
+			args.TargetThresholds[v1.ResourcePods] = 50
+		case deschedulerv1.HighThreshold:
+			args.Thresholds[v1.ResourceCPU] = 40
+			args.Thresholds[v1.ResourceMemory] = 40
+			args.Thresholds[v1.ResourcePods] = 40
+			args.TargetThresholds[v1.ResourceCPU] = 70
+			args.TargetThresholds[v1.ResourceMemory] = 70
+			args.TargetThresholds[v1.ResourcePods] = 70
+		default:
+			return nil, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+		}
+	}
+
+	if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[3]); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
+func longLifecycleProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile, err := lifecycleAndUtilizationProfile(profileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+	profile.PluginConfigs = profile.PluginConfigs[1:]
+	profile.Plugins.Deschedule.Enabled = profile.Plugins.Deschedule.Enabled[1:]
+	profile.Name = string(deschedulerv1.LongLifecycle)
+	return profile, err
+}
+
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
 	required := resourceread.ReadConfigMapV1OrDie(bindata.MustAsset("assets/kube-descheduler/configmap.yaml"))
 	required.Name = descheduler.Name
@@ -389,102 +708,57 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	if len(descheduler.Spec.Profiles) == 0 {
 		return nil, false, fmt.Errorf("descheduler should have at least 1 profile enabled")
 	}
-	profiles := sets.NewString()
-	policy := &deschedulerapi.DeschedulerPolicy{}
+
+	policy := &v1alpha2.DeschedulerPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DeschedulerPolicy",
+			APIVersion: "descheduler/v1alpha2",
+		},
+		Profiles: []v1alpha2.DeschedulerProfile{},
+	}
 
 	// ignore PVC pods by default
 	ignorePVCPods := true
-	policy.IgnorePVCPods = &ignorePVCPods
+	evictLocalStoragePods := false
 	for _, profileName := range descheduler.Spec.Profiles {
-		p := bindata.MustAsset("assets/profiles/" + string(profileName) + ".yaml")
-		profile := &deschedulerapi.DeschedulerPolicy{}
-		if err := yaml.Unmarshal(p, profile); err != nil {
-			return nil, false, err
+		if profileName == deschedulerv1.EvictPodsWithPVC {
+			ignorePVCPods = false
+			continue
 		}
+		if profileName == deschedulerv1.EvictPodsWithLocalStorage {
+			evictLocalStoragePods = true
+			continue
+		}
+	}
 
+	profiles := sets.NewString()
+	for _, profileName := range descheduler.Spec.Profiles {
 		if err := checkProfileConflicts(profiles, profileName, scheduler); err != nil {
 			klog.ErrorS(err, "Profile conflict")
 			continue
 		}
-
-		// exclude openshift namespaces from descheduling
-		for name, strategy := range profile.Strategies {
-			if strategy.Params == nil {
-				strategy.Params = &deschedulerapi.StrategyParameters{}
-			}
-			if name == "LowNodeUtilization" {
-				if len(includedNamespaces) > 0 {
-					// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
-					klog.Warning("LowNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime)")
-				}
-
-				if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds != nil {
-					if strategy.Params == nil {
-						strategy.Params = &deschedulerapi.StrategyParameters{}
-					}
-					switch *descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds {
-					case deschedulerv1.LowThreshold:
-						strategy.Params.NodeResourceUtilizationThresholds = &deschedulerapi.NodeResourceUtilizationThresholds{
-							Thresholds: map[v1.ResourceName]deschedulerapi.Percentage{
-								"cpu":    10,
-								"memory": 10,
-								"pods":   10,
-							},
-							TargetThresholds: map[v1.ResourceName]deschedulerapi.Percentage{
-								"cpu":    30,
-								"memory": 30,
-								"pods":   30,
-							},
-						}
-					case deschedulerv1.MediumThreshold:
-						strategy.Params.NodeResourceUtilizationThresholds = &deschedulerapi.NodeResourceUtilizationThresholds{
-							Thresholds: map[v1.ResourceName]deschedulerapi.Percentage{
-								"cpu":    20,
-								"memory": 20,
-								"pods":   20,
-							},
-							TargetThresholds: map[v1.ResourceName]deschedulerapi.Percentage{
-								"cpu":    50,
-								"memory": 50,
-								"pods":   50,
-							},
-						}
-					case deschedulerv1.HighThreshold:
-						strategy.Params.NodeResourceUtilizationThresholds = &deschedulerapi.NodeResourceUtilizationThresholds{
-							Thresholds: map[v1.ResourceName]deschedulerapi.Percentage{
-								"cpu":    40,
-								"memory": 40,
-								"pods":   40,
-							},
-							TargetThresholds: map[v1.ResourceName]deschedulerapi.Percentage{
-								"cpu":    70,
-								"memory": 70,
-								"pods":   70,
-							},
-						}
-					default:
-						return nil, false, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *descheduler.Spec.ProfileCustomizations.DevLowNodeUtilizationThresholds)
-					}
-				}
-			}
-			if len(excludedNamespaces) > 0 || len(includedNamespaces) > 0 {
-				// LowNodeUtilization can only support namespace exclusion
-				if name == "LowNodeUtilization" {
-					strategy.Params.Namespaces = &deschedulerapi.Namespaces{
-						Exclude: excludedNamespaces,
-					}
-					// Other strategies support both exclusions and inclusions
-				} else {
-					strategy.Params.Namespaces = &deschedulerapi.Namespaces{
-						Exclude: excludedNamespaces,
-						Include: includedNamespaces,
-					}
-				}
-			}
-
-			profile.Strategies[name] = strategy
+		var profile *v1alpha2.DeschedulerProfile
+		var err error
+		switch profileName {
+		case deschedulerv1.AffinityAndTaints:
+			profile, err = affinityAndTaintsProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.TopologyAndDuplicates:
+			profile, err = topologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.SoftTopologyAndDuplicates:
+			profile, err = softTopologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.LifecycleAndUtilization:
+			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.EvictPodsWithLocalStorage, deschedulerv1.EvictPodsWithPVC:
+			continue
+		case deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LongLifecycle:
+			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		default:
+			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}
-		mergo.Merge(policy, profile, mergo.WithAppendSlice, mergo.WithOverride)
+		if err != nil {
+			return nil, false, err
+		}
+		policy.Profiles = append(policy.Profiles, *profile)
 	}
 
 	// Check for conflicting kube-scheduler config
@@ -492,36 +766,6 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		(profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) || profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) || profiles.Has(string(deschedulerv1.LongLifecycle))) {
 		// force a new deployment so we can scale it to 0
 		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
-	}
-
-	if descheduler.Spec.ProfileCustomizations != nil {
-		// set PodLifetime if non-default
-		if descheduler.Spec.ProfileCustomizations.PodLifetime != nil {
-			seconds := uint(descheduler.Spec.ProfileCustomizations.PodLifetime.Seconds())
-			if _, ok := policy.Strategies["PodLifeTime"]; ok {
-				policy.Strategies["PodLifeTime"].Params.PodLifeTime.MaxPodLifeTimeSeconds = &seconds
-			}
-		}
-
-		// set priority class threshold if customized
-		if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil && descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
-			return nil, false, fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields")
-		}
-
-		if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil || descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
-			for name, strategy := range policy.Strategies {
-				if strategy.Params == nil {
-					strategy.Params = &deschedulerapi.StrategyParameters{}
-				}
-				if descheduler.Spec.ProfileCustomizations.ThresholdPriority != nil {
-					priority := *descheduler.Spec.ProfileCustomizations.ThresholdPriority
-					policy.Strategies[name].Params.ThresholdPriority = &priority
-				}
-				if descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName != "" {
-					policy.Strategies[name].Params.ThresholdPriorityClassName = descheduler.Spec.ProfileCustomizations.ThresholdPriorityClassName
-				}
-			}
-		}
 	}
 
 	policyBytes, err := yaml.Marshal(policy)

@@ -48,6 +48,10 @@ github.com/fsnotify/fsnotify
 # github.com/ghodss/yaml v1.0.0
 ## explicit
 github.com/ghodss/yaml
+# github.com/go-bindata/go-bindata v3.1.2+incompatible
+## explicit
+github.com/go-bindata/go-bindata
+github.com/go-bindata/go-bindata/go-bindata
 # github.com/go-logr/logr v1.4.1
 ## explicit; go 1.18
 github.com/go-logr/logr
@@ -1409,7 +1413,7 @@ sigs.k8s.io/controller-tools/pkg/webhook
 ## explicit; go 1.22.2
 sigs.k8s.io/descheduler/metrics
 sigs.k8s.io/descheduler/pkg/api
-sigs.k8s.io/descheduler/pkg/api/v1alpha1
+sigs.k8s.io/descheduler/pkg/api/v1alpha2
 sigs.k8s.io/descheduler/pkg/descheduler/evictions
 sigs.k8s.io/descheduler/pkg/descheduler/evictions/utils
 sigs.k8s.io/descheduler/pkg/descheduler/node
@@ -1419,7 +1423,6 @@ sigs.k8s.io/descheduler/pkg/framework/plugins/defaultevictor
 sigs.k8s.io/descheduler/pkg/framework/plugins/nodeutilization
 sigs.k8s.io/descheduler/pkg/framework/plugins/podlifetime
 sigs.k8s.io/descheduler/pkg/framework/plugins/removeduplicates
-sigs.k8s.io/descheduler/pkg/framework/plugins/removefailedpods
 sigs.k8s.io/descheduler/pkg/framework/plugins/removepodshavingtoomanyrestarts
 sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatinginterpodantiaffinity
 sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatingnodeaffinity
