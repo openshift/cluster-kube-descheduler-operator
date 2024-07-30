@@ -1,0 +1,59 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: SoftTopologyAndDuplicates
+  pluginConfig:
+  - args:
+      constraints:
+      - DoNotSchedule
+      - ScheduleAnyway
+      labelSelector: null
+      namespaces:
+        exclude:
+        - openshift-kube-scheduler
+        - kube-system
+        include: []
+      topologyBalanceNodeFit: null
+    name: RemovePodsViolatingTopologySpreadConstraint
+  - args:
+      excludeOwnerKinds: null
+      namespaces:
+        exclude:
+        - openshift-kube-scheduler
+        - kube-system
+        include: []
+    name: RemoveDuplicates
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - RemovePodsViolatingTopologySpreadConstraint
+      - RemoveDuplicates
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

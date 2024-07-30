@@ -21,355 +21,11 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-const podLifeTimeConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: true
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 50
-          memory: 50
-          pods: 50
-        thresholds:
-          cpu: 20
-          memory: 20
-          pods: 20
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 300
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-`
-
-const podLifeTimeWithThresholdPriorityClassNameConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: true
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 50
-          memory: 50
-          pods: 50
-        thresholds:
-          cpu: 20
-          memory: 20
-          pods: 20
-      thresholdPriority: null
-      thresholdPriorityClassName: className
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      thresholdPriority: null
-      thresholdPriorityClassName: className
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: null
-      thresholdPriorityClassName: className
-`
-
-const podLifeTimeWithThresholdPriorityConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: true
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 50
-          memory: 50
-          pods: 50
-        thresholds:
-          cpu: 20
-          memory: 20
-          pods: 20
-      thresholdPriority: 1000
-      thresholdPriorityClassName: ""
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      thresholdPriority: 1000
-      thresholdPriorityClassName: ""
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: 1000
-      thresholdPriorityClassName: ""
-`
-
-const evictPvcPodsConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: false
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 50
-          memory: 50
-          pods: 50
-        thresholds:
-          cpu: 20
-          memory: 20
-          pods: 20
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-`
-
-const lowNodeUtilizationLowConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: true
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 30
-          memory: 30
-          pods: 30
-        thresholds:
-          cpu: 10
-          memory: 10
-          pods: 10
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-`
-
-const lowNodeUtilizationMediumConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: true
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 50
-          memory: 50
-          pods: 50
-        thresholds:
-          cpu: 20
-          memory: 20
-          pods: 20
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-`
-
-const lowNodeUtilizationHighConfig = `apiVersion: descheduler/v1alpha1
-ignorePvcPods: true
-kind: DeschedulerPolicy
-strategies:
-  LowNodeUtilization:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      nodeResourceUtilizationThresholds:
-        targetThresholds:
-          cpu: 70
-          memory: 70
-          pods: 70
-        thresholds:
-          cpu: 40
-          memory: 40
-          pods: 40
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  PodLifeTime:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-  RemovePodsHavingTooManyRestarts:
-    enabled: true
-    params:
-      includePreferNoSchedule: false
-      includeSoftConstraints: false
-      labelSelector: null
-      namespaces: null
-      nodeFit: false
-      podsHavingTooManyRestarts:
-        includingInitContainers: true
-        podRestartThreshold: 100
-      thresholdPriority: null
-      thresholdPriorityClassName: ""
-`
+var configLowNodeUtilization = &configv1.Scheduler{
+	Spec: configv1.SchedulerSpec{Policy: configv1.ConfigMapNameReference{Name: ""},
+		Profile: configv1.LowNodeUtilization,
+	},
+}
 
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
@@ -401,7 +57,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": podLifeTimeConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
 			},
 		},
 		{
@@ -421,7 +77,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": evictPvcPodsConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
 			},
 		},
 		{
@@ -442,7 +98,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": podLifeTimeWithThresholdPriorityClassNameConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
 			},
 		},
 		{
@@ -463,7 +119,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": podLifeTimeWithThresholdPriorityConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
 			},
 		},
 		{
@@ -484,7 +140,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": lowNodeUtilizationLowConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationLowConfig.yaml"))},
 			},
 		},
 		{
@@ -505,7 +161,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": lowNodeUtilizationMediumConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationMediumConfig.yaml"))},
 			},
 		},
 		{
@@ -525,7 +181,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": lowNodeUtilizationMediumConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationMediumConfig.yaml"))},
 			},
 		},
 		{
@@ -546,25 +202,133 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": lowNodeUtilizationHighConfig},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationHighConfig.yaml"))},
+			},
+		},
+		{
+			name: "AffinityAndTaintsWithNamespaces",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"AffinityAndTaints"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
+						Included: []string{"includedNamespace"},
+					}},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/affinityAndTaintsWithNamespaces.yaml"))},
+			},
+		},
+		{
+			name: "LongLifecycleWithNamespaces",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
+						Included: []string{"includedNamespace"},
+					}},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/longLifecycleWithNamespaces.yaml"))},
+			},
+		},
+		{
+			name: "LongLifecycleWithLocalStorage",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle", "EvictPodsWithLocalStorage"},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/longLifecycleWithLocalStorage.yaml"))},
+			},
+		},
+		{
+			name: "SoftTopologyAndDuplicates",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates"},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/softTopologyAndDuplicates.yaml"))},
+			},
+		},
+		{
+			name: "TopologyAndDuplicates",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"TopologyAndDuplicates"},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/topologyAndDuplicates.yaml"))},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, _ := tt.targetConfigReconciler.manageConfigMap(tt.descheduler)
+			got, _, err := tt.targetConfigReconciler.manageConfigMap(tt.descheduler)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
+			}
 			if !apiequality.Semantic.DeepEqual(tt.want.Data, got.Data) {
 				t.Errorf("manageConfigMap diff \n\n %+v", cmp.Diff(tt.want.Data, got.Data))
 			}
 		})
 	}
-}
-
-var configLowNodeUtilization = &configv1.Scheduler{
-	Spec: configv1.SchedulerSpec{Policy: configv1.ConfigMapNameReference{Name: ""},
-		Profile: configv1.LowNodeUtilization,
-	},
 }
 
 // A scheduler configuration lister
