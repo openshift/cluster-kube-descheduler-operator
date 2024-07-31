@@ -253,6 +253,14 @@ spec:
           - get
           - watch
           - list
+        - apiGroups:
+          - ""
+          resources:
+          - endpoints
+          verbs:
+          - get
+          - watch
+          - list
       deployments:
       - name: descheduler-operator
         spec:
