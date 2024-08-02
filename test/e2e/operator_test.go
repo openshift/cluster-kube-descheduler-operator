@@ -47,6 +47,11 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	operator_image := "pipeline:cluster-kube-descheduler-operator"
+	if os.Getenv("OPERATOR_IMAGE") != "" {
+		operator_image = os.Getenv("OPERATOR_IMAGE")
+	}
+
 	kubeClient := getKubeClientOrDie()
 	apiExtClient := getApiExtensionKubeClient()
 	deschClient := getDeschedulerClient()
@@ -104,7 +109,7 @@ func TestMain(m *testing.M) {
 				// E.g. RELEASE_IMAGE_LATEST=registry.build03.ci.openshift.org/ci-op-52fj47p4/stable:${component}
 				registry := strings.Split(os.Getenv("RELEASE_IMAGE_LATEST"), "/")[0]
 
-				required.Spec.Template.Spec.Containers[0].Image = registry + "/" + os.Getenv("NAMESPACE") + "/pipeline:cluster-kube-descheduler-operator"
+				required.Spec.Template.Spec.Containers[0].Image = registry + "/" + os.Getenv("NAMESPACE") + "/" + operator_image
 				// OPERAND_IMAGE env
 				for i, env := range required.Spec.Template.Spec.Containers[0].Env {
 					if env.Name == "RELATED_IMAGE_OPERAND_IMAGE" {

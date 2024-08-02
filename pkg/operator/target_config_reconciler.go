@@ -131,12 +131,12 @@ func (c TargetConfigReconciler) sync() error {
 		"kubedeschedulers.operator.openshift.io/cluster": strconv.FormatInt(descheduler.Generation, 10),
 	}
 
-	configMap, forceDeployment, err := c.manageConfigMap(descheduler)
-	if err != nil {
+	configMap, forceDeployment, manageConfigMapErr := c.manageConfigMap(descheduler)
+	if manageConfigMapErr != nil {
 		// if we returned an error from the configmap AND want to force a deployment
 		// it means we want to scale the deployment to 0
 		if forceDeployment {
-			klog.ErrorS(err, "Error managing targetConfig")
+			klog.ErrorS(manageConfigMapErr, "Error managing targetConfig")
 			_, err = c.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).UpdateScale(
 				c.ctx,
 				operatorclient.OperandName,
@@ -157,6 +157,7 @@ func (c TargetConfigReconciler) sync() error {
 				v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
 					Type:   "TargetConfigControllerDegraded",
 					Status: operatorv1.ConditionTrue,
+					Reason: manageConfigMapErr.Error(),
 				}))
 		}
 		return err
@@ -662,6 +663,90 @@ func longLifecycleProfile(profileCustomizations *deschedulerv1.ProfileCustomizat
 	return profile, err
 }
 
+func compactAndScaleProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile := &v1alpha2.DeschedulerProfile{
+		Name: string(deschedulerv1.CompactAndScale),
+		PluginConfigs: []v1alpha2.PluginConfig{
+			{
+				Name: nodeutilization.HighNodeUtilizationPluginName,
+				Args: runtime.RawExtension{
+					Object: &nodeutilization.HighNodeUtilizationArgs{
+						Thresholds: deschedulerapi.ResourceThresholds{
+							v1.ResourceCPU:    20,
+							v1.ResourceMemory: 20,
+							v1.ResourcePods:   20,
+						},
+					},
+				},
+			},
+			{
+				Name: defaultevictor.PluginName,
+				Args: runtime.RawExtension{
+					Object: &defaultevictor.DefaultEvictorArgs{
+						IgnorePvcPods:         ignorePVCPods,
+						EvictLocalStoragePods: evictLocalStoragePods,
+					},
+				},
+			},
+		},
+		Plugins: v1alpha2.Plugins{
+			Filter: v1alpha2.PluginSet{
+				Enabled: []string{
+					defaultevictor.PluginName,
+				},
+			},
+			Balance: v1alpha2.PluginSet{
+				Enabled: []string{
+					nodeutilization.HighNodeUtilizationPluginName,
+				},
+			},
+		},
+	}
+
+	// exclude openshift namespaces from descheduling
+	if len(includedNamespaces) > 0 || len(excludedNamespaces) > 0 {
+		if len(includedNamespaces) > 0 {
+			// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
+			klog.Warning("HighNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime)")
+		}
+		if len(excludedNamespaces) > 0 {
+			profile.PluginConfigs[0].Args.Object.(*nodeutilization.HighNodeUtilizationArgs).EvictableNamespaces = &deschedulerapi.Namespaces{
+				Exclude: excludedNamespaces,
+			}
+		}
+	}
+
+	if profileCustomizations == nil {
+		return profile, nil
+	}
+
+	if profileCustomizations.DevHighNodeUtilizationThresholds != nil {
+		args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.HighNodeUtilizationArgs)
+		switch *profileCustomizations.DevHighNodeUtilizationThresholds {
+		case deschedulerv1.CompactMinimalThreshold:
+			args.Thresholds[v1.ResourceCPU] = 10
+			args.Thresholds[v1.ResourceMemory] = 10
+			args.Thresholds[v1.ResourcePods] = 10
+		case deschedulerv1.CompactModestThreshold:
+			args.Thresholds[v1.ResourceCPU] = 20
+			args.Thresholds[v1.ResourceMemory] = 20
+			args.Thresholds[v1.ResourcePods] = 20
+		case deschedulerv1.CompactModerateThreshold:
+			args.Thresholds[v1.ResourceCPU] = 30
+			args.Thresholds[v1.ResourceMemory] = 30
+			args.Thresholds[v1.ResourcePods] = 30
+		default:
+			return nil, fmt.Errorf("unknown Descheduler HighNodeUtilization threshold %v, only 'Minimal', 'Modest' and 'Moderate' are supported", *profileCustomizations.DevHighNodeUtilizationThresholds)
+		}
+	}
+
+	if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[1]); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
 	required := resourceread.ReadConfigMapV1OrDie(bindata.MustAsset("assets/kube-descheduler/configmap.yaml"))
 	required.Name = descheduler.Name
@@ -752,6 +837,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			continue
 		case deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LongLifecycle:
 			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.CompactAndScale:
+			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}
@@ -766,6 +853,12 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		(profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) || profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) || profiles.Has(string(deschedulerv1.LongLifecycle))) {
 		// force a new deployment so we can scale it to 0
 		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
+	}
+
+	if scheduler.Spec.Profile == configv1.LowNodeUtilization &&
+		profiles.Has(string(deschedulerv1.CompactAndScale)) {
+		// force a new deployment so we can scale it to 0
+		return nil, true, fmt.Errorf("enabling Descheduler CompactAndScale with Scheduler LowNodeUtilization may cause an eviction/scheduling hot loop")
 	}
 
 	policyBytes, err := yaml.Marshal(policy)
@@ -796,6 +889,22 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 
 	if profiles.Has(string(deschedulerv1.SoftTopologyAndDuplicates)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.TopologyAndDuplicates, deschedulerv1.SoftTopologyAndDuplicates)
+	}
+
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.LifecycleAndUtilization)
+	}
+
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.LongLifecycle)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.LongLifecycle)
+	}
+
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.DevPreviewLongLifecycle)
+	}
+
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.TopologyAndDuplicates)
 	}
 	return nil
 }
