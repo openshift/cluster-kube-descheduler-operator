@@ -66,6 +66,11 @@ type ProfileCustomizations struct {
 	// LowNodeUtilizationThresholds enumerates predefined experimental thresholds
 	// +kubebuilder:default=Medium
 	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
+
+	// HighNodeUtilizationThresholds enumerates thresholds for node utilization levels.
+	// The threshold values are subject to change.
+	// +kubebuilder:validation:Enum=Minimal;Modest;Moderate;""
+	HighNodeUtilizationThresholds *HighNodeUtilizationThresholdsType `json:"highNodeUtilizationThresholds"`
 }
 
 type LowNodeUtilizationThresholdsType string
@@ -81,6 +86,22 @@ var (
 	HighThreshold LowNodeUtilizationThresholdsType = "High"
 )
 
+type HighNodeUtilizationThresholdsType string
+
+var (
+	// CompactLowThreshold sets thresholds to 10% ratio.
+	// The threshold value is subject to change.
+	CompactMinimalThreshold HighNodeUtilizationThresholdsType = "Minimal"
+
+	// CompactMediumThreshold sets thresholds to 20% ratio.
+	// The threshold value is subject to change.
+	CompactModestThreshold HighNodeUtilizationThresholdsType = "Modest"
+
+	// CompactHighThreshold sets thresholds to 30% ratio.
+	// The threshold value is subject to change.
+	CompactModerateThreshold HighNodeUtilizationThresholdsType = "Moderate"
+)
+
 // Namespaces overrides included and excluded namespaces while keeping
 // the default exclusion of all openshift-*, kube-system and hypershift namespaces
 type Namespaces struct {
@@ -90,7 +111,7 @@ type Namespaces struct {
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
 // it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
-// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;LongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;LongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC;CompactAndScale
 type DeschedulerProfile string
 
 var (
@@ -121,6 +142,9 @@ var (
 
 	// LongLifecycle handles cluster lifecycle over a long term
 	LongLifecycle DeschedulerProfile = "LongLifecycle"
+
+	// CompactAndScale seeks to evict pods to enable the same workload to run on a smaller set of nodes.
+	CompactAndScale DeschedulerProfile = "CompactAndScale"
 )
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler

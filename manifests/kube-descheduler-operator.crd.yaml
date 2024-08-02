@@ -102,6 +102,16 @@ spec:
                     description: LowNodeUtilizationThresholds enumerates predefined
                       experimental thresholds
                     type: string
+                  highNodeUtilizationThresholds:
+                    description: |-
+                      HighNodeUtilizationThresholds enumerates thresholds for node utilization levels.
+                      The threshold values are subject to change.
+                    enum:
+                    - Minimal
+                    - Modest
+                    - Moderate
+                    - ""
+                    type: string
                   namespaces:
                     description: |-
                       Namespaces overrides included and excluded namespaces while keeping
@@ -150,6 +160,7 @@ spec:
                   - SoftTopologyAndDuplicates
                   - EvictPodsWithLocalStorage
                   - EvictPodsWithPVC
+                  - CompactAndScale
                   type: string
                 type: array
               unsupportedConfigOverrides:

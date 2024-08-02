@@ -127,6 +127,7 @@ rules:
   resources:
   - infrastructures
   - apiservers
+  - featuregates
   verbs:
   - get
   - watch

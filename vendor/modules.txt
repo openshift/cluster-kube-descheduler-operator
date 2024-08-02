@@ -278,6 +278,7 @@ github.com/openshift/client-go/config/listers/config/v1alpha1
 github.com/openshift/library-go/pkg/authorization/hardcodedauthorizer
 github.com/openshift/library-go/pkg/certs
 github.com/openshift/library-go/pkg/config/client
+github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
 github.com/openshift/library-go/pkg/config/clusterstatus
 github.com/openshift/library-go/pkg/config/configdefaults
 github.com/openshift/library-go/pkg/config/leaderelection
@@ -292,6 +293,7 @@ github.com/openshift/library-go/pkg/operator/certrotation
 github.com/openshift/library-go/pkg/operator/condition
 github.com/openshift/library-go/pkg/operator/configobserver
 github.com/openshift/library-go/pkg/operator/configobserver/apiserver
+github.com/openshift/library-go/pkg/operator/configobserver/featuregates
 github.com/openshift/library-go/pkg/operator/events
 github.com/openshift/library-go/pkg/operator/loglevel
 github.com/openshift/library-go/pkg/operator/management
@@ -300,6 +302,7 @@ github.com/openshift/library-go/pkg/operator/resource/resourcehelper
 github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
+github.com/openshift/library-go/pkg/operator/status
 github.com/openshift/library-go/pkg/operator/v1helpers
 github.com/openshift/library-go/pkg/serviceability
 # github.com/pkg/errors v0.9.1
