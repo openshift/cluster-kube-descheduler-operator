@@ -48,17 +48,17 @@ metadata:
     categories: OpenShift Optional
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
 spec:
-  replaces: clusterkubedescheduleroperator.5.0.0
+  replaces: clusterkubedescheduleroperator.v5.0.0
   # buffering up to 6 5.0.z releases to allow to include these in all supported bundle index images
   # The buffer len 6 should be sufficient for normal cadance. Including CVE releases.
   # The buffer can be extened later as needed.
   skips:
-  - clusterkubedescheduleroperator.5.0.1
-  - clusterkubedescheduleroperator.5.0.2
-  - clusterkubedescheduleroperator.5.0.3
-  - clusterkubedescheduleroperator.5.0.4
-  - clusterkubedescheduleroperator.5.0.5
-  - clusterkubedescheduleroperator.5.0.6
+  - clusterkubedescheduleroperator.v5.0.1
+  - clusterkubedescheduleroperator.v5.0.2
+  - clusterkubedescheduleroperator.v5.0.3
+  - clusterkubedescheduleroperator.v5.0.4
+  - clusterkubedescheduleroperator.v5.0.5
+  - clusterkubedescheduleroperator.v5.0.6
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
