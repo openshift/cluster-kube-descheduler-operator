@@ -158,6 +158,7 @@ the `profileCustomizations` field:
 
 |Name|Type|Description|
 |---|---|---|
+|`featureGates`|`[]string`|List of enabled feature gates. Accepted values are: `EvictionsInBackground`. https://github.com/kubernetes-sigs/descheduler/tree/master/keps/ for more about existing features|
 |`podLifetime`|`time.Duration`|Sets the lifetime value for pods evicted by the `LifecycleAndUtilization` profile|
 |`thresholdPriorityClassName`|`string`|Sets the priority class threshold by name for all strategies|
 |`thresholdPriority`|`string`|Sets the priority class threshold by value for all strategies|

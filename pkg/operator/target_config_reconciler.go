@@ -819,6 +819,22 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 	required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args,
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
 
+	featureGates := []string{}
+	if descheduler.Spec.ProfileCustomizations != nil {
+		for _, fg := range descheduler.Spec.ProfileCustomizations.FeatureGates {
+			switch fg {
+			case deschedulerv1.EvictionsInBackground:
+				featureGates = append(featureGates, "EvictionsInBackground=true")
+			default:
+				return nil, false, fmt.Errorf("unknown feature gate %q", fg)
+			}
+		}
+	}
+
+	if len(featureGates) > 0 {
+		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("--feature-gates=%s", strings.Join(featureGates, ",")))
+	}
+
 	var observedConfig map[string]interface{}
 	if err := yaml.Unmarshal(descheduler.Spec.ObservedConfig.Raw, &observedConfig); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal the observedConfig: %v", err)

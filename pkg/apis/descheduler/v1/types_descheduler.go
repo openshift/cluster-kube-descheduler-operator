@@ -46,6 +46,10 @@ type KubeDeschedulerSpec struct {
 
 // ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
 type ProfileCustomizations struct {
+	// FeatureGates consists of a list of all enabled feature gates.
+	// Depending on which feature gate is enabled, the operator can adjust some of the default configurations for the corresponding features.
+	FeatureGates []FeatureGate `json:"featureGates,omitempty"`
+
 	// PodLifetime is the length of time after which pods should be evicted
 	// This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
 	// +kubebuilder:validation:Format=duration
@@ -67,6 +71,13 @@ type ProfileCustomizations struct {
 	// +kubebuilder:default=Medium
 	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
 }
+
+// +kubebuilder:validation:Enum=EvictionsInBackground
+type FeatureGate string
+
+const (
+	EvictionsInBackground FeatureGate = "EvictionsInBackground"
+)
 
 type LowNodeUtilizationThresholdsType string
 
