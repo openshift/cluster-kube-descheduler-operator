@@ -9,10 +9,13 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
+	utilptr "k8s.io/utils/ptr"
 
 	configv1 "github.com/openshift/api/config/v1"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -326,6 +329,148 @@ func TestManageConfigMap(t *testing.T) {
 			}
 			if !apiequality.Semantic.DeepEqual(tt.want.Data, got.Data) {
 				t.Errorf("manageConfigMap diff \n\n %+v", cmp.Diff(tt.want.Data, got.Data))
+			}
+		})
+	}
+}
+
+func TestManageDeployment(t *testing.T) {
+	fakeRecorder := NewFakeRecorder(1024)
+	tests := []struct {
+		name                   string
+		targetConfigReconciler *TargetConfigReconciler
+		want                   *appsv1.Deployment
+		descheduler            *deschedulerv1.KubeDescheduler
+		checkContainerOnly     bool
+		checkContainerArgsOnly bool
+	}{
+		{
+			name: "NoFeatureGates",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+				},
+			},
+			checkContainerOnly: true,
+			want: &appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "openshift-descheduler",
+									Image: "",
+									SecurityContext: &corev1.SecurityContext{
+										AllowPrivilegeEscalation: utilptr.To[bool](false),
+										ReadOnlyRootFilesystem:   utilptr.To[bool](true),
+										Capabilities: &corev1.Capabilities{
+											Drop: []corev1.Capability{"ALL"},
+										},
+									},
+									Resources: corev1.ResourceRequirements{
+										Requests: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("100m"),
+											corev1.ResourceMemory: resource.MustParse("500Mi"),
+										},
+									},
+									Command: []string{"/bin/descheduler"},
+									Args: []string{
+										"--policy-config-file=/policy-dir/policy.yaml",
+										"--logging-format=text",
+										"--tls-cert-file=/certs-dir/tls.crt",
+										"--tls-private-key-file=/certs-dir/tls.key",
+										"--descheduling-interval=10s",
+										"-v=2",
+									},
+									VolumeMounts: []corev1.VolumeMount{
+										{
+											Name:      "policy-volume",
+											MountPath: "/policy-dir",
+										},
+										{
+											Name:      "certs-dir",
+											MountPath: "/certs-dir",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "EvictionsInBackground",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{DevEnableEvictionsInBackground: true},
+				},
+			},
+			checkContainerOnly:     true,
+			checkContainerArgsOnly: true,
+			want: &appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Args: []string{
+										"--policy-config-file=/policy-dir/policy.yaml",
+										"--logging-format=text",
+										"--tls-cert-file=/certs-dir/tls.crt",
+										"--tls-private-key-file=/certs-dir/tls.key",
+										"--descheduling-interval=10s",
+										"--feature-gates=EvictionsInBackground=true",
+										"-v=2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _, err := tt.targetConfigReconciler.manageDeployment(tt.descheduler, nil)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
+			}
+			if tt.checkContainerOnly {
+				if tt.checkContainerArgsOnly {
+					if !apiequality.Semantic.DeepEqual(tt.want.Spec.Template.Spec.Containers[0].Args, got.Spec.Template.Spec.Containers[0].Args) {
+						t.Errorf("manageDeployment diff \n\n %+v", cmp.Diff(tt.want.Spec.Template.Spec.Containers[0].Args, got.Spec.Template.Spec.Containers[0].Args))
+					}
+				} else {
+					if !apiequality.Semantic.DeepEqual(tt.want.Spec.Template.Spec.Containers[0], got.Spec.Template.Spec.Containers[0]) {
+						t.Errorf("manageDeployment diff \n\n %+v", cmp.Diff(tt.want.Spec.Template.Spec.Containers[0], got.Spec.Template.Spec.Containers[0]))
+					}
+				}
+			} else {
+				if !apiequality.Semantic.DeepEqual(tt.want, got) {
+					t.Errorf("manageDeployment diff \n\n %+v", cmp.Diff(tt.want, got))
+				}
 			}
 		})
 	}
