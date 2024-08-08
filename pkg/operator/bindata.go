@@ -1,6 +1,10 @@
 // Code generated for package operator by go-bindata DO NOT EDIT. (@generated)
 // sources:
 // pkg/operator/testdata/affinityAndTaintsWithNamespaces.yaml
+// pkg/operator/testdata/highNodeUtilization.yaml
+// pkg/operator/testdata/highNodeUtilizationMinimal.yaml
+// pkg/operator/testdata/highNodeUtilizationModerate.yaml
+// pkg/operator/testdata/highNodeUtilizationWithNamespaces.yaml
 // pkg/operator/testdata/lifecycleAndUtilizationEvictPvcPodsConfig.yaml
 // pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml
 // pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml
@@ -144,6 +148,270 @@ func pkgOperatorTestdataAffinityandtaintswithnamespacesYaml() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "pkg/operator/testdata/affinityAndTaintsWithNamespaces.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _pkgOperatorTestdataHighnodeutilizationYaml = []byte(`apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: CompactAndScale
+  pluginConfig:
+  - args:
+      evictableNamespaces:
+        exclude:
+        - openshift-kube-scheduler
+        - kube-system
+        include: null
+      numberOfNodes: 0
+      thresholds:
+        cpu: 20
+        memory: 20
+        pods: 20
+    name: HighNodeUtilization
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - HighNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
+`)
+
+func pkgOperatorTestdataHighnodeutilizationYamlBytes() ([]byte, error) {
+	return _pkgOperatorTestdataHighnodeutilizationYaml, nil
+}
+
+func pkgOperatorTestdataHighnodeutilizationYaml() (*asset, error) {
+	bytes, err := pkgOperatorTestdataHighnodeutilizationYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "pkg/operator/testdata/highNodeUtilization.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _pkgOperatorTestdataHighnodeutilizationminimalYaml = []byte(`apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: CompactAndScale
+  pluginConfig:
+  - args:
+      evictableNamespaces:
+        exclude:
+        - openshift-kube-scheduler
+        - kube-system
+        include: null
+      numberOfNodes: 0
+      thresholds:
+        cpu: 10
+        memory: 10
+        pods: 10
+    name: HighNodeUtilization
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - HighNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
+`)
+
+func pkgOperatorTestdataHighnodeutilizationminimalYamlBytes() ([]byte, error) {
+	return _pkgOperatorTestdataHighnodeutilizationminimalYaml, nil
+}
+
+func pkgOperatorTestdataHighnodeutilizationminimalYaml() (*asset, error) {
+	bytes, err := pkgOperatorTestdataHighnodeutilizationminimalYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "pkg/operator/testdata/highNodeUtilizationMinimal.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _pkgOperatorTestdataHighnodeutilizationmoderateYaml = []byte(`apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: CompactAndScale
+  pluginConfig:
+  - args:
+      evictableNamespaces:
+        exclude:
+        - openshift-kube-scheduler
+        - kube-system
+        include: null
+      numberOfNodes: 0
+      thresholds:
+        cpu: 30
+        memory: 30
+        pods: 30
+    name: HighNodeUtilization
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - HighNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
+`)
+
+func pkgOperatorTestdataHighnodeutilizationmoderateYamlBytes() ([]byte, error) {
+	return _pkgOperatorTestdataHighnodeutilizationmoderateYaml, nil
+}
+
+func pkgOperatorTestdataHighnodeutilizationmoderateYaml() (*asset, error) {
+	bytes, err := pkgOperatorTestdataHighnodeutilizationmoderateYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "pkg/operator/testdata/highNodeUtilizationModerate.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _pkgOperatorTestdataHighnodeutilizationwithnamespacesYaml = []byte(`apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: CompactAndScale
+  pluginConfig:
+  - args:
+      evictableNamespaces: null
+      numberOfNodes: 0
+      thresholds:
+        cpu: 20
+        memory: 20
+        pods: 20
+    name: HighNodeUtilization
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - HighNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
+`)
+
+func pkgOperatorTestdataHighnodeutilizationwithnamespacesYamlBytes() ([]byte, error) {
+	return _pkgOperatorTestdataHighnodeutilizationwithnamespacesYaml, nil
+}
+
+func pkgOperatorTestdataHighnodeutilizationwithnamespacesYaml() (*asset, error) {
+	bytes, err := pkgOperatorTestdataHighnodeutilizationwithnamespacesYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "pkg/operator/testdata/highNodeUtilizationWithNamespaces.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -1100,6 +1368,10 @@ func AssetNames() []string {
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
 	"pkg/operator/testdata/affinityAndTaintsWithNamespaces.yaml":                                        pkgOperatorTestdataAffinityandtaintswithnamespacesYaml,
+	"pkg/operator/testdata/highNodeUtilization.yaml":                                                    pkgOperatorTestdataHighnodeutilizationYaml,
+	"pkg/operator/testdata/highNodeUtilizationMinimal.yaml":                                             pkgOperatorTestdataHighnodeutilizationminimalYaml,
+	"pkg/operator/testdata/highNodeUtilizationModerate.yaml":                                            pkgOperatorTestdataHighnodeutilizationmoderateYaml,
+	"pkg/operator/testdata/highNodeUtilizationWithNamespaces.yaml":                                      pkgOperatorTestdataHighnodeutilizationwithnamespacesYaml,
 	"pkg/operator/testdata/lifecycleAndUtilizationEvictPvcPodsConfig.yaml":                              pkgOperatorTestdataLifecycleandutilizationevictpvcpodsconfigYaml,
 	"pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml":                  pkgOperatorTestdataLifecycleandutilizationpodlifetimecustomizationconfigYaml,
 	"pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml": pkgOperatorTestdataLifecycleandutilizationpodlifetimewiththresholdpriorityclassnameconfigYaml,
@@ -1160,6 +1432,10 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"operator": {nil, map[string]*bintree{
 			"testdata": {nil, map[string]*bintree{
 				"affinityAndTaintsWithNamespaces.yaml":                                        {pkgOperatorTestdataAffinityandtaintswithnamespacesYaml, map[string]*bintree{}},
+				"highNodeUtilization.yaml":                                                    {pkgOperatorTestdataHighnodeutilizationYaml, map[string]*bintree{}},
+				"highNodeUtilizationMinimal.yaml":                                             {pkgOperatorTestdataHighnodeutilizationminimalYaml, map[string]*bintree{}},
+				"highNodeUtilizationModerate.yaml":                                            {pkgOperatorTestdataHighnodeutilizationmoderateYaml, map[string]*bintree{}},
+				"highNodeUtilizationWithNamespaces.yaml":                                      {pkgOperatorTestdataHighnodeutilizationwithnamespacesYaml, map[string]*bintree{}},
 				"lifecycleAndUtilizationEvictPvcPodsConfig.yaml":                              {pkgOperatorTestdataLifecycleandutilizationevictpvcpodsconfigYaml, map[string]*bintree{}},
 				"lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml":                  {pkgOperatorTestdataLifecycleandutilizationpodlifetimecustomizationconfigYaml, map[string]*bintree{}},
 				"lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml": {pkgOperatorTestdataLifecycleandutilizationpodlifetimewiththresholdpriorityclassnameconfigYaml, map[string]*bintree{}},
