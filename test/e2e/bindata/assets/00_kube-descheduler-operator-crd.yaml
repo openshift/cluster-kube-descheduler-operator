@@ -94,6 +94,16 @@ spec:
                       alpha feature is a subject to change. Currently provided as
                       an experimental feature.
                     type: boolean
+                  devHighNodeUtilizationThresholds:
+                    description: devHighNodeUtilizationThresholds enumerates thresholds
+                      for node utilization levels. The threshold values are subject
+                      to change. Currently provided as an experimental feature.
+                    enum:
+                    - Minimal
+                    - Modest
+                    - Moderate
+                    - ""
+                    type: string
                   devLowNodeUtilizationThresholds:
                     default: Medium
                     description: LowNodeUtilizationThresholds enumerates predefined
@@ -147,6 +157,7 @@ spec:
                   - SoftTopologyAndDuplicates
                   - EvictPodsWithLocalStorage
                   - EvictPodsWithPVC
+                  - CompactAndScale
                   type: string
                 type: array
               unsupportedConfigOverrides:

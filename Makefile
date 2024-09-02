@@ -45,6 +45,7 @@ $(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests,./manifests
 $(call add-bindata,operator,./pkg/operator/testdata/...,,operator,pkg/operator/bindata.go)
 
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
+test-e2e: GO_TEST_ARGS :=-v
 test-e2e: test-unit
 .PHONY: test-e2e
 

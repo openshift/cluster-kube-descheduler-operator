@@ -1,0 +1,46 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: CompactAndScale
+  pluginConfig:
+  - args:
+      evictableNamespaces: null
+      numberOfNodes: 0
+      thresholds:
+        cpu: 20
+        memory: 20
+        pods: 20
+    name: HighNodeUtilization
+  - args:
+      evictDaemonSetPods: false
+      evictFailedBarePods: false
+      evictLocalStoragePods: false
+      evictSystemCriticalPods: false
+      ignorePvcPods: true
+      labelSelector: null
+      minReplicas: 0
+      nodeFit: false
+      nodeSelector: ""
+      priorityThreshold: null
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - HighNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

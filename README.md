@@ -102,9 +102,10 @@ The following profiles are currently provided:
 * [`TopologyAndDuplicates`](#TopologyAndDuplicates)
 * [`SoftTopologyAndDuplicates`](#SoftTopologyAndDuplicates)
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
+* [`LongLifecycle`](#LongLifecycle)
+* [`CompactAndScale`](#compactandscale-techpreview)
 * [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
-* [`LongLifecycle`](#LongLifecycle)
 
 Each of these enables cluster-wide descheduling (excluding openshift and kube-system namespaces) based on certain goals.
 
@@ -140,6 +141,14 @@ may be made available through the operator for these strategies based on user fe
 This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running
 clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
 
+### CompactAndScale
+This profile seeks to evict pods to enable the same workload to run on a smaller set of nodes.
+It will attempts to evict pods from "under utilized" nodes that can fit into fewer nodes.
+An under utilized node is any node consuming less than 20% of its available cpu, memory, *and* pod capacity.
+
+This profile enables the [`HighNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#highnodeutilization) strategy.
+In the future, more configuration may be made available through the operator based on user feedback.
+
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
 profile in combination with any of the above profiles allows pods with PVCs to be
@@ -164,6 +173,7 @@ the `profileCustomizations` field:
 |`namespaces.included`, `namespaces.excluded`|`[]string`| Sets the included/excluded namespaces for all strategies (included namespaces are not allowed to include protected namespaces which consist of `kube-system`, `hypershift` and all `openshift-` prefixed namespaces)|
 | `devLowNodeUtilizationThresholds` | `string` | Sets experimental thresholds for the [LowNodeUtilization](https://github.com/kubernetes-sigs/descheduler#lownodeutilization) strategy of the `LifecycleAndUtilization` profile in the following ratios: `Low` for 10%:30%, `Medium` for 20%:50%, `High` for 40%:70%|
 |`devEnableEvictionsInBackground`|`bool`| Enables descheduler's EvictionsInBackground alpha feature. The EvictionsInBackground alpha feature is a subject to change. Currently provided as an experimental feature.|
+| `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
 
 ## Descheduling modes
 The operator provides two modes of eviction:

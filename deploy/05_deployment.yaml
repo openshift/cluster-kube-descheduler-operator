@@ -41,9 +41,9 @@ spec:
             - name: OPERATOR_NAME
               value: "descheduler-operator"
             - name: RELATED_IMAGE_OPERAND_IMAGE
-              value: quay.io/openshift/origin-descheduler:4.17
+              value: quay.io/openshift/origin-descheduler:latest
             - name: OPERAND_VERSION
-              value: 5.0.1
+              value: 5.1.0
           volumeMounts:
           - name: tmp
             mountPath: "/tmp"
