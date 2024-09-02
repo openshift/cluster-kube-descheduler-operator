@@ -66,6 +66,11 @@ type ProfileCustomizations struct {
 	// LowNodeUtilizationThresholds enumerates predefined experimental thresholds
 	// +kubebuilder:default=Medium
 	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
+
+	// DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
+	// The EvictionsInBackground alpha feature is a subject to change.
+	// Currently provided as an experimental feature.
+	DevEnableEvictionsInBackground bool `json:"devEnableEvictionsInBackground,omitempty"`
 }
 
 type LowNodeUtilizationThresholdsType string

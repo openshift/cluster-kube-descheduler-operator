@@ -97,6 +97,12 @@ spec:
                 description: ProfileCustomizations contains various parameters for
                   modifying the default behavior of certain profiles
                 properties:
+                  devEnableEvictionsInBackground:
+                    description: DevEnableEvictionsInBackground enables descheduler's
+                      EvictionsInBackground alpha feature. The EvictionsInBackground
+                      alpha feature is a subject to change. Currently provided as
+                      an experimental feature.
+                    type: boolean
                   devLowNodeUtilizationThresholds:
                     default: Medium
                     description: LowNodeUtilizationThresholds enumerates predefined
