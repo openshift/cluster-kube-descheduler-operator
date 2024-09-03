@@ -35,6 +35,9 @@ type KubeDeschedulerSpec struct {
 	// +optional
 	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds,omitempty"`
 
+	// evictionLimits restrict the number of evictions during each descheduling run
+	EvictionLimits *EvictionLimits `json:"evictionLimits,omitempty"`
+
 	// ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
 	ProfileCustomizations *ProfileCustomizations `json:"profileCustomizations,omitempty"`
 
@@ -42,6 +45,11 @@ type KubeDeschedulerSpec struct {
 	// +optional
 	// +kubebuilder:default=Predictive
 	Mode Mode `json:"mode"`
+}
+
+type EvictionLimits struct {
+	// total restricts the maximum number of overall evictions
+	Total *int32 `json:"total,omitempty"`
 }
 
 // ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles

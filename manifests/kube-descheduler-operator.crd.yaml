@@ -62,6 +62,11 @@ spec:
                   should manage the component
                 pattern: ^(Managed|Unmanaged|Force|Removed)$
                 type: string
+              maxNoOfPodsToEvictTotal:
+                description: maxNoOfPodsToEvictTotal restricts the maximum number
+                  of pods that can be evicted during each descheduling run
+                format: int32
+                type: integer
               mode:
                 default: Predictive
                 description: Mode configures the descheduler to either evict pods
@@ -98,15 +103,16 @@ spec:
                   modifying the default behavior of certain profiles
                 properties:
                   devEnableEvictionsInBackground:
-                    description: DevEnableEvictionsInBackground enables descheduler's
-                      EvictionsInBackground alpha feature. The EvictionsInBackground
-                      alpha feature is a subject to change. Currently provided as
-                      an experimental feature.
+                    description: |-
+                      DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
+                      The EvictionsInBackground alpha feature is a subject to change.
+                      Currently provided as an experimental feature.
                     type: boolean
                   devHighNodeUtilizationThresholds:
-                    description: devHighNodeUtilizationThresholds enumerates thresholds
-                      for node utilization levels. The threshold values are subject
-                      to change. Currently provided as an experimental feature.
+                    description: |-
+                      devHighNodeUtilizationThresholds enumerates thresholds for node utilization levels.
+                      The threshold values are subject to change.
+                      Currently provided as an experimental feature.
                     enum:
                     - Minimal
                     - Modest
@@ -259,9 +265,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

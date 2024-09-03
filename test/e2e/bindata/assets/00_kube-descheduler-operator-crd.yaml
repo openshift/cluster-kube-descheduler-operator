@@ -17,14 +17,19 @@ spec:
         description: KubeDescheduler is the Schema for the deschedulers API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -38,11 +43,13 @@ spec:
                 type: integer
               logLevel:
                 default: Normal
-                description: "logLevel is an intent based logging for an overall component.
-                  \ It does not give fine grained control, but it is a simple way
-                  to manage coarse grained logging choices that operators have to
-                  interpret for their operands. \n Valid values are: \"Normal\", \"Debug\",
-                  \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                description: |-
+                  logLevel is an intent based logging for an overall component.  It does not give fine grained control, but it is a
+                  simple way to manage coarse grained logging choices that operators have to interpret for their operands.
+
+
+                  Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                  Defaults to "Normal".
                 enum:
                 - ""
                 - Normal
@@ -55,6 +62,11 @@ spec:
                   should manage the component
                 pattern: ^(Managed|Unmanaged|Force|Removed)$
                 type: string
+              maxNoOfPodsToEvictTotal:
+                description: maxNoOfPodsToEvictTotal restricts the maximum number
+                  of pods that can be evicted during each descheduling run
+                format: int32
+                type: integer
               mode:
                 default: Predictive
                 description: Mode configures the descheduler to either evict pods
@@ -64,19 +76,21 @@ spec:
                 - Predictive
                 type: string
               observedConfig:
-                description: observedConfig holds a sparse config that controller
-                  has observed from the cluster state.  It exists in spec because
+                description: |-
+                  observedConfig holds a sparse config that controller has observed from the cluster state.  It exists in spec because
                   it is an input to the level for the operator
                 nullable: true
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               operatorLogLevel:
                 default: Normal
-                description: "operatorLogLevel is an intent based logging for the
-                  operator itself.  It does not give fine grained control, but it
-                  is a simple way to manage coarse grained logging choices that operators
-                  have to interpret for themselves. \n Valid values are: \"Normal\",
-                  \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                description: |-
+                  operatorLogLevel is an intent based logging for the operator itself.  It does not give fine grained control, but it is a
+                  simple way to manage coarse grained logging choices that operators have to interpret for themselves.
+
+
+                  Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                  Defaults to "Normal".
                 enum:
                 - ""
                 - Normal
@@ -89,15 +103,16 @@ spec:
                   modifying the default behavior of certain profiles
                 properties:
                   devEnableEvictionsInBackground:
-                    description: DevEnableEvictionsInBackground enables descheduler's
-                      EvictionsInBackground alpha feature. The EvictionsInBackground
-                      alpha feature is a subject to change. Currently provided as
-                      an experimental feature.
+                    description: |-
+                      DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
+                      The EvictionsInBackground alpha feature is a subject to change.
+                      Currently provided as an experimental feature.
                     type: boolean
                   devHighNodeUtilizationThresholds:
-                    description: devHighNodeUtilizationThresholds enumerates thresholds
-                      for node utilization levels. The threshold values are subject
-                      to change. Currently provided as an experimental feature.
+                    description: |-
+                      devHighNodeUtilizationThresholds enumerates thresholds for node utilization levels.
+                      The threshold values are subject to change.
+                      Currently provided as an experimental feature.
                     enum:
                     - Minimal
                     - Modest
@@ -110,9 +125,9 @@ spec:
                       experimental thresholds
                     type: string
                   namespaces:
-                    description: Namespaces overrides included and excluded namespaces
-                      while keeping the default exclusion of all openshift-*, kube-system
-                      and hypershift namespaces
+                    description: |-
+                      Namespaces overrides included and excluded namespaces while keeping
+                      the default exclusion of all openshift-*, kube-system and hypershift namespaces
                     properties:
                       excluded:
                         items:
@@ -124,30 +139,30 @@ spec:
                         type: array
                     type: object
                   podLifetime:
-                    description: PodLifetime is the length of time after which pods
-                      should be evicted This field should be used with profiles that
-                      enable the PodLifetime strategy, such as LifecycleAndUtilization
+                    description: |-
+                      PodLifetime is the length of time after which pods should be evicted
+                      This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
                     format: duration
                     type: string
                   thresholdPriority:
-                    description: ThresholdPriority when set will reject eviction of
-                      any pod with priority equal or higher It is invalid to set it
-                      alongside ThresholdPriorityClassName
+                    description: |-
+                      ThresholdPriority when set will reject eviction of any pod with priority equal or higher
+                      It is invalid to set it alongside ThresholdPriorityClassName
                     format: int32
                     type: integer
                   thresholdPriorityClassName:
-                    description: ThresholdPriorityClassName when set will reject eviction
-                      of any pod with priority equal or higher It is invalid to set
-                      it alongside ThresholdPriority
+                    description: |-
+                      ThresholdPriorityClassName when set will reject eviction of any pod with priority equal or higher
+                      It is invalid to set it alongside ThresholdPriority
                     type: string
                 type: object
               profiles:
                 description: Profiles sets which descheduler strategy profiles are
                   enabled
                 items:
-                  description: DeschedulerProfile allows configuring the enabled strategy
-                    profiles for the descheduler it allows multiple profiles to be
-                    enabled at once, which will have cumulative effects on the cluster.
+                  description: |-
+                    DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
+                    it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
                   enum:
                   - AffinityAndTaints
                   - TopologyAndDuplicates
@@ -161,13 +176,12 @@ spec:
                   type: string
                 type: array
               unsupportedConfigOverrides:
-                description: unsupportedConfigOverrides overrides the final configuration
-                  that was computed by the operator. Red Hat does not support the
-                  use of this field. Misuse of this field could lead to unexpected
-                  behavior or conflict with other configuration options. Seek guidance
-                  from the Red Hat support before using this field. Use of this property
-                  blocks cluster upgrades, it must be removed before upgrading your
-                  cluster.
+                description: |-
+                  unsupportedConfigOverrides overrides the final configuration that was computed by the operator.
+                  Red Hat does not support the use of this field.
+                  Misuse of this field could lead to unexpected behavior or conflict with other configuration options.
+                  Seek guidance from the Red Hat support before using this field.
+                  Use of this property blocks cluster upgrades, it must be removed before upgrading your cluster.
                 nullable: true
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
@@ -251,9 +265,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

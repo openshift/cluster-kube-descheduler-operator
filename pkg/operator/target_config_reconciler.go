@@ -802,6 +802,12 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		Profiles: []v1alpha2.DeschedulerProfile{},
 	}
 
+	if descheduler.Spec.EvictionLimits != nil {
+		if descheduler.Spec.EvictionLimits.Total != nil {
+			policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Total))
+		}
+	}
+
 	// ignore PVC pods by default
 	ignorePVCPods := true
 	evictLocalStoragePods := false
