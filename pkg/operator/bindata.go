@@ -107,6 +107,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -176,6 +177,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -243,6 +245,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -310,6 +313,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -373,6 +377,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -422,6 +427,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 86400
       namespaces: null
@@ -454,6 +461,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: false
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -505,6 +513,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 300
       namespaces: null
@@ -537,6 +547,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -588,6 +599,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 86400
       namespaces: null
@@ -620,6 +633,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -673,6 +687,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 86400
       namespaces: null
@@ -705,6 +721,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -792,6 +809,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -871,6 +889,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -921,6 +940,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 86400
       namespaces: null
@@ -953,6 +974,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -1004,6 +1026,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 86400
       namespaces: null
@@ -1036,6 +1060,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -1087,6 +1112,8 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
+      includingEphemeralContainers: false
+      includingInitContainers: false
       labelSelector: null
       maxPodLifeTimeSeconds: 86400
       namespaces: null
@@ -1119,6 +1146,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -1196,6 +1224,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
@@ -1271,6 +1300,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""

@@ -1,6 +1,8 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.22.2
+go 1.22.5
+
+toolchain go1.22.6
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -19,9 +21,9 @@ require (
 	k8s.io/code-generator v0.30.1
 	k8s.io/component-base v0.30.1
 	k8s.io/klog/v2 v2.120.1
-	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
+	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/controller-tools v0.15.0
-	sigs.k8s.io/descheduler v0.30.0
+	sigs.k8s.io/descheduler v0.30.1-0.20240815130811-3eece465fb25
 )
 
 require (
