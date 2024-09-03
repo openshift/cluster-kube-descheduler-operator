@@ -41,6 +41,15 @@ spec:
                   between descheduler runs
                 format: int32
                 type: integer
+              evictionLimits:
+                description: evictionLimits restrict the number of evictions during
+                  each descheduling run
+                properties:
+                  total:
+                    description: total restricts the maximum number of overall evictions
+                    format: int32
+                    type: integer
+                type: object
               logLevel:
                 default: Normal
                 description: |-
@@ -62,11 +71,6 @@ spec:
                   should manage the component
                 pattern: ^(Managed|Unmanaged|Force|Removed)$
                 type: string
-              maxNoOfPodsToEvictTotal:
-                description: maxNoOfPodsToEvictTotal restricts the maximum number
-                  of pods that can be evicted during each descheduling run
-                format: int32
-                type: integer
               mode:
                 default: Predictive
                 description: Mode configures the descheduler to either evict pods
