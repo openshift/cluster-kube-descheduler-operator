@@ -188,10 +188,17 @@ spec:
           resources:
           - namespaces
           - pods
+          - nodes
           verbs:
           - get
           - watch
           - list
+        - apiGroups:
+          - ""
+          resources:
+          - pods/eviction
+          verbs:
+          - create
         - apiGroups:
           - rbac.authorization.k8s.io
           resources:
@@ -208,6 +215,14 @@ spec:
           - patch
           - delete
           - deletecollection
+        - apiGroups:
+          - scheduling.k8s.io
+          resources:
+          - priorityclasses
+          verbs:
+          - get
+          - watch
+          - list
         - apiGroups:
           - apps
           resources:
