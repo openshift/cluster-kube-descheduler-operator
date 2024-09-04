@@ -5,7 +5,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-descheduler-operator
+  name: descheduler-operator
 subjects:
   - kind: ServiceAccount
     name: openshift-descheduler

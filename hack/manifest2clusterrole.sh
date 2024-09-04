@@ -31,3 +31,4 @@ EOF
 cat ${CURRENT_DIR}/../manifests/cluster-kube-descheduler-operator.clusterserviceversion.yaml | yq -M '.spec.install.spec.clusterPermissions[0].rules' >> deploy/02_clusterrole.yaml
 
 yq -i -P deploy/02_clusterrole.yaml
+cp deploy/02_clusterrole.yaml test/e2e/bindata/assets/03_clusterrole.yaml
