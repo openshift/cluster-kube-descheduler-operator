@@ -826,7 +826,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	for _, profileName := range descheduler.Spec.Profiles {
 		if err := checkProfileConflicts(profiles, profileName, scheduler); err != nil {
 			klog.ErrorS(err, "Profile conflict")
-			continue
+			return nil, true, err
 		}
 		var profile *v1alpha2.DeschedulerProfile
 		var err error
@@ -894,7 +894,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 	}
 
 	if profiles.Has(string(deschedulerv1.SoftTopologyAndDuplicates)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.TopologyAndDuplicates, deschedulerv1.SoftTopologyAndDuplicates)
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.SoftTopologyAndDuplicates, deschedulerv1.TopologyAndDuplicates)
 	}
 
 	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
