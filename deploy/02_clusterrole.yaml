@@ -3,145 +3,158 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: descheduler-operator
 rules:
-- apiGroups:
-  - operator.openshift.io
-  resources:
-  - "*"
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - schedulers
-  verbs:
-  - get
-  - watch
-  - list
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - kubedeschedulers.operator.openshift.io
-  resources:
-  - "*"
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - services
-  - serviceaccounts
-  - pods
-  - configmaps
-  - secrets
-  - namespaces
-  - nodes
-  - pods/eviction
-  - events
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterroles
-  - clusterrolebindings
-  - roles
-  - rolebindings
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - scheduling.k8s.io
-  resources:
-  - priorityclasses
-  verbs:
-  - get
-  - watch
-  - list
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - deployments/scale
-  - replicasets
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - infrastructures
-  - apiservers
-  verbs:
-  - get
-  - watch
-  - list
-- apiGroups:
-  - events.k8s.io
-  resources:
-  - events
-  verbs:
-  - get
-  - watch
-  - list
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - endpoints
-  verbs:
-  - get
-  - watch
-  - list
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - schedulers
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - servicemonitors
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - operator.openshift.io
+    resources:
+      - kubedeschedulers
+      - kubedeschedulers/status
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - configmaps
+      - secrets
+      - events
+      - serviceaccounts
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - pods
+      - nodes
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods/eviction
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterroles
+      - clusterrolebindings
+      - roles
+      - rolebindings
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - replicasets
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - deployments/scale
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - infrastructures
+      - apiservers
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - get
+      - watch
+      - list
