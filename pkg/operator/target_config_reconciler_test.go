@@ -48,6 +48,7 @@ func TestManageConfigMap(t *testing.T) {
 		want                   *corev1.ConfigMap
 		descheduler            *deschedulerv1.KubeDescheduler
 		err                    error
+		forceDeployment        bool
 	}{
 		{
 			name: "Podlifetime",
@@ -316,6 +317,76 @@ func TestManageConfigMap(t *testing.T) {
 				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationModerate.yaml"))},
 			},
 		},
+		{
+			name: "DevPreviewLongLifecycleAndLifecycleAndUtilizationProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevPreviewLongLifecycle", "LifecycleAndUtilization"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
+		{
+			name: "LongLifecycleAndLifecycleAndUtilizationProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle", "LifecycleAndUtilization"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
+		{
+			name: "SoftTopologyAndDuplicatesAndTopologyAndDuplicatesProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates", "TopologyAndDuplicates"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
+		{
+			name: "CompactAndScaleAndLifecycleAndUtilizationProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "LifecycleAndUtilization"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
+		{
+			name: "CompactAndScaleAndLongLifecycleProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "LongLifecycle"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare CompactAndScale and LongLifecycle profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
+		{
+			name: "CompactAndScaleAndDevPreviewLongLifecycleProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "DevPreviewLongLifecycle"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
+		{
+			name: "CompactAndScaleAndTopologyAndDuplicatesProfileConflict",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "TopologyAndDuplicates"},
+				},
+			},
+			err:             fmt.Errorf("cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously, ignoring"),
+			forceDeployment: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -331,13 +402,16 @@ func TestManageConfigMap(t *testing.T) {
 					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
 				}
 			}
-			got, _, err := tt.targetConfigReconciler.manageConfigMap(tt.descheduler)
+			got, forceDeployment, err := tt.targetConfigReconciler.manageConfigMap(tt.descheduler)
 			if tt.err != nil {
 				if err == nil {
 					t.Fatalf("Expected error, not nil\n")
 				}
 				if tt.err.Error() != err.Error() {
 					t.Fatalf("Expected error string: %v, got instead: %v\n", tt.err.Error(), err.Error())
+				}
+				if tt.forceDeployment != forceDeployment {
+					t.Fatalf("Expected forceDeployment to be %v, got %v instead\n", tt.forceDeployment, forceDeployment)
 				}
 				return
 			}

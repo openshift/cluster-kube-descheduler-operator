@@ -41,6 +41,15 @@ spec:
                   between descheduler runs
                 format: int32
                 type: integer
+              evictionLimits:
+                description: evictionLimits restrict the number of evictions during
+                  each descheduling run
+                properties:
+                  total:
+                    description: total restricts the maximum number of overall evictions
+                    format: int32
+                    type: integer
+                type: object
               logLevel:
                 default: Normal
                 description: |-
@@ -98,15 +107,16 @@ spec:
                   modifying the default behavior of certain profiles
                 properties:
                   devEnableEvictionsInBackground:
-                    description: DevEnableEvictionsInBackground enables descheduler's
-                      EvictionsInBackground alpha feature. The EvictionsInBackground
-                      alpha feature is a subject to change. Currently provided as
-                      an experimental feature.
+                    description: |-
+                      DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
+                      The EvictionsInBackground alpha feature is a subject to change.
+                      Currently provided as an experimental feature.
                     type: boolean
                   devHighNodeUtilizationThresholds:
-                    description: devHighNodeUtilizationThresholds enumerates thresholds
-                      for node utilization levels. The threshold values are subject
-                      to change. Currently provided as an experimental feature.
+                    description: |-
+                      devHighNodeUtilizationThresholds enumerates thresholds for node utilization levels.
+                      The threshold values are subject to change.
+                      Currently provided as an experimental feature.
                     enum:
                     - Minimal
                     - Modest
@@ -259,9 +269,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

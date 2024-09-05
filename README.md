@@ -217,7 +217,11 @@ apiVersion: descheduler/v1alpha1
 ## Parameters
 The Descheduler operator exposes the following parameters in its CRD:
 
-* `deschedulingIntervalSeconds` - sets the number of seconds between descheduler runs
-* `profiles` - sets which descheduler strategy profiles are enabled
-* `profileCustomizations` - contains various parameters for modifying the default behavior of certain profiles
-* `mode` - configures the descheduler to either evict pods or to simulate the eviction
+|Name|Type|Description|
+|---|---|---|
+|`deschedulingIntervalSeconds`|`int32`|Sets the number of seconds between descheduler runs|
+|`profiles`|`[]string`|Sets which descheduler strategy profiles are enabled|
+|`profileCustomizations`|`map`|Contains various parameters for modifying the default behavior of certain profiles|
+|`mode`|`string`|Configures the descheduler to either evict pods or to simulate the eviction|
+|`evictionLimits`|`map`|Restrict the number of evictions during each descheduling run. Available fields are: `total`|
+|`evictionLimits.total`|`int32`|Restricts the maximum number of overall evictions|

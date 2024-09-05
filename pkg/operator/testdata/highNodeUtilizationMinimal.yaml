@@ -22,6 +22,7 @@ profiles:
       evictSystemCriticalPods: false
       ignorePvcPods: true
       labelSelector: null
+      minPodAge: null
       minReplicas: 0
       nodeFit: false
       nodeSelector: ""
