@@ -159,8 +159,9 @@ func (c TargetConfigReconciler) sync() error {
 					Status: operatorv1.ConditionTrue,
 					Reason: manageConfigMapErr.Error(),
 				}))
+			return err
 		}
-		return err
+		return manageConfigMapErr
 	} else {
 		resourceVersion := "0"
 		if configMap != nil { // SyncConfigMap can return nil

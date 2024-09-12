@@ -8,20 +8,22 @@ import (
 	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/resource"
-	utilptr "k8s.io/utils/ptr"
-
 	configv1 "github.com/openshift/api/config/v1"
-	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	utilptr "k8s.io/utils/ptr"
+
+	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
+	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
 )
 
 var configLowNodeUtilization = &configv1.Scheduler{
@@ -60,7 +62,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
 			},
 		},
 		{
@@ -72,7 +74,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
 			},
 		},
 		{
@@ -85,7 +87,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
 			},
 		},
 		{
@@ -98,8 +100,18 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
 			},
+		},
+		{
+			name: "ThresholdPriorityClassNameAndValueError",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority, ThresholdPriorityClassName: "className"},
+				},
+			},
+			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
 		{
 			name: "LowNodeUtilizationLow",
@@ -111,7 +123,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationLowConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationLowConfig.yaml"))},
 			},
 		},
 		{
@@ -124,7 +136,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationMediumConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
 			},
 		},
 		{
@@ -136,7 +148,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationMediumConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
 			},
 		},
 		{
@@ -149,7 +161,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationHighConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationHighConfig.yaml"))},
 			},
 		},
 		{
@@ -167,7 +179,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/affinityAndTaintsWithNamespaces.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/affinityAndTaintsWithNamespaces.yaml"))},
 			},
 		},
 		{
@@ -185,7 +197,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/longLifecycleWithNamespaces.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithNamespaces.yaml"))},
 			},
 		},
 		{
@@ -200,7 +212,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/longLifecycleWithLocalStorage.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithLocalStorage.yaml"))},
 			},
 		},
 		{
@@ -215,7 +227,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/softTopologyAndDuplicates.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/softTopologyAndDuplicates.yaml"))},
 			},
 		},
 		{
@@ -230,7 +242,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/topologyAndDuplicates.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/topologyAndDuplicates.yaml"))},
 			},
 		},
 		{
@@ -251,7 +263,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationWithNamespaces.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationWithNamespaces.yaml"))},
 			},
 		},
 		{
@@ -272,7 +284,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationMinimal.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationMinimal.yaml"))},
 			},
 		},
 		{
@@ -293,7 +305,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilization.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
 			},
 		},
 		{
@@ -314,7 +326,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationModerate.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationModerate.yaml"))},
 			},
 		},
 		{
@@ -562,6 +574,59 @@ func TestManageDeployment(t *testing.T) {
 				if !apiequality.Semantic.DeepEqual(tt.want, got) {
 					t.Errorf("manageDeployment diff \n\n %+v", cmp.Diff(tt.want, got))
 				}
+			}
+		})
+	}
+}
+
+func TestSync(t *testing.T) {
+	fakeRecorder := NewFakeRecorder(1024)
+	tests := []struct {
+		name                   string
+		targetConfigReconciler *TargetConfigReconciler
+		descheduler            *deschedulerv1.KubeDescheduler
+		err                    error
+	}{
+		{
+			name: "Invalid priority threshold configuration",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
+				},
+			},
+			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.targetConfigReconciler.operatorClient = operatorconfigclient.NewSimpleClientset(tt.descheduler).KubedeschedulersV1()
+			err := tt.targetConfigReconciler.sync()
+			if tt.err != nil {
+				if err == nil {
+					t.Fatalf("Expected error, not nil\n")
+				}
+				if tt.err.Error() != err.Error() {
+					t.Fatalf("Expected error string: %v, got instead: %v\n", tt.err.Error(), err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
 			}
 		})
 	}
