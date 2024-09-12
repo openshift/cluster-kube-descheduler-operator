@@ -124,9 +124,13 @@ spec:
                     - ""
                     type: string
                   devLowNodeUtilizationThresholds:
-                    default: Medium
                     description: LowNodeUtilizationThresholds enumerates predefined
                       experimental thresholds
+                    enum:
+                    - Low
+                    - Medium
+                    - High
+                    - ""
                     type: string
                   namespaces:
                     description: |-

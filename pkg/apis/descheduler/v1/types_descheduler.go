@@ -72,7 +72,7 @@ type ProfileCustomizations struct {
 	Namespaces Namespaces `json:"namespaces"`
 
 	// LowNodeUtilizationThresholds enumerates predefined experimental thresholds
-	// +kubebuilder:default=Medium
+	// +kubebuilder:validation:Enum=Low;Medium;High;""
 	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
 
 	// DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.

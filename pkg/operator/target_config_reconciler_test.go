@@ -152,6 +152,19 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
+			name: "LowNodeUtilizationEmptyDefault",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
+			},
+		},
+		{
 			name: "LowNodeUtilizationHigh",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
@@ -300,6 +313,27 @@ func TestManageConfigMap(t *testing.T) {
 					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModestThreshold,
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
+			},
+		},
+		{
+			name: "CompactAndScaleDefault",
+			targetConfigReconciler: &TargetConfigReconciler{
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configHighNodeUtilization},
+				},
+				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevHighNodeUtilizationThresholds: utilptr.To[deschedulerv1.HighNodeUtilizationThresholdsType](""),
 					},
 				},
 			},
