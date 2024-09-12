@@ -22,6 +22,7 @@ import (
 	utilptr "k8s.io/utils/ptr"
 
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
 	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
 )
 
@@ -101,6 +102,16 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
 			},
+		},
+		{
+			name: "ThresholdPriorityClassNameAndValueError",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority, ThresholdPriorityClassName: "className"},
+				},
+			},
+			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
 		{
 			name: "LowNodeUtilizationLow",
@@ -563,6 +574,59 @@ func TestManageDeployment(t *testing.T) {
 				if !apiequality.Semantic.DeepEqual(tt.want, got) {
 					t.Errorf("manageDeployment diff \n\n %+v", cmp.Diff(tt.want, got))
 				}
+			}
+		})
+	}
+}
+
+func TestSync(t *testing.T) {
+	fakeRecorder := NewFakeRecorder(1024)
+	tests := []struct {
+		name                   string
+		targetConfigReconciler *TargetConfigReconciler
+		descheduler            *deschedulerv1.KubeDescheduler
+		err                    error
+	}{
+		{
+			name: "Invalid priority threshold configuration",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
+				},
+			},
+			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.targetConfigReconciler.operatorClient = operatorconfigclient.NewSimpleClientset(tt.descheduler).KubedeschedulersV1()
+			err := tt.targetConfigReconciler.sync()
+			if tt.err != nil {
+				if err == nil {
+					t.Fatalf("Expected error, not nil\n")
+				}
+				if tt.err.Error() != err.Error() {
+					t.Fatalf("Expected error string: %v, got instead: %v\n", tt.err.Error(), err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
 			}
 		})
 	}
