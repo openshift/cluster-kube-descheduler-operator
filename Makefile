@@ -33,17 +33,6 @@ $(call verify-golang-versions,Dockerfile.rhel7)
 
 $(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests,./manifests)
 
-# This will call a macro called "add-bindata" which will generate bindata specific targets based on the parameters:
-# $0 - macro name
-# $1 - target suffix
-# $2 - input dirs
-# $3 - prefix
-# $4 - pkg
-# $5 - output
-# It will generate targets {update,verify}-bindata-$(1) logically grouping them in unsuffixed versions of these targets
-# and also hooked into {update,verify}-generated for broader integration.
-$(call add-bindata,operator,./pkg/operator/testdata/...,,operator,pkg/operator/bindata.go)
-
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 test-e2e: GO_TEST_ARGS :=-v
 test-e2e: test-unit

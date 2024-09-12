@@ -8,20 +8,21 @@ import (
 	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/resource"
-	utilptr "k8s.io/utils/ptr"
-
 	configv1 "github.com/openshift/api/config/v1"
-	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	utilptr "k8s.io/utils/ptr"
+
+	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
 )
 
 var configLowNodeUtilization = &configv1.Scheduler{
@@ -60,7 +61,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
 			},
 		},
 		{
@@ -72,7 +73,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
 			},
 		},
 		{
@@ -85,7 +86,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
 			},
 		},
 		{
@@ -98,7 +99,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
 			},
 		},
 		{
@@ -111,7 +112,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationLowConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationLowConfig.yaml"))},
 			},
 		},
 		{
@@ -124,7 +125,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationMediumConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
 			},
 		},
 		{
@@ -136,7 +137,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationMediumConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
 			},
 		},
 		{
@@ -149,7 +150,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/lowNodeUtilizationHighConfig.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationHighConfig.yaml"))},
 			},
 		},
 		{
@@ -167,7 +168,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/affinityAndTaintsWithNamespaces.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/affinityAndTaintsWithNamespaces.yaml"))},
 			},
 		},
 		{
@@ -185,7 +186,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/longLifecycleWithNamespaces.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithNamespaces.yaml"))},
 			},
 		},
 		{
@@ -200,7 +201,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/longLifecycleWithLocalStorage.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithLocalStorage.yaml"))},
 			},
 		},
 		{
@@ -215,7 +216,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/softTopologyAndDuplicates.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/softTopologyAndDuplicates.yaml"))},
 			},
 		},
 		{
@@ -230,7 +231,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/topologyAndDuplicates.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/topologyAndDuplicates.yaml"))},
 			},
 		},
 		{
@@ -251,7 +252,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationWithNamespaces.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationWithNamespaces.yaml"))},
 			},
 		},
 		{
@@ -272,7 +273,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationMinimal.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationMinimal.yaml"))},
 			},
 		},
 		{
@@ -293,7 +294,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilization.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
 			},
 		},
 		{
@@ -314,7 +315,7 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(MustAsset("pkg/operator/testdata/highNodeUtilizationModerate.yaml"))},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationModerate.yaml"))},
 			},
 		},
 		{
