@@ -630,7 +630,7 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 			args.TargetThresholds[v1.ResourceCPU] = 30
 			args.TargetThresholds[v1.ResourceMemory] = 30
 			args.TargetThresholds[v1.ResourcePods] = 30
-		case deschedulerv1.MediumThreshold:
+		case deschedulerv1.MediumThreshold, "":
 			args.Thresholds[v1.ResourceCPU] = 20
 			args.Thresholds[v1.ResourceMemory] = 20
 			args.Thresholds[v1.ResourcePods] = 20
@@ -728,7 +728,7 @@ func compactAndScaleProfile(profileCustomizations *deschedulerv1.ProfileCustomiz
 			args.Thresholds[v1.ResourceCPU] = 10
 			args.Thresholds[v1.ResourceMemory] = 10
 			args.Thresholds[v1.ResourcePods] = 10
-		case deschedulerv1.CompactModestThreshold:
+		case deschedulerv1.CompactModestThreshold, "":
 			args.Thresholds[v1.ResourceCPU] = 20
 			args.Thresholds[v1.ResourceMemory] = 20
 			args.Thresholds[v1.ResourcePods] = 20
