@@ -1,7 +1,5 @@
 reviewers:
   - ingvagabund
-  - knelasevero
 approvers:
   - ingvagabund
-  - knelasevero
 component: "descheduler"
