@@ -4,8 +4,8 @@ package v1
 
 import (
 	v1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -22,25 +22,17 @@ type KubeDeschedulerLister interface {
 
 // kubeDeschedulerLister implements the KubeDeschedulerLister interface.
 type kubeDeschedulerLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1.KubeDescheduler]
 }
 
 // NewKubeDeschedulerLister returns a new KubeDeschedulerLister.
 func NewKubeDeschedulerLister(indexer cache.Indexer) KubeDeschedulerLister {
-	return &kubeDeschedulerLister{indexer: indexer}
-}
-
-// List lists all KubeDeschedulers in the indexer.
-func (s *kubeDeschedulerLister) List(selector labels.Selector) (ret []*v1.KubeDescheduler, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.KubeDescheduler))
-	})
-	return ret, err
+	return &kubeDeschedulerLister{listers.New[*v1.KubeDescheduler](indexer, v1.Resource("kubedescheduler"))}
 }
 
 // KubeDeschedulers returns an object that can list and get KubeDeschedulers.
 func (s *kubeDeschedulerLister) KubeDeschedulers(namespace string) KubeDeschedulerNamespaceLister {
-	return kubeDeschedulerNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return kubeDeschedulerNamespaceLister{listers.NewNamespaced[*v1.KubeDescheduler](s.ResourceIndexer, namespace)}
 }
 
 // KubeDeschedulerNamespaceLister helps list and get KubeDeschedulers.
@@ -58,26 +50,5 @@ type KubeDeschedulerNamespaceLister interface {
 // kubeDeschedulerNamespaceLister implements the KubeDeschedulerNamespaceLister
 // interface.
 type kubeDeschedulerNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all KubeDeschedulers in the indexer for a given namespace.
-func (s kubeDeschedulerNamespaceLister) List(selector labels.Selector) (ret []*v1.KubeDescheduler, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.KubeDescheduler))
-	})
-	return ret, err
-}
-
-// Get retrieves the KubeDescheduler from the indexer for a given namespace and name.
-func (s kubeDeschedulerNamespaceLister) Get(name string) (*v1.KubeDescheduler, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("kubedescheduler"), name)
-	}
-	return obj.(*v1.KubeDescheduler), nil
+	listers.ResourceIndexer[*v1.KubeDescheduler]
 }
