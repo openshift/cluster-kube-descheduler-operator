@@ -5,17 +5,12 @@ profiles:
   pluginConfig:
   - args:
       includingInitContainers: true
-      labelSelector: null
       namespaces:
-        exclude: []
         include:
         - includedNamespace
       podRestartThreshold: 100
-      states: null
     name: RemovePodsHavingTooManyRestarts
   - args:
-      evictableNamespaces: null
-      numberOfNodes: 0
       targetThresholds:
         cpu: 50
         memory: 50
@@ -24,20 +19,9 @@ profiles:
         cpu: 20
         memory: 20
         pods: 20
-      useDeviationThresholds: false
     name: LowNodeUtilization
   - args:
-      evictDaemonSetPods: false
-      evictFailedBarePods: false
-      evictLocalStoragePods: false
-      evictSystemCriticalPods: false
       ignorePvcPods: true
-      labelSelector: null
-      minPodAge: null
-      minReplicas: 0
-      nodeFit: false
-      nodeSelector: ""
-      priorityThreshold: null
     name: DefaultEvictor
   plugins:
     balance:

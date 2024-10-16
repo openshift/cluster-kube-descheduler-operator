@@ -8,25 +8,13 @@ profiles:
         exclude:
         - openshift-kube-scheduler
         - kube-system
-        include: null
-      numberOfNodes: 0
       thresholds:
         cpu: 20
         memory: 20
         pods: 20
     name: HighNodeUtilization
   - args:
-      evictDaemonSetPods: false
-      evictFailedBarePods: false
-      evictLocalStoragePods: false
-      evictSystemCriticalPods: false
       ignorePvcPods: true
-      labelSelector: null
-      minPodAge: null
-      minReplicas: 0
-      nodeFit: false
-      nodeSelector: ""
-      priorityThreshold: null
     name: DefaultEvictor
   plugins:
     balance:

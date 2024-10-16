@@ -45,6 +45,7 @@ func NewConfigObserver(
 
 	c := &ConfigObserver{
 		Controller: configobserver.NewConfigObserver(
+			"cluster-kube-descheduler-operator",
 			operatorClient,
 			eventRecorder,
 			configobservation.Listers{

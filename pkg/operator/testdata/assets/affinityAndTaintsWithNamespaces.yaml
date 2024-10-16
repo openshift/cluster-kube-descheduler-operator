@@ -4,43 +4,24 @@ profiles:
 - name: AffinityAndTaints
   pluginConfig:
   - args:
-      labelSelector: null
       namespaces:
-        exclude: []
         include:
         - includedNamespace
     name: RemovePodsViolatingInterPodAntiAffinity
   - args:
-      excludedTaints: null
-      includePreferNoSchedule: false
-      includedTaints: null
-      labelSelector: null
       namespaces:
-        exclude: []
         include:
         - includedNamespace
     name: RemovePodsViolatingNodeTaints
   - args:
-      labelSelector: null
       namespaces:
-        exclude: []
         include:
         - includedNamespace
       nodeAffinityType:
       - requiredDuringSchedulingIgnoredDuringExecution
     name: RemovePodsViolatingNodeAffinity
   - args:
-      evictDaemonSetPods: false
-      evictFailedBarePods: false
-      evictLocalStoragePods: false
-      evictSystemCriticalPods: false
       ignorePvcPods: true
-      labelSelector: null
-      minPodAge: null
-      minReplicas: 0
-      nodeFit: false
-      nodeSelector: ""
-      priorityThreshold: null
     name: DefaultEvictor
   plugins:
     balance:
