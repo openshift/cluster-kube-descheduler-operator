@@ -2,12 +2,19 @@ package operatorclient
 
 import (
 	"context"
+	"fmt"
 
-	operatorv1 "github.com/openshift/api/operator/v1"
-	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+
+	operatorv1 "github.com/openshift/api/operator/v1"
+
+	applyconfiguration "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
+	deschedulerapplyconfiguration "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/applyconfiguration/descheduler/v1"
+	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
 )
 
 const OperatorNamespace = "openshift-kube-descheduler-operator"
@@ -76,4 +83,80 @@ func (c *DeschedulerClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error)
 		return nil, err
 	}
 	return &instance.ObjectMeta, nil
+}
+
+func (c *DeschedulerClient) ApplyOperatorSpec(ctx context.Context, fieldManager string, desiredConfiguration *applyconfiguration.OperatorSpecApplyConfiguration) error {
+	if desiredConfiguration == nil {
+		return fmt.Errorf("applyConfiguration must have a value")
+	}
+
+	desiredSpec := &deschedulerapplyconfiguration.KubeDeschedulerSpecApplyConfiguration{
+		OperatorSpecApplyConfiguration: *desiredConfiguration,
+	}
+	desired := deschedulerapplyconfiguration.KubeDescheduler(OperatorConfigName, OperatorNamespace)
+	desired.WithSpec(desiredSpec)
+
+	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	switch {
+	case apierrors.IsNotFound(err):
+	// do nothing and proceed with the apply
+	case err != nil:
+		return fmt.Errorf("unable to get operator configuration: %w", err)
+	default:
+		original, err := deschedulerapplyconfiguration.ExtractKubeDescheduler(instance, fieldManager)
+		if err != nil {
+			return fmt.Errorf("unable to extract operator configuration: %w", err)
+		}
+		if equality.Semantic.DeepEqual(original, desired) {
+			return nil
+		}
+	}
+
+	_, err = c.OperatorClient.KubeDeschedulers(OperatorNamespace).Apply(ctx, desired, v1.ApplyOptions{
+		Force:        true,
+		FieldManager: fieldManager,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to Apply for operator using fieldManager %q: %w", fieldManager, err)
+	}
+
+	return nil
+}
+
+func (c *DeschedulerClient) ApplyOperatorStatus(ctx context.Context, fieldManager string, desiredConfiguration *applyconfiguration.OperatorStatusApplyConfiguration) error {
+	if desiredConfiguration == nil {
+		return fmt.Errorf("applyConfiguration must have a value")
+	}
+
+	desiredStatus := &deschedulerapplyconfiguration.KubeDeschedulerStatusApplyConfiguration{
+		OperatorStatusApplyConfiguration: *desiredConfiguration,
+	}
+	desired := deschedulerapplyconfiguration.KubeDescheduler(OperatorConfigName, OperatorNamespace)
+	desired.WithStatus(desiredStatus)
+
+	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	switch {
+	case apierrors.IsNotFound(err):
+		// do nothing and proceed with the apply
+	case err != nil:
+		return fmt.Errorf("unable to get operator configuration: %w", err)
+	default:
+		original, err := deschedulerapplyconfiguration.ExtractKubeDeschedulerStatus(instance, fieldManager)
+		if err != nil {
+			return fmt.Errorf("unable to extract operator configuration: %w", err)
+		}
+		if equality.Semantic.DeepEqual(original, desired) {
+			return nil
+		}
+	}
+
+	_, err = c.OperatorClient.KubeDeschedulers(OperatorNamespace).ApplyStatus(ctx, desired, v1.ApplyOptions{
+		Force:        true,
+		FieldManager: fieldManager,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to ApplyStatus for operator using fieldManager %q: %w", fieldManager, err)
+	}
+
+	return nil
 }

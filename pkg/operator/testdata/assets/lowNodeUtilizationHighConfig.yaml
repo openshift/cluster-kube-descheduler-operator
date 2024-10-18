@@ -4,23 +4,13 @@ profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
-      includingEphemeralContainers: false
-      includingInitContainers: false
-      labelSelector: null
       maxPodLifeTimeSeconds: 86400
-      namespaces: null
-      states: null
     name: PodLifeTime
   - args:
       includingInitContainers: true
-      labelSelector: null
-      namespaces: null
       podRestartThreshold: 100
-      states: null
     name: RemovePodsHavingTooManyRestarts
   - args:
-      evictableNamespaces: null
-      numberOfNodes: 0
       targetThresholds:
         cpu: 70
         memory: 70
@@ -29,20 +19,9 @@ profiles:
         cpu: 40
         memory: 40
         pods: 40
-      useDeviationThresholds: false
     name: LowNodeUtilization
   - args:
-      evictDaemonSetPods: false
-      evictFailedBarePods: false
-      evictLocalStoragePods: false
-      evictSystemCriticalPods: false
       ignorePvcPods: true
-      labelSelector: null
-      minPodAge: null
-      minReplicas: 0
-      nodeFit: false
-      nodeSelector: ""
-      priorityThreshold: null
     name: DefaultEvictor
   plugins:
     balance:

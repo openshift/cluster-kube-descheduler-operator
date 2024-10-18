@@ -7,34 +7,19 @@ profiles:
       constraints:
       - DoNotSchedule
       - ScheduleAnyway
-      labelSelector: null
       namespaces:
         exclude:
         - openshift-kube-scheduler
         - kube-system
-        include: []
-      topologyBalanceNodeFit: null
     name: RemovePodsViolatingTopologySpreadConstraint
   - args:
-      excludeOwnerKinds: null
       namespaces:
         exclude:
         - openshift-kube-scheduler
         - kube-system
-        include: []
     name: RemoveDuplicates
   - args:
-      evictDaemonSetPods: false
-      evictFailedBarePods: false
-      evictLocalStoragePods: false
-      evictSystemCriticalPods: false
       ignorePvcPods: true
-      labelSelector: null
-      minPodAge: null
-      minReplicas: 0
-      nodeFit: false
-      nodeSelector: ""
-      priorityThreshold: null
     name: DefaultEvictor
   plugins:
     balance:
