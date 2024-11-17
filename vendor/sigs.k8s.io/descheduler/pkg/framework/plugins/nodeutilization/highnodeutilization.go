@@ -44,6 +44,7 @@ type HighNodeUtilization struct {
 	underutilizationCriteria []interface{}
 	resourceNames            []v1.ResourceName
 	targetThresholds         api.ResourceThresholds
+	usageClient              usageClient
 }
 
 var _ frameworktypes.BalancePlugin = &HighNodeUtilization{}
@@ -84,6 +85,7 @@ func NewHighNodeUtilization(args runtime.Object, handle frameworktypes.Handle) (
 		targetThresholds:         targetThresholds,
 		underutilizationCriteria: underutilizationCriteria,
 		podFilter:                podFilter,
+		usageClient:              newRequestedUsageClient(resourceNames, handle.GetPodsAssignedToNodeFunc()),
 	}, nil
 }
 
@@ -94,9 +96,15 @@ func (h *HighNodeUtilization) Name() string {
 
 // Balance extension point implementation for the plugin
 func (h *HighNodeUtilization) Balance(ctx context.Context, nodes []*v1.Node) *frameworktypes.Status {
+	if err := h.usageClient.sync(nodes); err != nil {
+		return &frameworktypes.Status{
+			Err: fmt.Errorf("error getting node usage: %v", err),
+		}
+	}
+
 	sourceNodes, highNodes := classifyNodes(
-		getNodeUsage(nodes, h.resourceNames, h.handle.GetPodsAssignedToNodeFunc()),
-		getNodeThresholds(nodes, h.args.Thresholds, h.targetThresholds, h.resourceNames, h.handle.GetPodsAssignedToNodeFunc(), false),
+		getNodeUsage(nodes, h.usageClient),
+		getNodeThresholds(nodes, h.args.Thresholds, h.targetThresholds, h.resourceNames, false, h.usageClient),
 		func(node *v1.Node, usage NodeUsage, threshold NodeThresholds) bool {
 			return isNodeWithLowUtilization(usage, threshold.lowResourceThreshold)
 		},
@@ -152,7 +160,9 @@ func (h *HighNodeUtilization) Balance(ctx context.Context, nodes []*v1.Node) *fr
 		evictions.EvictOptions{StrategyName: HighNodeUtilizationPluginName},
 		h.podFilter,
 		h.resourceNames,
-		continueEvictionCond)
+		continueEvictionCond,
+		h.usageClient,
+	)
 
 	return nil
 }

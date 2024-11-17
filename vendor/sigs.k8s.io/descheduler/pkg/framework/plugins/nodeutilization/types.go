@@ -28,6 +28,7 @@ type LowNodeUtilizationArgs struct {
 	Thresholds             api.ResourceThresholds `json:"thresholds"`
 	TargetThresholds       api.ResourceThresholds `json:"targetThresholds"`
 	NumberOfNodes          int                    `json:"numberOfNodes,omitempty"`
+	MetricsUtilization     MetricsUtilization     `json:"metricsUtilization,omitempty"`
 
 	// Naming this one differently since namespaces are still
 	// considered while considering resources used by pods
@@ -41,10 +42,29 @@ type LowNodeUtilizationArgs struct {
 type HighNodeUtilizationArgs struct {
 	metav1.TypeMeta `json:",inline"`
 
-	Thresholds    api.ResourceThresholds `json:"thresholds"`
-	NumberOfNodes int                    `json:"numberOfNodes,omitempty"`
+	Thresholds         api.ResourceThresholds `json:"thresholds"`
+	NumberOfNodes      int                    `json:"numberOfNodes,omitempty"`
+	MetricsUtilization MetricsUtilization     `json:"metricsUtilization,omitempty"`
+
 	// Naming this one differently since namespaces are still
 	// considered while considering resources used by pods
 	// but then filtered out before eviction
 	EvictableNamespaces *api.Namespaces `json:"evictableNamespaces,omitempty"`
+}
+
+// MetricsUtilization allow to consume actual resource utilization from metrics
+type MetricsUtilization struct {
+	// metricsServer enables metrics from a kubernetes metrics server.
+	// Please see https://kubernetes-sigs.github.io/metrics-server/ for more.
+	MetricsServer bool `json:"metricsServer,omitempty"`
+
+	// prometheus enables metrics collection through a prometheus query.
+	Prometheus Prometheus `json:"prometheus,omitempty"`
+}
+
+type Prometheus struct {
+	// query returning a vector of samples, each sample labeled with `instance`
+	// corresponding to a node name with each sample value as a real number
+	// in <0; 1> interval.
+	Query string `json:"query,omitempty"`
 }
