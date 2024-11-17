@@ -85,6 +85,11 @@ type ProfileCustomizations struct {
 	// Currently provided as an experimental feature.
 	// +kubebuilder:validation:Enum=Minimal;Modest;Moderate;""
 	DevHighNodeUtilizationThresholds *HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds"`
+
+	// devActualUtilizationProfile enables integration with metrics.
+	// LowNodeUtilization plugin can consume the metrics for now.
+	// Currently provided as an experimental feature.
+	DevActualUtilizationProfile ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
 }
 
 type LowNodeUtilizationThresholdsType string
@@ -114,6 +119,20 @@ var (
 	// CompactHighThreshold sets thresholds to 30% ratio.
 	// The threshold value is subject to change.
 	CompactModerateThreshold HighNodeUtilizationThresholdsType = "Moderate"
+)
+
+// ActualUtilizationProfile sets predefined Prometheus PromQL query
+type ActualUtilizationProfile string
+
+const (
+	// PrometheusCPUUsageProfile sets instance:node_cpu:rate:sum query
+	PrometheusCPUUsageProfile ActualUtilizationProfile = "PrometheusCPUUsage"
+	// PrometheusCPUPSIPressureProfile sets rate(node_pressure_cpu_waiting_seconds_total[1m]) query
+	PrometheusCPUPSIPressureProfile ActualUtilizationProfile = "PrometheusCPUPSIPressure"
+	// PrometheusMemoryPSIPressureProfile sets rate(node_pressure_memory_waiting_seconds_total[1m]) query
+	PrometheusMemoryPSIPressureProfile ActualUtilizationProfile = "PrometheusMemoryPSIPressure"
+	// PrometheusIOPSIPressureProfile sets rate(node_pressure_io_waiting_seconds_total[1m]) query
+	PrometheusIOPSIPressureProfile ActualUtilizationProfile = "PrometheusIOPSIPressure"
 )
 
 // Namespaces overrides included and excluded namespaces while keeping

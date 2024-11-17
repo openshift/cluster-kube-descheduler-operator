@@ -15,6 +15,8 @@ import (
 
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
+	routev1client "github.com/openshift/client-go/route/clientset/versioned"
+	routev1informers "github.com/openshift/client-go/route/informers/externalversions"
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation/configobservercontroller"
@@ -41,6 +43,13 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	}
 
 	configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
+
+	openshiftRouteClient, err := routev1client.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+
+	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 
 	dynamicClient, err := dynamic.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
@@ -96,6 +105,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		kubeClient,
 		dynamicClient,
 		configInformers,
+		routeInformers,
 		cc.EventRecorder,
 	)
 
@@ -104,6 +114,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	configInformers.Start(ctx.Done())
+	routeInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
 
 	klog.Infof("Starting log level controller")

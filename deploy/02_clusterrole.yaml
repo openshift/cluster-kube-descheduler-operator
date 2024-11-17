@@ -25,6 +25,16 @@ rules:
       - delete
       - deletecollection
   - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - prometheuses/api
+    resourceNames:
+      - k8s
+    verbs:
+      - get
+      - create
+      - update
+  - apiGroups:
       - operator.openshift.io
     resources:
       - kubedeschedulers
@@ -96,6 +106,14 @@ rules:
       - watch
       - list
   - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
       - apps
     resources:
       - replicasets
@@ -146,6 +164,14 @@ rules:
     resources:
       - infrastructures
       - apiservers
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - route.openshift.io
+    resources:
+      - routes
     verbs:
       - get
       - watch

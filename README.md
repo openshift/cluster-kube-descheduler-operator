@@ -175,6 +175,29 @@ the `profileCustomizations` field:
 | `devLowNodeUtilizationThresholds` | `string` | Sets experimental thresholds for the [LowNodeUtilization](https://github.com/kubernetes-sigs/descheduler#lownodeutilization) strategy of the `LifecycleAndUtilization` profile in the following ratios: `Low` for 10%:30%, `Medium` for 20%:50%, `High` for 40%:70%|
 |`devEnableEvictionsInBackground`|`bool`| Enables descheduler's EvictionsInBackground alpha feature. The EvictionsInBackground alpha feature is a subject to change. Currently provided as an experimental feature.|
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
+|`devActualUtilizationProfile`|`string`| Sets a profile that gets translated into a predefined prometheus query |
+
+## Prometheus query profiles
+The operator provides the following profiles:
+- `PrometheusCPUUsage`: `instance:node_cpu:rate:sum` (metric available in OpenShift by default)
+- `PrometheusCPUPSIPressure`: `rate(node_pressure_cpu_waiting_seconds_total[1m])` (`node_pressure_cpu_waiting_seconds_total` is a custom metric that needs to be provided)
+- `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is a custom metric that needs to be provided)
+- `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is a custom metric that needs to be provided)
+
+```yaml
+apiVersion: operator.openshift.io/v1
+kind: KubeDescheduler
+metadata:
+  name: cluster
+  namespace: openshift-kube-descheduler-operator
+spec:
+  managementState: Managed
+  deschedulingIntervalSeconds: 3600
+  profiles:
+  - LongLifecycle
+  profileCustomizations:
+    devActualUtilizationProfile: PrometheusCPUUsage
+```
 
 ## Descheduling modes
 The operator provides two modes of eviction:

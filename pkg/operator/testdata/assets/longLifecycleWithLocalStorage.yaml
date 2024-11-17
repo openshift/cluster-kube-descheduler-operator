@@ -1,5 +1,6 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
+metricsCollector: {}
 profiles:
 - name: LongLifecycle
   pluginConfig:
@@ -16,6 +17,8 @@ profiles:
         exclude:
         - openshift-kube-scheduler
         - kube-system
+      metricsUtilization:
+        prometheus: {}
       targetThresholds:
         cpu: 50
         memory: 50
@@ -51,3 +54,6 @@ profiles:
     sort:
       disabled: null
       enabled: null
+prometheus:
+  authToken:
+    secretReference: {}
