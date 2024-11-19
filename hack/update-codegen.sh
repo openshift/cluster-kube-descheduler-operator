@@ -24,10 +24,18 @@ kube::codegen::gen_helpers \
     --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
     "${SCRIPT_ROOT}/pkg/apis"
 
+# NOTE(jchaloup): --applyconfig-openapi-schema needs to point to a valid openapi.json file
+# Steps to generate it:
+# 1. copy paste pkg/apis/descheduler/v1/types_descheduler.go under github.com/openshift/api/ under operator/v1 directory (and update the file to remove the cyclic dependency)
+# 2. "make update-openapi" under github.com/openshift/api/ repository
+# 3. point --applyconfig-openapi-schema to the regenerated openapi/openapi.json (or copy the file into this repository)
+# 4. "make generate-clients" under this repository
+
 kube::codegen::gen_client \
     --output-dir "${SCRIPT_ROOT}/pkg/generated" \
     --output-pkg "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated" \
     --applyconfig-externals "github.com/openshift/api/operator/v1.OperatorSpec:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.OperatorStatus:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.OperatorCondition:github.com/openshift/client-go/operator/applyconfigurations/operator/v1,github.com/openshift/api/operator/v1.GenerationStatus:github.com/openshift/client-go/operator/applyconfigurations/operator/v1" \
+    --applyconfig-openapi-schema openapi.json \
     --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
     --with-applyconfig \
     --with-watch \

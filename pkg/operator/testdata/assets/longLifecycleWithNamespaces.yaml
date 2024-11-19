@@ -1,5 +1,6 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
+metricsCollector: {}
 profiles:
 - name: LongLifecycle
   pluginConfig:
@@ -11,6 +12,8 @@ profiles:
       podRestartThreshold: 100
     name: RemovePodsHavingTooManyRestarts
   - args:
+      metricsUtilization:
+        prometheus: {}
       targetThresholds:
         cpu: 50
         memory: 50
@@ -45,3 +48,6 @@ profiles:
     sort:
       disabled: null
       enabled: null
+prometheus:
+  authToken:
+    secretReference: {}

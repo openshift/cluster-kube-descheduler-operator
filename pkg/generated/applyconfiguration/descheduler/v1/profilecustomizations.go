@@ -17,6 +17,7 @@ type ProfileCustomizationsApplyConfiguration struct {
 	DevLowNodeUtilizationThresholds  *apisdeschedulerv1.LowNodeUtilizationThresholdsType  `json:"devLowNodeUtilizationThresholds,omitempty"`
 	DevEnableEvictionsInBackground   *bool                                                `json:"devEnableEvictionsInBackground,omitempty"`
 	DevHighNodeUtilizationThresholds *apisdeschedulerv1.HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds,omitempty"`
+	DevActualUtilizationProfile      *apisdeschedulerv1.ActualUtilizationProfile          `json:"devActualUtilizationProfile,omitempty"`
 }
 
 // ProfileCustomizationsApplyConfiguration constructs a declarative configuration of the ProfileCustomizations type for use with
@@ -78,5 +79,13 @@ func (b *ProfileCustomizationsApplyConfiguration) WithDevEnableEvictionsInBackgr
 // If called multiple times, the DevHighNodeUtilizationThresholds field is set to the value of the last call.
 func (b *ProfileCustomizationsApplyConfiguration) WithDevHighNodeUtilizationThresholds(value apisdeschedulerv1.HighNodeUtilizationThresholdsType) *ProfileCustomizationsApplyConfiguration {
 	b.DevHighNodeUtilizationThresholds = &value
+	return b
+}
+
+// WithDevActualUtilizationProfile sets the DevActualUtilizationProfile field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevActualUtilizationProfile field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevActualUtilizationProfile(value apisdeschedulerv1.ActualUtilizationProfile) *ProfileCustomizationsApplyConfiguration {
+	b.DevActualUtilizationProfile = &value
 	return b
 }

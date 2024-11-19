@@ -9,10 +9,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/clock"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
-
 	applyconfiguration "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
+	"github.com/openshift/library-go/pkg/operator/v1helpers"
+
 	deschedulerapplyconfiguration "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/applyconfiguration/descheduler/v1"
 	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
 )
@@ -105,7 +107,7 @@ func (c *DeschedulerClient) ApplyOperatorSpec(ctx context.Context, fieldManager 
 	default:
 		original, err := deschedulerapplyconfiguration.ExtractKubeDescheduler(instance, fieldManager)
 		if err != nil {
-			return fmt.Errorf("unable to extract operator configuration: %w", err)
+			return fmt.Errorf("unable to extract operator configuration from spec: %w", err)
 		}
 		if equality.Semantic.DeepEqual(original, desired) {
 			return nil
@@ -138,15 +140,21 @@ func (c *DeschedulerClient) ApplyOperatorStatus(ctx context.Context, fieldManage
 	switch {
 	case apierrors.IsNotFound(err):
 		// do nothing and proceed with the apply
+		v1helpers.SetApplyConditionsLastTransitionTime(clock.RealClock{}, &desired.Status.Conditions, nil)
 	case err != nil:
 		return fmt.Errorf("unable to get operator configuration: %w", err)
 	default:
 		original, err := deschedulerapplyconfiguration.ExtractKubeDeschedulerStatus(instance, fieldManager)
 		if err != nil {
-			return fmt.Errorf("unable to extract operator configuration: %w", err)
+			return fmt.Errorf("unable to extract operator configuration from status: %w", err)
 		}
 		if equality.Semantic.DeepEqual(original, desired) {
 			return nil
+		}
+		if original.Status != nil {
+			v1helpers.SetApplyConditionsLastTransitionTime(clock.RealClock{}, &desired.Status.Conditions, original.Status.Conditions)
+		} else {
+			v1helpers.SetApplyConditionsLastTransitionTime(clock.RealClock{}, &desired.Status.Conditions, nil)
 		}
 	}
 

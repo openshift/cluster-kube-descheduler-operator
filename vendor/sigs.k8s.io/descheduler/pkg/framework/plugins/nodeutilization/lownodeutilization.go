@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+
 	"sigs.k8s.io/descheduler/pkg/api"
 	"sigs.k8s.io/descheduler/pkg/descheduler/evictions"
 	nodeutil "sigs.k8s.io/descheduler/pkg/descheduler/node"
@@ -43,6 +44,7 @@ type LowNodeUtilization struct {
 	underutilizationCriteria []interface{}
 	overutilizationCriteria  []interface{}
 	resourceNames            []v1.ResourceName
+	usageClient              usageClient
 }
 
 var _ frameworktypes.BalancePlugin = &LowNodeUtilization{}
@@ -54,7 +56,18 @@ func NewLowNodeUtilization(args runtime.Object, handle frameworktypes.Handle) (f
 		return nil, fmt.Errorf("want args to be of type LowNodeUtilizationArgs, got %T", args)
 	}
 
-	setDefaultForLNUThresholds(lowNodeUtilizationArgsArgs.Thresholds, lowNodeUtilizationArgsArgs.TargetThresholds, lowNodeUtilizationArgsArgs.UseDeviationThresholds)
+	if lowNodeUtilizationArgsArgs.MetricsUtilization.Prometheus.Query != "" {
+		uResourceNames := getResourceNames(lowNodeUtilizationArgsArgs.Thresholds)
+		oResourceNames := getResourceNames(lowNodeUtilizationArgsArgs.TargetThresholds)
+		if len(uResourceNames) != 1 || uResourceNames[0] != ResourceMetrics {
+			return nil, fmt.Errorf("thresholds are expected to specify a single instance of %q resource, got %v instead", ResourceMetrics, uResourceNames)
+		}
+		if len(oResourceNames) != 1 || oResourceNames[0] != ResourceMetrics {
+			return nil, fmt.Errorf("targetThresholds are expected to specify a single instance of %q resource, got %v instead", ResourceMetrics, oResourceNames)
+		}
+	} else {
+		setDefaultForLNUThresholds(lowNodeUtilizationArgsArgs.Thresholds, lowNodeUtilizationArgsArgs.TargetThresholds, lowNodeUtilizationArgsArgs.UseDeviationThresholds)
+	}
 
 	underutilizationCriteria := []interface{}{
 		"CPU", lowNodeUtilizationArgsArgs.Thresholds[v1.ResourceCPU],
@@ -85,13 +98,31 @@ func NewLowNodeUtilization(args runtime.Object, handle frameworktypes.Handle) (f
 		return nil, fmt.Errorf("error initializing pod filter function: %v", err)
 	}
 
+	resourceNames := getResourceNames(lowNodeUtilizationArgsArgs.Thresholds)
+
+	var usageClient usageClient
+	if lowNodeUtilizationArgsArgs.MetricsUtilization.MetricsServer {
+		if handle.MetricsCollector() == nil {
+			return nil, fmt.Errorf("metrics client not initialized")
+		}
+		usageClient = newActualUsageClient(resourceNames, handle.GetPodsAssignedToNodeFunc(), handle.MetricsCollector())
+	} else if lowNodeUtilizationArgsArgs.MetricsUtilization.Prometheus.Query != "" {
+		if handle.PrometheusClient() == nil {
+			return nil, fmt.Errorf("prometheus client not initialized")
+		}
+		usageClient = newPrometheusUsageClient(handle.GetPodsAssignedToNodeFunc(), handle.PrometheusClient(), lowNodeUtilizationArgsArgs.MetricsUtilization.Prometheus.Query)
+	} else {
+		usageClient = newRequestedUsageClient(resourceNames, handle.GetPodsAssignedToNodeFunc())
+	}
+
 	return &LowNodeUtilization{
 		handle:                   handle,
 		args:                     lowNodeUtilizationArgsArgs,
 		underutilizationCriteria: underutilizationCriteria,
 		overutilizationCriteria:  overutilizationCriteria,
-		resourceNames:            getResourceNames(lowNodeUtilizationArgsArgs.Thresholds),
+		resourceNames:            resourceNames,
 		podFilter:                podFilter,
+		usageClient:              usageClient,
 	}, nil
 }
 
@@ -102,9 +133,15 @@ func (l *LowNodeUtilization) Name() string {
 
 // Balance extension point implementation for the plugin
 func (l *LowNodeUtilization) Balance(ctx context.Context, nodes []*v1.Node) *frameworktypes.Status {
+	if err := l.usageClient.sync(nodes); err != nil {
+		return &frameworktypes.Status{
+			Err: fmt.Errorf("error getting node usage: %v", err),
+		}
+	}
+
 	lowNodes, sourceNodes := classifyNodes(
-		getNodeUsage(nodes, l.resourceNames, l.handle.GetPodsAssignedToNodeFunc()),
-		getNodeThresholds(nodes, l.args.Thresholds, l.args.TargetThresholds, l.resourceNames, l.handle.GetPodsAssignedToNodeFunc(), l.args.UseDeviationThresholds),
+		getNodeUsage(nodes, l.usageClient),
+		getNodeThresholds(nodes, l.args.Thresholds, l.args.TargetThresholds, l.resourceNames, l.args.UseDeviationThresholds, l.usageClient),
 		// The node has to be schedulable (to be able to move workload there)
 		func(node *v1.Node, usage NodeUsage, threshold NodeThresholds) bool {
 			if nodeutil.IsNodeUnschedulable(node) {
@@ -172,7 +209,9 @@ func (l *LowNodeUtilization) Balance(ctx context.Context, nodes []*v1.Node) *fra
 		evictions.EvictOptions{StrategyName: LowNodeUtilizationPluginName},
 		l.podFilter,
 		l.resourceNames,
-		continueEvictionCond)
+		continueEvictionCond,
+		l.usageClient,
+	)
 
 	return nil
 }

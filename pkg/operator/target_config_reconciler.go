@@ -13,6 +13,8 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	configlistersv1 "github.com/openshift/client-go/config/listers/config/v1"
+	routeinformers "github.com/openshift/client-go/route/informers/externalversions"
+	routelistersv1 "github.com/openshift/client-go/route/listers/route/v1"
 	"github.com/openshift/cluster-kube-descheduler-operator/bindata"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
@@ -72,6 +74,7 @@ type TargetConfigReconciler struct {
 	queue                 workqueue.RateLimitingInterface
 	protectedNamespaces   []string
 	configSchedulerLister configlistersv1.SchedulerLister
+	routeRouteLister      routelistersv1.RouteLister
 }
 
 func NewTargetConfigReconciler(
@@ -83,6 +86,7 @@ func NewTargetConfigReconciler(
 	kubeClient kubernetes.Interface,
 	dynamicClient dynamic.Interface,
 	configInformer configinformers.SharedInformerFactory,
+	routeInformers routeinformers.SharedInformerFactory,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
 	// make sure our list of excluded system namespaces is up to date
@@ -109,8 +113,10 @@ func NewTargetConfigReconciler(
 		protectedNamespaces:   protectedNamespaces,
 		targetImagePullSpec:   targetImagePullSpec,
 		configSchedulerLister: configInformer.Config().V1().Schedulers().Lister(),
+		routeRouteLister:      routeInformers.Route().V1().Routes().Lister(),
 	}
 	configInformer.Config().V1().Schedulers().Informer().AddEventHandler(c.eventHandler())
+	routeInformers.Route().V1().Routes().Informer().AddEventHandler(c.eventHandler())
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 
 	return c
@@ -210,6 +216,16 @@ func (c TargetConfigReconciler) sync() error {
 		specAnnotations["clusterrolebindings/openshift-descheduler-operand"] = resourceVersion
 	}
 
+	if clusterMonitoringViewClusterRoleBinding, _, err := c.manageClusterMonitoringViewClusterRoleBinding(descheduler); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if clusterMonitoringViewClusterRoleBinding != nil { // SyncConfigMap can return nil
+			resourceVersion = clusterMonitoringViewClusterRoleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["clusterrolebindings/openshift-descheduler-operand"] = resourceVersion
+	}
+
 	if role, _, err := c.manageRole(descheduler); err != nil {
 		return err
 	} else {
@@ -269,6 +285,22 @@ func (c *TargetConfigReconciler) manageClusterRole(descheduler *deschedulerv1.Ku
 
 func (c *TargetConfigReconciler) manageClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRoleBinding, bool, error) {
 	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandclusterrolebinding.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageClusterMonitoringViewClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRoleBinding, bool, error) {
+	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandclusterrolebindingprometheus.yaml"))
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -518,6 +550,9 @@ func topologyAndDuplicatesProfile(profileCustomizations *deschedulerv1.ProfileCu
 
 func softTopologyAndDuplicatesProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
 	profile, err := topologyAndDuplicatesProfile(profileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+	if err != nil {
+		return profile, err
+	}
 	profile.Name = string(deschedulerv1.SoftTopologyAndDuplicates)
 	profile.PluginConfigs[0].Args.Object.(*removepodsviolatingtopologyspreadconstraint.RemovePodsViolatingTopologySpreadConstraintArgs).Constraints = []v1.UnsatisfiableConstraintAction{v1.DoNotSchedule, v1.ScheduleAnyway}
 	return profile, err
@@ -548,16 +583,8 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 				Name: nodeutilization.LowNodeUtilizationPluginName,
 				Args: runtime.RawExtension{
 					Object: &nodeutilization.LowNodeUtilizationArgs{
-						Thresholds: deschedulerapi.ResourceThresholds{
-							v1.ResourceCPU:    20,
-							v1.ResourceMemory: 20,
-							v1.ResourcePods:   20,
-						},
-						TargetThresholds: deschedulerapi.ResourceThresholds{
-							v1.ResourceCPU:    50,
-							v1.ResourceMemory: 50,
-							v1.ResourcePods:   50,
-						},
+						Thresholds:       deschedulerapi.ResourceThresholds{},
+						TargetThresholds: deschedulerapi.ResourceThresholds{},
 					},
 				},
 			},
@@ -612,45 +639,63 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 		}
 	}
 
-	if profileCustomizations == nil {
-		return profile, nil
-	}
+	resourceNames := []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourcePods}
+	lowThreshold := deschedulerapi.Percentage(20)
+	highThreshold := deschedulerapi.Percentage(50)
+	args := profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
 
-	if profileCustomizations.PodLifetime != nil {
-		profile.PluginConfigs[0].Args.Object.(*podlifetime.PodLifeTimeArgs).MaxPodLifeTimeSeconds = utilptr.To[uint](uint(profileCustomizations.PodLifetime.Seconds()))
-	}
+	if profileCustomizations != nil {
+		if profileCustomizations.PodLifetime != nil {
+			profile.PluginConfigs[0].Args.Object.(*podlifetime.PodLifeTimeArgs).MaxPodLifeTimeSeconds = utilptr.To[uint](uint(profileCustomizations.PodLifetime.Seconds()))
+		}
 
-	if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
-		args := profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
-		switch *profileCustomizations.DevLowNodeUtilizationThresholds {
-		case deschedulerv1.LowThreshold:
-			args.Thresholds[v1.ResourceCPU] = 10
-			args.Thresholds[v1.ResourceMemory] = 10
-			args.Thresholds[v1.ResourcePods] = 10
-			args.TargetThresholds[v1.ResourceCPU] = 30
-			args.TargetThresholds[v1.ResourceMemory] = 30
-			args.TargetThresholds[v1.ResourcePods] = 30
-		case deschedulerv1.MediumThreshold, "":
-			args.Thresholds[v1.ResourceCPU] = 20
-			args.Thresholds[v1.ResourceMemory] = 20
-			args.Thresholds[v1.ResourcePods] = 20
-			args.TargetThresholds[v1.ResourceCPU] = 50
-			args.TargetThresholds[v1.ResourceMemory] = 50
-			args.TargetThresholds[v1.ResourcePods] = 50
-		case deschedulerv1.HighThreshold:
-			args.Thresholds[v1.ResourceCPU] = 40
-			args.Thresholds[v1.ResourceMemory] = 40
-			args.Thresholds[v1.ResourcePods] = 40
-			args.TargetThresholds[v1.ResourceCPU] = 70
-			args.TargetThresholds[v1.ResourceMemory] = 70
-			args.TargetThresholds[v1.ResourcePods] = 70
-		default:
-			return nil, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+		if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+			switch *profileCustomizations.DevLowNodeUtilizationThresholds {
+			case deschedulerv1.LowThreshold:
+				lowThreshold = 10
+				highThreshold = 30
+			case deschedulerv1.MediumThreshold, "":
+				lowThreshold = 20
+				highThreshold = 50
+			case deschedulerv1.HighThreshold:
+				lowThreshold = 40
+				highThreshold = 70
+			default:
+				return nil, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+			}
+		}
+
+		if profileCustomizations.DevActualUtilizationProfile != "" {
+			query := ""
+			switch profileCustomizations.DevActualUtilizationProfile {
+			case deschedulerv1.PrometheusCPUUsageProfile:
+				query = "instance:node_cpu:rate:sum"
+			case deschedulerv1.PrometheusCPUPSIPressureProfile:
+				query = "rate(node_pressure_cpu_waiting_seconds_total[1m])"
+			case deschedulerv1.PrometheusMemoryPSIPressureProfile:
+				query = "rate(node_pressure_memory_waiting_seconds_total[1m])"
+			case deschedulerv1.PrometheusIOPSIPressureProfile:
+				query = "rate(node_pressure_io_waiting_seconds_total[1m])"
+			default:
+				if !strings.HasPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:") {
+					return nil, fmt.Errorf("unknown prometheus profile: %v", profileCustomizations.DevActualUtilizationProfile)
+				}
+				query = strings.TrimPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:")
+			}
+			args.MetricsUtilization.Prometheus = nodeutilization.Prometheus{
+				Query: query,
+			}
+			resourceNames = []v1.ResourceName{nodeutilization.ResourceMetrics}
+		}
+
+		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[3]); err != nil {
+			return nil, err
 		}
 	}
 
-	if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[3]); err != nil {
-		return nil, err
+	for _, resourceName := range resourceNames {
+		args.Thresholds[resourceName] = lowThreshold
+		args.TargetThresholds[resourceName] = highThreshold
 	}
 
 	return profile, nil
@@ -658,6 +703,9 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 
 func longLifecycleProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
 	profile, err := lifecycleAndUtilizationProfile(profileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+	if err != nil {
+		return profile, err
+	}
 	profile.PluginConfigs = profile.PluginConfigs[1:]
 	profile.Plugins.Deschedule.Enabled = profile.Plugins.Deschedule.Enabled[1:]
 	profile.Name = string(deschedulerv1.LongLifecycle)
@@ -806,6 +854,24 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	if descheduler.Spec.EvictionLimits != nil {
 		if descheduler.Spec.EvictionLimits.Total != nil {
 			policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Total))
+		}
+	}
+
+	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevActualUtilizationProfile != "" {
+		// detect the prometheus server url
+		route, err := c.routeRouteLister.Routes("openshift-monitoring").Get("prometheus-k8s")
+		if err != nil {
+			return nil, false, fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: %v", err)
+		}
+		if len(route.Status.Ingress) == 0 {
+			return nil, false, fmt.Errorf("No ingress found in openshift-monitoring/prometheus-k8s route")
+		}
+		if route.Status.Ingress[0].Host == "" {
+			return nil, false, fmt.Errorf("Host for status.ingress[0] in openshift-monitoring/prometheus-k8s route is empty")
+		}
+		klog.InfoS("Detecting prometheus server url", "url", route.Status.Ingress[0].Host)
+		policy.Prometheus = v1alpha2.Prometheus{
+			URL: "https://" + route.Status.Ingress[0].Host,
 		}
 	}
 

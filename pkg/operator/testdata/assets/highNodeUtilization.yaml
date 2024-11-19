@@ -1,5 +1,6 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
+metricsCollector: {}
 profiles:
 - name: CompactAndScale
   pluginConfig:
@@ -8,6 +9,8 @@ profiles:
         exclude:
         - openshift-kube-scheduler
         - kube-system
+      metricsUtilization:
+        prometheus: {}
       thresholds:
         cpu: 20
         memory: 20
@@ -37,3 +40,6 @@ profiles:
     sort:
       disabled: null
       enabled: null
+prometheus:
+  authToken:
+    secretReference: {}
