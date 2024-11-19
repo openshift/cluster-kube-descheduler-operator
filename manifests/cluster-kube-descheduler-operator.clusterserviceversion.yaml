@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   # The version value is substituted by the ART pipeline
-  name: clusterkubedescheduleroperator.v5.1.0
+  name: clusterkubedescheduleroperator.v5.1.1
   namespace: openshift-kube-descheduler-operator
   labels:
     operatorframework.io/arch.amd64: supported
@@ -29,7 +29,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: 2024/10/01
+    createdAt: 2024/12/01
     features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
@@ -40,7 +40,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=5.0.0 <5.1.0"
+    olm.skipRange: ">=5.0.0 <5.1.1"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -48,7 +48,7 @@ metadata:
     categories: OpenShift Optional
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
 spec:
-  replaces: clusterkubedescheduleroperator.v5.0.1
+  replaces: clusterkubedescheduleroperator.v5.0.0
   # buffering up to 6 5.0.z releases to allow to include these in all supported bundle index images
   # The buffer len 6 should be sufficient for normal cadance. Including CVE releases.
   # The buffer can be extened later as needed.
@@ -59,6 +59,7 @@ spec:
   - clusterkubedescheduleroperator.v5.0.4
   - clusterkubedescheduleroperator.v5.0.5
   - clusterkubedescheduleroperator.v5.0.6
+  - clusterkubedescheduleroperator.v5.1.0
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
@@ -87,6 +88,8 @@ spec:
       * TopologyAndDuplicates
       * SoftTopologyAndDuplicates
       * LifecycleAndUtilization
+      * LongLifecycle
+      * CompactAndScale
       * EvictPodsWithPVC
       * EvictPodsWithLocalStorage
 
@@ -97,13 +100,15 @@ spec:
       In addition to the profiles, the following parameters can be configured:
 
       * `deschedulingIntervalSeconds` - Set the number of seconds between descheduler runs. A value of `0` in this field runs the descheduler once and exits.
+      * `mode` - Configures the descheduler to either evict pods or to simulate the eviction.
       * `profileCustomizations` - Allows certain profile parameters to be tweaked, such as `podLifetime` (see [README](https://github.com/openshift/cluster-kube-descheduler-operator#profile-customizations) for more info).
+      * `evictionLimits` - Restricts the number of evictions during each descheduling run.
   displayName: Kube Descheduler Operator
   keywords: ["scheduling", "descheduler", "workload"]
   provider:
     name: Red Hat, Inc.
   maturity: beta
-  version: 5.1.0
+  version: 5.1.1
   icon:
   - base64data: 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
     mediatype: image/png
@@ -116,7 +121,7 @@ spec:
   minKubeVersion: 1.30.0
   labels:
     olm-owner-enterprise-app: cluster-kube-descheduler-operator
-    olm-status-descriptors: cluster-kube-descheduler-operator.v5.1.0
+    olm-status-descriptors: cluster-kube-descheduler-operator.v5.1.1
   installModes:
   - supported: true
     type: OwnNamespace
@@ -360,7 +365,7 @@ spec:
                     - name: RELATED_IMAGE_OPERAND_IMAGE
                       value: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
                     - name: OPERAND_VERSION
-                      value: 5.1.0
+                      value: 5.1.1
                   volumeMounts:
                   - name: tmp
                     mountPath: "/tmp"
