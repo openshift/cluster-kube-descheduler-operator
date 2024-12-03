@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 RUN make build --warn-undefined-variables
 
-FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.2
+FROM registry.redhat.io/rhel9-2-els/rhel-minimal:9.2
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
 RUN mkdir /licenses
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/LICENSE /licenses/.
