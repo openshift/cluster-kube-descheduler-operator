@@ -5,7 +5,7 @@ COPY . .
 RUN mkdir licenses
 COPY ./LICENSE licenses/.
 
-ARG OPERATOR_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:bdb5ff7379e50fa7a9d3bd230c33f24f1bd858bf0aa6e61aa072f9a3809d3663
+ARG OPERATOR_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:7ef6ef5375a4913446fa64a3e0742a80231bfee526b1323e2124e96dcde49a4b
 ARG OPERAND_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:e7f1e09ea814190f9c08c7e6a233d1008c937116b278ef92e9de18bcbf10807e
 ARG REPLACED_OPERATOR_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
 ARG REPLACED_OPERAND_IMG=registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
