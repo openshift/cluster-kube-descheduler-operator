@@ -75,22 +75,9 @@
                     ]
                 },
                 {
-                    "name": "clusterkubedescheduleroperator.v5.0.1",
+                    "name": "clusterkubedescheduleroperator.v5.0.2",
                     "replaces": "clusterkubedescheduleroperator.4.14.0-202311021650",
-                    "skipRange": "\u003e=4.12.0 \u003c5.0.1"
-                },
-                {
-                    "name": "clusterkubedescheduleroperator.v5.1.0",
-                    "replaces": "clusterkubedescheduleroperator.v5.0.1",
-                    "skipRange": "\u003e=5.0.0 \u003c5.1.0",
-                    "skips": [
-                        "clusterkubedescheduleroperator.v5.0.1",
-                        "clusterkubedescheduleroperator.v5.0.2",
-                        "clusterkubedescheduleroperator.v5.0.3",
-                        "clusterkubedescheduleroperator.v5.0.4",
-                        "clusterkubedescheduleroperator.v5.0.5",
-                        "clusterkubedescheduleroperator.v5.0.6"
-                    ]
+                    "skipRange": "\u003e=4.12.0 \u003c5.0.2"
                 }
             ],
             "name": "stable",
@@ -111,11 +98,7 @@
         },
         {
             "schema": "olm.bundle",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:b26e5ebec8ffcfaf18c8c4acb8c25a71318ea7d3b372c9e3e170b6026a681a89"
-        },
-        {
-            "schema": "olm.bundle",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:d8ccfec899fbd543a076c28bce386e9ec764bada413350ae53132863ebddaa71"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7"
         }
     ]
 }
