@@ -47,6 +47,9 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
+    operatorframework.io/cluster-monitoring: "true"
+    operatorframework.io/suggested-namespace: "openshift-kube-descheduler-operator"
+    console.openshift.io/operator-monitoring-default: "true"
 spec:
   replaces: clusterkubedescheduleroperator.v5.0.1
   # buffering up to 6 5.0.z releases to allow to include these in all supported bundle index images
