@@ -9,7 +9,7 @@ require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/google/go-cmp v0.6.0
 	github.com/openshift/api v0.0.0-20241015143726-5afd6c371db4
-	github.com/openshift/build-machinery-go v0.0.0-20240910153727-5725581bdf8f
+	github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2
 	github.com/openshift/client-go v0.0.0-20241001162912-da6d55e4611f
 	github.com/openshift/library-go v0.0.0-20241015180910-c0f6295482a7
 	github.com/prometheus/client_golang v1.19.1
