@@ -22,6 +22,7 @@ import (
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
@@ -56,7 +57,7 @@ func TestMain(m *testing.M) {
 	apiExtClient := getApiExtensionKubeClient()
 	deschClient := getDeschedulerClient()
 
-	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events("default"), "test-e2e", &corev1.ObjectReference{})
+	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events("default"), "test-e2e", &corev1.ObjectReference{}, clock.RealClock{})
 
 	ctx, cancelFnc := context.WithCancel(context.TODO())
 	defer cancelFnc()
