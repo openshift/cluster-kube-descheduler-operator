@@ -18,10 +18,7 @@ package nodeutilization
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
@@ -176,8 +173,11 @@ func (client *actualUsageClient) podUsage(pod *v1.Pod) (map[v1.ResourceName]*res
 	totalUsage := make(map[v1.ResourceName]*resource.Quantity)
 	for _, container := range podMetrics.Containers {
 		for _, resourceName := range client.resourceNames {
-			if _, exists := container.Usage[resourceName]; !exists {
+			if resourceName == v1.ResourcePods {
 				continue
+			}
+			if _, exists := container.Usage[resourceName]; !exists {
+				return nil, fmt.Errorf("pod %v/%v: container %q is missing %q resource", pod.Namespace, pod.Name, container.Name, resourceName)
 			}
 			if totalUsage[resourceName] == nil {
 				totalUsage[resourceName] = utilptr.To[resource.Quantity](container.Usage[resourceName].DeepCopy())
@@ -210,13 +210,13 @@ func (client *actualUsageClient) sync(nodes []*v1.Node) error {
 		if !ok {
 			return fmt.Errorf("unable to find node %q in the collected metrics", node.Name)
 		}
-		if _, exists := nodeUsage[v1.ResourceCPU]; !exists {
-			return fmt.Errorf("unable to find %q resource for collected %q node metric", v1.ResourceCPU, node.Name)
-		}
-		if _, exists := nodeUsage[v1.ResourceMemory]; !exists {
-			return fmt.Errorf("unable to find %q resource for collected %q node metric", v1.ResourceMemory, node.Name)
-		}
 		nodeUsage[v1.ResourcePods] = resource.NewQuantity(int64(len(pods)), resource.DecimalSI)
+
+		for _, resourceName := range client.resourceNames {
+			if _, exists := nodeUsage[resourceName]; !exists {
+				return fmt.Errorf("unable to find %q resource for collected %q node metric", resourceName, node.Name)
+			}
+		}
 
 		// store the snapshot of pods from the same (or the closest) node utilization computation
 		client._pods[node.Name] = pods
@@ -261,36 +261,6 @@ func (client *prometheusUsageClient) podUsage(pod *v1.Pod) (map[v1.ResourceName]
 	return nil, newNotSupportedError(prometheusUsageClientType)
 }
 
-type fakePromClient struct {
-	result interface{}
-}
-
-type fakePayload struct {
-	Status string      `json:"status"`
-	Data   queryResult `json:"data"`
-}
-
-type queryResult struct {
-	Type   model.ValueType `json:"resultType"`
-	Result interface{}     `json:"result"`
-}
-
-func (client *fakePromClient) URL(ep string, args map[string]string) *url.URL {
-	return &url.URL{}
-}
-
-func (client *fakePromClient) Do(ctx context.Context, request *http.Request) (*http.Response, []byte, error) {
-	jsonData, err := json.Marshal(fakePayload{
-		Status: "success",
-		Data: queryResult{
-			Type:   model.ValVector,
-			Result: client.result,
-		},
-	})
-
-	return &http.Response{StatusCode: 200}, jsonData, err
-}
-
 func (client *prometheusUsageClient) resourceNames() []v1.ResourceName {
 	return []v1.ResourceName{ResourceMetrics}
 }
@@ -307,11 +277,21 @@ func (client *prometheusUsageClient) sync(nodes []*v1.Node) error {
 		klog.Infof("prometheus metrics warnings: %v", warnings)
 	}
 
+	if results.Type() != model.ValVector {
+		return fmt.Errorf("expected query results to be of type %q, got %q instead", model.ValVector, results.Type())
+	}
+
 	nodeUsages := make(map[string]map[v1.ResourceName]*resource.Quantity)
 	for _, sample := range results.(model.Vector) {
-		nodeName := string(sample.Metric["instance"])
-		nodeUsages[nodeName] = map[v1.ResourceName]*resource.Quantity{
-			v1.ResourceName("MetricResource"): resource.NewQuantity(int64(sample.Value*100), resource.DecimalSI),
+		nodeName, exists := sample.Metric["instance"]
+		if !exists {
+			return fmt.Errorf("The collected metrics sample is missing 'instance' key")
+		}
+		if sample.Value < 0 || sample.Value > 1 {
+			return fmt.Errorf("The collected metrics sample for %q has value %v outside of <0; 1> interval", string(nodeName), sample.Value)
+		}
+		nodeUsages[string(nodeName)] = map[v1.ResourceName]*resource.Quantity{
+			ResourceMetrics: resource.NewQuantity(int64(sample.Value*100), resource.DecimalSI),
 		}
 	}
 
