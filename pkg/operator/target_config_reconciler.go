@@ -672,6 +672,8 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 				query = "instance:node_cpu:rate:sum"
 			case deschedulerv1.PrometheusCPUPSIPressureProfile:
 				query = "rate(node_pressure_cpu_waiting_seconds_total[1m])"
+			case deschedulerv1.PrometheusCPUPSIPressureByUtilizationProfile:
+				query = "avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) and (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))) > 0.7 or avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0"
 			case deschedulerv1.PrometheusMemoryPSIPressureProfile:
 				query = "rate(node_pressure_memory_waiting_seconds_total[1m])"
 			case deschedulerv1.PrometheusIOPSIPressureProfile:

@@ -129,6 +129,8 @@ const (
 	PrometheusCPUUsageProfile ActualUtilizationProfile = "PrometheusCPUUsage"
 	// PrometheusCPUPSIPressureProfile sets rate(node_pressure_cpu_waiting_seconds_total[1m]) query
 	PrometheusCPUPSIPressureProfile ActualUtilizationProfile = "PrometheusCPUPSIPressure"
+	// PrometheusCPUPSIPressureUtilizationProfile sets a query based on a combination of PSI CPU pressure and average CPU utilization
+	PrometheusCPUPSIPressureByUtilizationProfile ActualUtilizationProfile = "PrometheusCPUPSIPressureByUtilization"
 	// PrometheusMemoryPSIPressureProfile sets rate(node_pressure_memory_waiting_seconds_total[1m]) query
 	PrometheusMemoryPSIPressureProfile ActualUtilizationProfile = "PrometheusMemoryPSIPressure"
 	// PrometheusIOPSIPressureProfile sets rate(node_pressure_io_waiting_seconds_total[1m]) query
