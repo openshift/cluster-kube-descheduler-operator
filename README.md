@@ -181,9 +181,10 @@ the `profileCustomizations` field:
 ## Prometheus query profiles
 The operator provides the following profiles:
 - `PrometheusCPUUsage`: `instance:node_cpu:rate:sum` (metric available in OpenShift by default)
-- `PrometheusCPUPSIPressure`: `rate(node_pressure_cpu_waiting_seconds_total[1m])` (`node_pressure_cpu_waiting_seconds_total` is a custom metric that needs to be provided)
-- `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is a custom metric that needs to be provided)
-- `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is a custom metric that needs to be provided)
+- `PrometheusCPUPSIPressure`: `rate(node_pressure_cpu_waiting_seconds_total[1m])` (`node_pressure_cpu_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
+- `PrometheusCPUPSIPressureByUtilization`: `avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) and (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m]))) > 0.7 or avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0` (`node_pressure_cpu_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument; the query is filtering out PSI pressure on nodes with average CPU utilization < 0.7 to filter out false positives pressure spikes due to self imposed CPU throttling)
+- `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
+- `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 
 ```yaml
 apiVersion: operator.openshift.io/v1
