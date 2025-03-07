@@ -558,6 +558,140 @@ func softTopologyAndDuplicatesProfile(profileCustomizations *deschedulerv1.Profi
 	return profile, err
 }
 
+func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile := &v1alpha2.DeschedulerProfile{
+		Name: string(deschedulerv1.RelieveAndMigrate),
+		PluginConfigs: []v1alpha2.PluginConfig{
+			{
+				Name: nodeutilization.LowNodeUtilizationPluginName,
+				Args: runtime.RawExtension{
+					Object: &nodeutilization.LowNodeUtilizationArgs{
+						Thresholds:       deschedulerapi.ResourceThresholds{},
+						TargetThresholds: deschedulerapi.ResourceThresholds{},
+					},
+				},
+			},
+			{
+				Name: defaultevictor.PluginName,
+				Args: runtime.RawExtension{
+					Object: &defaultevictor.DefaultEvictorArgs{
+						IgnorePvcPods:         ignorePVCPods,
+						EvictLocalStoragePods: evictLocalStoragePods,
+					},
+				},
+			},
+		},
+		Plugins: v1alpha2.Plugins{
+			Filter: v1alpha2.PluginSet{
+				Enabled: []string{
+					defaultevictor.PluginName,
+				},
+			},
+			Balance: v1alpha2.PluginSet{
+				Enabled: []string{
+					nodeutilization.LowNodeUtilizationPluginName,
+				},
+			},
+		},
+	}
+
+	// exclude openshift namespaces from descheduling
+	if len(includedNamespaces) > 0 {
+		// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
+		klog.Warning("LowNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime)")
+	}
+	if len(excludedNamespaces) > 0 {
+		profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs).EvictableNamespaces = &deschedulerapi.Namespaces{
+			Exclude: excludedNamespaces,
+		}
+	}
+
+	resourceNames := []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourcePods}
+	lowThreshold := deschedulerapi.Percentage(20)
+	highThreshold := deschedulerapi.Percentage(50)
+	args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+
+	if profileCustomizations != nil {
+		if profileCustomizations.DevLowNodeUtilizationThresholds != nil && profileCustomizations.DevDeviationThresholds != nil {
+			return nil, fmt.Errorf("setting both devLowNodeUtilizationThresholds and devDeviationThresholds is not supported")
+		}
+		if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+			switch *profileCustomizations.DevLowNodeUtilizationThresholds {
+			case deschedulerv1.LowThreshold:
+				lowThreshold = 10
+				highThreshold = 30
+			case deschedulerv1.MediumThreshold, "":
+				lowThreshold = 20
+				highThreshold = 50
+			case deschedulerv1.HighThreshold:
+				lowThreshold = 40
+				highThreshold = 70
+			default:
+				return nil, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+			}
+			args.UseDeviationThresholds = true
+		}
+
+		if profileCustomizations.DevDeviationThresholds != nil {
+			switch *profileCustomizations.DevDeviationThresholds {
+			case deschedulerv1.DeviationThresholdLow:
+				lowThreshold = 10
+				highThreshold = 10
+			case deschedulerv1.DeviationThresholdMedium:
+				lowThreshold = 20
+				highThreshold = 20
+			case deschedulerv1.DeviationThresholdHigh:
+				lowThreshold = 30
+				highThreshold = 30
+			default:
+				return nil, fmt.Errorf("unknown Descheduler DeviationThresholds threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevDeviationThresholds)
+			}
+		}
+
+		if profileCustomizations.DevMultiSoftTainting != nil {
+			// TBD(ingvagabund): produce a taint controller option
+		}
+
+		if profileCustomizations.DevMultiEvictions != nil {
+			// TBD(ingvagabund): produce a descheduler LowNodeUtilization plugin configuration
+		}
+
+		if profileCustomizations.DevActualUtilizationProfile != "" {
+			query := ""
+			switch profileCustomizations.DevActualUtilizationProfile {
+			case deschedulerv1.PrometheusCPUUsageProfile:
+				query = "instance:node_cpu:rate:sum"
+			case deschedulerv1.PrometheusCPUPSIPressureProfile:
+				query = "rate(node_pressure_cpu_waiting_seconds_total[1m])"
+			case deschedulerv1.PrometheusMemoryPSIPressureProfile:
+				query = "rate(node_pressure_memory_waiting_seconds_total[1m])"
+			case deschedulerv1.PrometheusIOPSIPressureProfile:
+				query = "rate(node_pressure_io_waiting_seconds_total[1m])"
+			default:
+				if !strings.HasPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:") {
+					return nil, fmt.Errorf("unknown prometheus profile: %v", profileCustomizations.DevActualUtilizationProfile)
+				}
+				query = strings.TrimPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:")
+			}
+			args.MetricsUtilization.Prometheus = nodeutilization.Prometheus{
+				Query: query,
+			}
+			resourceNames = []v1.ResourceName{nodeutilization.ResourceMetrics}
+		}
+
+		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[1]); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, resourceName := range resourceNames {
+		args.Thresholds[resourceName] = lowThreshold
+		args.TargetThresholds[resourceName] = highThreshold
+	}
+
+	return profile, nil
+}
+
 func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
 		Name: string(deschedulerv1.LifecycleAndUtilization),

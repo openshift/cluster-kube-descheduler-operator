@@ -106,6 +106,7 @@ The following profiles are currently provided:
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
 * [`LongLifecycle`](#LongLifecycle)
 * [`CompactAndScale`](#compactandscale-techpreview)
+* [`RelieveAndMigrate`](#relieveandmigrate-techpreview)
 * [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
 
@@ -151,6 +152,25 @@ An under utilized node is any node consuming less than 20% of its available cpu,
 This profile enables the [`HighNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#highnodeutilization) strategy.
 In the future, more configuration may be made available through the operator based on user feedback.
 
+### RelieveAndMigrate
+
+This profiles seeks to evict pods from high-cost nodes to relieve overall expenses while considering workload migration.
+Node cost can include:
+- Actual resource utilization: Increased resource pressure leads to higher overhead for running applications.
+- Node maintenance costs: A higher number of containers on a node results in greater resource counting.
+Migration strategies may involve VM live migration, state transitions between stateful set pods, and other methods.
+
+This profile enables the [`LowNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization) strategy
+with `EvictionsInBackground` alpha feature enabled.
+In the future, more configuration may be made available through the operator based on user feedback.
+
+The profile exposes the following customization:
+- `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
+- `devActualUtilizationProfile`: Enable load-aware descheduling.
+- `devDeviationThresholds`: Have the thresholds be based on the average utilization.
+- `devMultiSoftTainting`: For applying multiple soft-taints instead of a single one.
+- `devMultiEvictions`: Evict multiple pods per node during a descheduling cycle.
+
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
 profile in combination with any of the above profiles allows pods with PVCs to be
@@ -177,6 +197,9 @@ the `profileCustomizations` field:
 |`devEnableEvictionsInBackground`|`bool`| Enables descheduler's EvictionsInBackground alpha feature. The EvictionsInBackground alpha feature is a subject to change. Currently provided as an experimental feature.|
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
 |`devActualUtilizationProfile`|`string`| Sets a profile that gets translated into a predefined prometheus query |
+| `devDeviationThresholds` | `string` | Have the thresholds be based on the average utilization. Thresholds signify the distance from the average node utilization in the following setting: `Low`: 10%:10%, `Medium`: 20%:20%, `High`: 30%:30% |
+| `devMultiSoftTainting` | `string` | To apply multiple soft-taints instead of just one: `Static` for a single taint, `Dynamic` for one or more, depending on the remaining utilization. |
+| `devMultiEvictions` | `string` |  Evict multiple pods per node during a descheduling cycle: `Simple` for 1 (default), `Modest` for 2, `Rapid` for `5`. |
 
 ## Prometheus query profiles
 The operator provides the following profiles:
