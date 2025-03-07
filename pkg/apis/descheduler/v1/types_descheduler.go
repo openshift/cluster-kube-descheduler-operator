@@ -90,6 +90,18 @@ type ProfileCustomizations struct {
 	// LowNodeUtilization plugin can consume the metrics for now.
 	// Currently provided as an experimental feature.
 	DevActualUtilizationProfile ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
+
+	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
+	// +kubebuilder:validation:Enum=Low;Medium;High;""
+	DevDeviationThresholds *DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
+
+	// To apply multiple soft-taints instead of just one
+	// +kubebuilder:validation:Enum=Static;Dynamic;""
+	DevMultiSoftTainting *MultiSoftTaintingType `json:"devMultiSoftTainting,omitempty"`
+
+	// Evict multiple pods per node during a descheduling cycle
+	// +kubebuilder:validation:Enum=Simple;Modest;Rapid;""
+	DevMultiEvictions *MultiEvictionsType `json:"devMultiEvictions,omitempty"`
 }
 
 type LowNodeUtilizationThresholdsType string
@@ -119,6 +131,48 @@ var (
 	// CompactHighThreshold sets thresholds to 30% ratio.
 	// The threshold value is subject to change.
 	CompactModerateThreshold HighNodeUtilizationThresholdsType = "Moderate"
+)
+
+type DeviationThresholdsType string
+
+var (
+	// DeviationThresholdLow sets thresholds to 10%:10% ratio.
+	// The threshold value is subject to change.
+	DeviationThresholdLow DeviationThresholdsType = "Low"
+
+	// DeviationThresholdMedium sets thresholds to 20%:20% ratio.
+	// The threshold value is subject to change.
+	DeviationThresholdMedium DeviationThresholdsType = "Medium"
+
+	// DeviationThresholdHigh sets thresholds to 30%:30% ratio.
+	// The threshold value is subject to change.
+	DeviationThresholdHigh DeviationThresholdsType = "High"
+)
+
+type MultiSoftTaintingType string
+
+var (
+	// MultiSoftTaintingStatic taints a node with a single soft taint
+	MultiSoftTaintingStatic MultiSoftTaintingType = "Static"
+
+	// MultiSoftTaintingDynamic taints a node with one or more soft taints, depending on the remaining utilization.
+	MultiSoftTaintingDynamic MultiSoftTaintingType = "Dynamic"
+)
+
+type MultiEvictionsType string
+
+var (
+	// MultiEvictionsSimple evicts a single pod during a descheduling cycle
+	// The value is subject to change.
+	MultiEvictionsSimple MultiEvictionsType = "Simple"
+
+	// MultiEvictionsSimple evicts two pods during a descheduling cycle
+	// The value is subject to change.
+	MultiEvictionsModest MultiEvictionsType = "Modest"
+
+	// MultiEvictionsSimple evicts five pods during a descheduling cycle
+	// The value is subject to change.
+	MultiEvictionsRapid MultiEvictionsType = "Rapid"
 )
 
 // ActualUtilizationProfile sets predefined Prometheus PromQL query
@@ -178,6 +232,9 @@ var (
 
 	// CompactAndScale seeks to evict pods to enable the same workload to run on a smaller set of nodes.
 	CompactAndScale DeschedulerProfile = "CompactAndScale"
+
+	// RelieveAndMigrate seeks to evict pods from high-cost nodes to relieve overall expenses while considering workload migration.
+	RelieveAndMigrate DeschedulerProfile = "RelieveAndMigrate"
 )
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler

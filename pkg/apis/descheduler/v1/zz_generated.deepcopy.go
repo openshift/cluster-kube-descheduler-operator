@@ -196,6 +196,21 @@ func (in *ProfileCustomizations) DeepCopyInto(out *ProfileCustomizations) {
 		*out = new(HighNodeUtilizationThresholdsType)
 		**out = **in
 	}
+	if in.DevDeviationThresholds != nil {
+		in, out := &in.DevDeviationThresholds, &out.DevDeviationThresholds
+		*out = new(DeviationThresholdsType)
+		**out = **in
+	}
+	if in.DevMultiSoftTainting != nil {
+		in, out := &in.DevMultiSoftTainting, &out.DevMultiSoftTainting
+		*out = new(MultiSoftTaintingType)
+		**out = **in
+	}
+	if in.DevMultiEvictions != nil {
+		in, out := &in.DevMultiEvictions, &out.DevMultiEvictions
+		*out = new(MultiEvictionsType)
+		**out = **in
+	}
 	return
 }
 
