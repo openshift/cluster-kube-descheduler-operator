@@ -24,6 +24,7 @@ import (
 const OperatorNamespace = "openshift-kube-descheduler-operator"
 const OperatorConfigName = "cluster"
 const OperandName = "descheduler"
+const SoftTainterOperandName = "softtainter"
 
 type DeschedulerClient struct {
 	Ctx            context.Context

@@ -1,0 +1,43 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openshift-descheduler-operand
+rules:
+- apiGroups:
+  - "events.k8s.io"
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "watch"
+  - "list"
+  - "create"
+  - "update"
+  - "patch"
+  - "delete"
+- apiGroups:
+  - ""
+  resources:
+  - "nodes"
+  verbs:
+  - "get"
+  - "watch"
+  - "list"
+  - "patch"
+  - "update"
+- apiGroups:
+  - "coordination.k8s.io"
+  resources:
+  - "leases"
+  verbs:
+  - "create"
+- apiGroups:
+  - "coordination.k8s.io"
+  resources:
+  - "leases"
+  resourceNames:
+  - "softtainter"
+  verbs:
+  - "get"
+  - "patch"
+  - "delete"

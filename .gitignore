@@ -1,4 +1,5 @@
 cluster-kube-descheduler-operator
+soft-tainter
 
 # Binaries for programs and plugins
 *.exe

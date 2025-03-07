@@ -42,6 +42,8 @@ spec:
               value: "descheduler-operator"
             - name: RELATED_IMAGE_OPERAND_IMAGE
               value: quay.io/openshift/origin-descheduler:latest
+            - name: RELATED_IMAGE_SOFTTAINTER_IMAGE
+              value: quay.io/openshift/origin-softtainter:latest
             - name: OPERAND_VERSION
               value: 5.1.0
           volumeMounts:

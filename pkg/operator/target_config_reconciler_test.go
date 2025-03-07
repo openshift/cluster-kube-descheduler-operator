@@ -590,7 +590,7 @@ func TestManageDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := tt.targetConfigReconciler.manageDeployment(tt.descheduler, nil)
+			got, _, err := tt.targetConfigReconciler.manageDeschedulerDeployment(tt.descheduler, nil)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v\n", err)
 			}
