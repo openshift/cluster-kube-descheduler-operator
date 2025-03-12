@@ -3,21 +3,24 @@
 package v1
 
 import (
-	apisdeschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ProfileCustomizationsApplyConfiguration represents a declarative configuration of the ProfileCustomizations type for use
 // with apply.
 type ProfileCustomizationsApplyConfiguration struct {
-	PodLifetime                      *v1.Duration                                         `json:"podLifetime,omitempty"`
-	ThresholdPriority                *int32                                               `json:"thresholdPriority,omitempty"`
-	ThresholdPriorityClassName       *string                                              `json:"thresholdPriorityClassName,omitempty"`
-	Namespaces                       *NamespacesApplyConfiguration                        `json:"namespaces,omitempty"`
-	DevLowNodeUtilizationThresholds  *apisdeschedulerv1.LowNodeUtilizationThresholdsType  `json:"devLowNodeUtilizationThresholds,omitempty"`
-	DevEnableEvictionsInBackground   *bool                                                `json:"devEnableEvictionsInBackground,omitempty"`
-	DevHighNodeUtilizationThresholds *apisdeschedulerv1.HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds,omitempty"`
-	DevActualUtilizationProfile      *apisdeschedulerv1.ActualUtilizationProfile          `json:"devActualUtilizationProfile,omitempty"`
+	PodLifetime                      *metav1.Duration                                 `json:"podLifetime,omitempty"`
+	ThresholdPriority                *int32                                           `json:"thresholdPriority,omitempty"`
+	ThresholdPriorityClassName       *string                                          `json:"thresholdPriorityClassName,omitempty"`
+	Namespaces                       *NamespacesApplyConfiguration                    `json:"namespaces,omitempty"`
+	DevLowNodeUtilizationThresholds  *deschedulerv1.LowNodeUtilizationThresholdsType  `json:"devLowNodeUtilizationThresholds,omitempty"`
+	DevEnableEvictionsInBackground   *bool                                            `json:"devEnableEvictionsInBackground,omitempty"`
+	DevHighNodeUtilizationThresholds *deschedulerv1.HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds,omitempty"`
+	DevActualUtilizationProfile      *deschedulerv1.ActualUtilizationProfile          `json:"devActualUtilizationProfile,omitempty"`
+	DevDeviationThresholds           *deschedulerv1.DeviationThresholdsType           `json:"devDeviationThresholds,omitempty"`
+	DevMultiSoftTainting             *deschedulerv1.MultiSoftTaintingType             `json:"devMultiSoftTainting,omitempty"`
+	DevMultiEvictions                *deschedulerv1.MultiEvictionsType                `json:"devMultiEvictions,omitempty"`
 }
 
 // ProfileCustomizationsApplyConfiguration constructs a declarative configuration of the ProfileCustomizations type for use with
@@ -29,7 +32,7 @@ func ProfileCustomizations() *ProfileCustomizationsApplyConfiguration {
 // WithPodLifetime sets the PodLifetime field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the PodLifetime field is set to the value of the last call.
-func (b *ProfileCustomizationsApplyConfiguration) WithPodLifetime(value v1.Duration) *ProfileCustomizationsApplyConfiguration {
+func (b *ProfileCustomizationsApplyConfiguration) WithPodLifetime(value metav1.Duration) *ProfileCustomizationsApplyConfiguration {
 	b.PodLifetime = &value
 	return b
 }
@@ -61,7 +64,7 @@ func (b *ProfileCustomizationsApplyConfiguration) WithNamespaces(value *Namespac
 // WithDevLowNodeUtilizationThresholds sets the DevLowNodeUtilizationThresholds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DevLowNodeUtilizationThresholds field is set to the value of the last call.
-func (b *ProfileCustomizationsApplyConfiguration) WithDevLowNodeUtilizationThresholds(value apisdeschedulerv1.LowNodeUtilizationThresholdsType) *ProfileCustomizationsApplyConfiguration {
+func (b *ProfileCustomizationsApplyConfiguration) WithDevLowNodeUtilizationThresholds(value deschedulerv1.LowNodeUtilizationThresholdsType) *ProfileCustomizationsApplyConfiguration {
 	b.DevLowNodeUtilizationThresholds = &value
 	return b
 }
@@ -77,7 +80,7 @@ func (b *ProfileCustomizationsApplyConfiguration) WithDevEnableEvictionsInBackgr
 // WithDevHighNodeUtilizationThresholds sets the DevHighNodeUtilizationThresholds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DevHighNodeUtilizationThresholds field is set to the value of the last call.
-func (b *ProfileCustomizationsApplyConfiguration) WithDevHighNodeUtilizationThresholds(value apisdeschedulerv1.HighNodeUtilizationThresholdsType) *ProfileCustomizationsApplyConfiguration {
+func (b *ProfileCustomizationsApplyConfiguration) WithDevHighNodeUtilizationThresholds(value deschedulerv1.HighNodeUtilizationThresholdsType) *ProfileCustomizationsApplyConfiguration {
 	b.DevHighNodeUtilizationThresholds = &value
 	return b
 }
@@ -85,7 +88,31 @@ func (b *ProfileCustomizationsApplyConfiguration) WithDevHighNodeUtilizationThre
 // WithDevActualUtilizationProfile sets the DevActualUtilizationProfile field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DevActualUtilizationProfile field is set to the value of the last call.
-func (b *ProfileCustomizationsApplyConfiguration) WithDevActualUtilizationProfile(value apisdeschedulerv1.ActualUtilizationProfile) *ProfileCustomizationsApplyConfiguration {
+func (b *ProfileCustomizationsApplyConfiguration) WithDevActualUtilizationProfile(value deschedulerv1.ActualUtilizationProfile) *ProfileCustomizationsApplyConfiguration {
 	b.DevActualUtilizationProfile = &value
+	return b
+}
+
+// WithDevDeviationThresholds sets the DevDeviationThresholds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevDeviationThresholds field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevDeviationThresholds(value deschedulerv1.DeviationThresholdsType) *ProfileCustomizationsApplyConfiguration {
+	b.DevDeviationThresholds = &value
+	return b
+}
+
+// WithDevMultiSoftTainting sets the DevMultiSoftTainting field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevMultiSoftTainting field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevMultiSoftTainting(value deschedulerv1.MultiSoftTaintingType) *ProfileCustomizationsApplyConfiguration {
+	b.DevMultiSoftTainting = &value
+	return b
+}
+
+// WithDevMultiEvictions sets the DevMultiEvictions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevMultiEvictions field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevMultiEvictions(value deschedulerv1.MultiEvictionsType) *ProfileCustomizationsApplyConfiguration {
+	b.DevMultiEvictions = &value
 	return b
 }

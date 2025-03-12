@@ -3,7 +3,7 @@
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
