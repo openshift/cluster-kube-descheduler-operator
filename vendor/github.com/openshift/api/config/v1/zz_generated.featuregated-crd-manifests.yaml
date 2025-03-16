@@ -115,6 +115,7 @@ clusterversions.config.openshift.io:
   Capability: ""
   Category: ""
   FeatureGates:
+  - ImageStreamImportMode
   - SignatureStores
   FilenameOperatorName: cluster-version-operator
   FilenameOperatorOrdering: "01"
@@ -312,9 +313,15 @@ infrastructures.config.openshift.io:
   FeatureGates:
   - AWSClusterHostedDNS
   - BareMetalLoadBalancer
+  - DualReplica
+  - DyanmicServiceEndpointIBMCloud
   - GCPClusterHostedDNS
+  - GCPCustomAPIEndpoints
   - GCPLabelsTags
+  - HighlyAvailableArbiter
+  - NutanixMultiSubnets
   - VSphereControlPlaneMachineSet
+  - VSphereHostVMGroupZonal
   - VSphereMultiNetworks
   - VSphereMultiVCenters
   FilenameOperatorName: config-operator
@@ -383,7 +390,8 @@ nodes.config.openshift.io:
   CRDName: nodes.config.openshift.io
   Capability: ""
   Category: ""
-  FeatureGates: []
+  FeatureGates:
+  - MinimumKubeletVersion
   FilenameOperatorName: config-operator
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_10"
