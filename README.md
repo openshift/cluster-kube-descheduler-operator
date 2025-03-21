@@ -172,6 +172,7 @@ The profile exposes the following customization:
 - `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
 - `devDeviationThresholds`: Have the thresholds be based on the average utilization.
+- `devEnableSoftTainter`: Have the operator deploying the soft-tainter component to dynamic set/remove soft taints according to the same criteria used for load aware descheduling. Scheduling and descheduling decisions are in general fully independent. In case of load-aware descheduling we can potentially have a relevant asymmetry between the descheduling and successive scheduling decisions. The soft taints set by the descheduler soft-tainter act as a hint for the scheduler to mitigate this asymmetry and foster a quicker convergence.
 
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
@@ -200,6 +201,7 @@ the `profileCustomizations` field:
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
 |`devActualUtilizationProfile`|`string`| Sets a profile that gets translated into a predefined prometheus query |
 | `devDeviationThresholds` | `string` | Have the thresholds be based on the average utilization. Thresholds signify the distance from the average node utilization in the following setting: `Low`: 10%:10%, `Medium`: 20%:20%, `High`: 30%:30% |
+| `devEnableSoftTainter` | `bool` | Have the operator deploying the soft-tainter component to dynamic set/remove soft taints a a hint for the scheduler based on the same criteria used for the descheduling |
 
 ## Prometheus query profiles
 The operator provides the following profiles:

@@ -10,6 +10,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
     name: PodLifeTime
   - args:
@@ -19,6 +20,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
       podRestartThreshold: 100
     name: RemovePodsHavingTooManyRestarts
@@ -28,6 +30,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
       targetThresholds:
         cpu: 30

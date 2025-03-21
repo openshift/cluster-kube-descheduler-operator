@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "softtainer"
+  namespace: "openshift-kube-descheduler-operator"
+  labels:
+    app: "softtainer"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "softtainer"
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: openshift-softtainer
+      labels:
+        app: "softtainer"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: "policy-volume"
+          configMap:
+            name: "descheduler"
+        - name: certs-dir
+          secret:
+            secretName: kube-descheduler-serving-cert
+      priorityClassName: "system-cluster-critical"
+      restartPolicy: "Always"
+      containers:
+        - name: "openshift-softtainer"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          image: ${IMAGE}
+          livenessProbe:
+            failureThreshold: 1
+            httpGet:
+              path: /livez
+              port: 6060
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          readinessProbe:
+            failureThreshold: 1
+            httpGet:
+              path: /readyz
+              port: 6060
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "500Mi"
+          command: ["/usr/bin/soft-tainter"]
+          args:
+            - --policy-config-file=/policy-dir/policy.yaml
+            - --logging-format=text
+            - --tls-cert-file=/certs-dir/tls.crt
+            - --tls-private-key-file=/certs-dir/tls.key
+          volumeMounts:
+            - mountPath: "/policy-dir"
+              name: "policy-volume"
+            - mountPath: "/certs-dir"
+              name: certs-dir
+      serviceAccountName: "openshift-descheduler-softtainter"

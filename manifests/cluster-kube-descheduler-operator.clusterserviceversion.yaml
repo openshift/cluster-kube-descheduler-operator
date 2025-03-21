@@ -151,6 +151,7 @@ spec:
           - monitoring.coreos.com
           resources:
           - servicemonitors
+          - prometheusrules
           verbs:
           - get
           - watch
@@ -320,6 +321,20 @@ spec:
           - get
           - watch
           - list
+        - apiGroups:
+            - admissionregistration.k8s.io
+          resources:
+            - validatingadmissionpolicies
+            - validatingadmissionpolicybindings
+          verbs:
+            - get
+            - watch
+            - list
+            - create
+            - update
+            - patch
+            - delete
+            - deletecollection
       deployments:
       - name: descheduler-operator
         spec:

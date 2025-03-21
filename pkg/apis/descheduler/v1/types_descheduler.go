@@ -71,9 +71,14 @@ type ProfileCustomizations struct {
 	// the default exclusion of all openshift-*, kube-system and hypershift namespaces
 	Namespaces Namespaces `json:"namespaces"`
 
-	// LowNodeUtilizationThresholds enumerates predefined experimental thresholds
+	// DevLowNodeUtilizationThresholds enumerates predefined experimental thresholds
 	// +kubebuilder:validation:Enum=Low;Medium;High;""
 	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
+
+	// DevEnableSoftTainter enables SoftTainter alpha feature.
+	// The EnableSoftTainter alpha feature is a subject to change.
+	// Currently provided as an experimental feature.
+	DevEnableSoftTainter bool `json:"devEnableSoftTainter"`
 
 	// DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
 	// The EvictionsInBackground alpha feature is a subject to change.
@@ -155,6 +160,8 @@ const (
 	PrometheusMemoryPSIPressureProfile ActualUtilizationProfile = "PrometheusMemoryPSIPressure"
 	// PrometheusIOPSIPressureProfile sets rate(node_pressure_io_waiting_seconds_total[1m]) query
 	PrometheusIOPSIPressureProfile ActualUtilizationProfile = "PrometheusIOPSIPressure"
+	// PrometheusCPUCombinedProfile uses a combination of CPU utilization and CPU pressure based on a recording rule
+	PrometheusCPUCombinedProfile ActualUtilizationProfile = "PrometheusCPUCombined"
 )
 
 // Namespaces overrides included and excluded namespaces while keeping

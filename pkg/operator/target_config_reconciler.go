@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/descheduler/v1"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/softtainter"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
@@ -27,6 +29,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	"github.com/openshift/library-go/pkg/controller"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	v1 "k8s.io/api/core/v1"
@@ -42,6 +45,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/kubernetes/pkg/util/taints"
 	utilptr "k8s.io/utils/ptr"
 
 	deschedulerapi "sigs.k8s.io/descheduler/pkg/api"
@@ -64,22 +68,25 @@ const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "2"}
 
 type TargetConfigReconciler struct {
-	ctx                   context.Context
-	targetImagePullSpec   string
-	operatorClient        operatorconfigclientv1.KubedeschedulersV1Interface
-	deschedulerClient     *operatorclient.DeschedulerClient
-	kubeClient            kubernetes.Interface
-	dynamicClient         dynamic.Interface
-	eventRecorder         events.Recorder
-	queue                 workqueue.RateLimitingInterface
-	protectedNamespaces   []string
-	configSchedulerLister configlistersv1.SchedulerLister
-	routeRouteLister      routelistersv1.RouteLister
+	ctx                      context.Context
+	deschedulerImagePullSpec string
+	softtainterImagePullSpec string
+	operatorClient           operatorconfigclientv1.KubedeschedulersV1Interface
+	deschedulerClient        *operatorclient.DeschedulerClient
+	kubeClient               kubernetes.Interface
+	dynamicClient            dynamic.Interface
+	eventRecorder            events.Recorder
+	queue                    workqueue.RateLimitingInterface
+	protectedNamespaces      []string
+	configSchedulerLister    configlistersv1.SchedulerLister
+	routeRouteLister         routelistersv1.RouteLister
+	cache                    resourceapply.ResourceCache
 }
 
 func NewTargetConfigReconciler(
 	ctx context.Context,
-	targetImagePullSpec string,
+	deschedulerImagePullSpec string,
+	softTainterImagePullSpec string,
 	operatorConfigClient operatorconfigclientv1.KubedeschedulersV1Interface,
 	operatorClientInformer operatorclientinformers.KubeDeschedulerInformer,
 	deschedulerClient *operatorclient.DeschedulerClient,
@@ -103,17 +110,19 @@ func NewTargetConfigReconciler(
 	}
 
 	c := &TargetConfigReconciler{
-		ctx:                   ctx,
-		operatorClient:        operatorConfigClient,
-		deschedulerClient:     deschedulerClient,
-		kubeClient:            kubeClient,
-		dynamicClient:         dynamicClient,
-		eventRecorder:         eventRecorder,
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
-		protectedNamespaces:   protectedNamespaces,
-		targetImagePullSpec:   targetImagePullSpec,
-		configSchedulerLister: configInformer.Config().V1().Schedulers().Lister(),
-		routeRouteLister:      routeInformers.Route().V1().Routes().Lister(),
+		ctx:                      ctx,
+		operatorClient:           operatorConfigClient,
+		deschedulerClient:        deschedulerClient,
+		kubeClient:               kubeClient,
+		dynamicClient:            dynamicClient,
+		eventRecorder:            eventRecorder,
+		queue:                    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
+		protectedNamespaces:      protectedNamespaces,
+		deschedulerImagePullSpec: deschedulerImagePullSpec,
+		softtainterImagePullSpec: softTainterImagePullSpec,
+		configSchedulerLister:    configInformer.Config().V1().Schedulers().Lister(),
+		routeRouteLister:         routeInformers.Route().V1().Routes().Lister(),
+		cache:                    resourceapply.NewResourceCache(),
 	}
 	configInformer.Config().V1().Schedulers().Informer().AddEventHandler(c.eventHandler())
 	routeInformers.Route().V1().Routes().Informer().AddEventHandler(c.eventHandler())
@@ -196,6 +205,21 @@ func (c TargetConfigReconciler) sync() error {
 		specAnnotations["serviceaccounts/openshift-descheduler-operand"] = resourceVersion
 	}
 
+	isSoftTainterNeeded, err := c.isSoftTainterNeeded(descheduler)
+	if err != nil {
+		return err
+	}
+
+	if stsa, _, err := c.manageSoftTainterServiceAccount(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stsa != nil {
+			resourceVersion = stsa.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["serviceaccounts/openshift-descheduler-softtainter"] = resourceVersion
+	}
+
 	if clusterRole, _, err := c.manageClusterRole(descheduler); err != nil {
 		return err
 	} else {
@@ -206,14 +230,64 @@ func (c TargetConfigReconciler) sync() error {
 		specAnnotations["clusterroles/openshift-descheduler-operand"] = resourceVersion
 	}
 
+	if stClusterRole, _, err := c.manageSoftTainterClusterRole(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stClusterRole != nil {
+			resourceVersion = stClusterRole.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["clusterroles/openshift-descheduler-softtainter"] = resourceVersion
+	}
+
 	if clusterRoleBinding, _, err := c.manageClusterRoleBinding(descheduler); err != nil {
 		return err
 	} else {
 		resourceVersion := "0"
-		if clusterRoleBinding != nil { // SyncConfigMap can return nil
+		if clusterRoleBinding != nil {
 			resourceVersion = clusterRoleBinding.ObjectMeta.ResourceVersion
 		}
 		specAnnotations["clusterrolebindings/openshift-descheduler-operand"] = resourceVersion
+	}
+
+	if stClusterRoleBinding, _, err := c.manageSoftTainterClusterRoleBinding(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stClusterRoleBinding != nil {
+			resourceVersion = stClusterRoleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["clusterrolebindings/openshift-descheduler-softtainter"] = resourceVersion
+	}
+
+	if prometheusRule, _, err := c.managePrometheusRule(descheduler); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if prometheusRule != nil {
+			resourceVersion = prometheusRule.GetResourceVersion()
+		}
+		specAnnotations["prometheusrule/descheduler-rules"] = resourceVersion
+	}
+
+	if softTainterVAP, _, err := c.manageSoftTainterValidatingAdmissionPolicy(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if softTainterVAP != nil {
+			resourceVersion = softTainterVAP.GetResourceVersion()
+		}
+		specAnnotations["validatingadmissionpolicy/openshift-descheduler-softtainter-vap"] = resourceVersion
+	}
+
+	if softTainterVAPBinding, _, err := c.manageSoftTainterValidatingAdmissionPolicyBinding(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if softTainterVAPBinding != nil {
+			resourceVersion = softTainterVAPBinding.GetResourceVersion()
+		}
+		specAnnotations["validatingadmissionpolicybinding/openshift-descheduler-softtainter-vap-binding"] = resourceVersion
 	}
 
 	if clusterMonitoringViewClusterRoleBinding, _, err := c.manageClusterMonitoringViewClusterRoleBinding(descheduler); err != nil {
@@ -222,6 +296,16 @@ func (c TargetConfigReconciler) sync() error {
 		resourceVersion := "0"
 		if clusterMonitoringViewClusterRoleBinding != nil { // SyncConfigMap can return nil
 			resourceVersion = clusterMonitoringViewClusterRoleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["clusterrolebindings/openshift-descheduler-softtainter"] = resourceVersion
+	}
+
+	if softtainterClusterMonitoringViewClusterRoleBinding, _, err := c.manageSoftTainterClusterMonitoringViewClusterRoleBinding(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if softtainterClusterMonitoringViewClusterRoleBinding != nil {
+			resourceVersion = softtainterClusterMonitoringViewClusterRoleBinding.ObjectMeta.ResourceVersion
 		}
 		specAnnotations["clusterrolebindings/openshift-descheduler-operand"] = resourceVersion
 	}
@@ -250,7 +334,12 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	deployment, _, err := c.manageDeployment(descheduler, specAnnotations)
+	deschedulerDeployment, _, err := c.manageDeschedulerDeployment(descheduler, specAnnotations)
+	if err != nil {
+		return err
+	}
+
+	softTainterDeployment, _, err := c.manageSoftTainterDeployment(descheduler, specAnnotations, isSoftTainterNeeded)
 	if err != nil {
 		return err
 	}
@@ -261,9 +350,15 @@ func (c TargetConfigReconciler) sync() error {
 			Status: operatorv1.ConditionFalse,
 		}),
 		func(status *operatorv1.OperatorStatus) error {
-			resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
+			resourcemerge.SetDeploymentGeneration(&status.Generations, deschedulerDeployment)
 			return nil
-		})
+		},
+		// TODO: do it only if enabled
+		func(status *operatorv1.OperatorStatus) error {
+			resourcemerge.SetDeploymentGeneration(&status.Generations, softTainterDeployment)
+			return nil
+		},
+	)
 	return err
 }
 
@@ -281,6 +376,42 @@ func (c *TargetConfigReconciler) manageClusterRole(descheduler *deschedulerv1.Ku
 	controller.EnsureOwnerRef(required, ownerReference)
 
 	return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterClusterRole(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.ClusterRole, bool, error) {
+	required := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterclusterrole.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.ClusterRoleBinding, bool, error) {
+	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterclusterrolebinding.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRoleBinding, bool, error) {
@@ -313,6 +444,70 @@ func (c *TargetConfigReconciler) manageClusterMonitoringViewClusterRoleBinding(d
 	controller.EnsureOwnerRef(required, ownerReference)
 
 	return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) managePrometheusRule(descheduler *deschedulerv1.KubeDescheduler) (*unstructured.Unstructured, bool, error) {
+	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/prometheusrule.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
+	controller.EnsureOwnerRef(required, ownerReference)
+	return resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterValidatingAdmissionPolicy(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*admissionv1.ValidatingAdmissionPolicy, bool, error) {
+	required := resourceread.ReadValidatingAdmissionPolicyV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtaintervalidatingadmissionpolicy.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyValidatingAdmissionPolicyV1(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, required, c.cache)
+	}
+	return DeleteValidatingAdmissionPolicyV1(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, required)
+
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterValidatingAdmissionPolicyBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*admissionv1.ValidatingAdmissionPolicyBinding, bool, error) {
+	required := resourceread.ReadValidatingAdmissionPolicyBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtaintervalidatingadmissionpolicybinding.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyValidatingAdmissionPolicyBindingV1(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, required, c.cache)
+	}
+	return DeleteValidatingAdmissionPolicyBindingV1(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterClusterMonitoringViewClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.ClusterRoleBinding, bool, error) {
+	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterclusterrolebindingprometheus.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageRole(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.Role, bool, error) {
@@ -364,6 +559,26 @@ func (c *TargetConfigReconciler) manageServiceAccount(descheduler *deschedulerv1
 	controller.EnsureOwnerRef(required, ownerReference)
 
 	return resourceapply.ApplyServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterServiceAccount(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*v1.ServiceAccount, bool, error) {
+	required := resourceread.ReadServiceAccountV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterserviceaccount.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	if stEnabled {
+		return resourceapply.ApplyServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDescheduler) (*v1.Service, bool, error) {
@@ -570,6 +785,8 @@ func utilizationProfileToPrometheusQuery(profile deschedulerv1.ActualUtilization
 		return "rate(node_pressure_memory_waiting_seconds_total[1m])", nil
 	case deschedulerv1.PrometheusIOPSIPressureProfile:
 		return "rate(node_pressure_io_waiting_seconds_total[1m])", nil
+	case deschedulerv1.PrometheusCPUCombinedProfile:
+		return "descheduler:combined_utilization_and_pressure:avg1m", nil
 	default:
 		if !strings.HasPrefix(string(profile), "query:") {
 			return "", fmt.Errorf("unknown prometheus profile: %v", profile)
@@ -999,12 +1216,22 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		if route.Status.Ingress[0].Host == "" {
 			return nil, false, fmt.Errorf("Host for status.ingress[0] in openshift-monitoring/prometheus-k8s route is empty")
 		}
+		err = c.checkNamepsaceMonitoringLabel()
+		if err != nil {
+			return nil, false, err
+		}
 		klog.InfoS("Detecting prometheus server url", "url", route.Status.Ingress[0].Host)
 		policy.MetricsProviders = []v1alpha2.MetricsProvider{{
 			Source: v1alpha2.PrometheusMetrics,
 			Prometheus: &v1alpha2.Prometheus{
 				URL: "https://" + route.Status.Ingress[0].Host,
 			}},
+		}
+	}
+
+	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevEnableSoftTainter {
+		if !slices.Contains(descheduler.Spec.Profiles, deschedulerv1.RelieveAndMigrate) {
+			return nil, true, fmt.Errorf("the softtainter can only be used with the RelieveAndMigrate profile")
 		}
 	}
 
@@ -1046,6 +1273,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.RelieveAndMigrate:
+			kubeVirtShedulable := "kubevirt.io/schedulable=true"
+			policy.NodeSelector = &kubeVirtShedulable
 			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
@@ -1134,10 +1363,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.KubeDescheduler, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
-	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
-	required.Name = operatorclient.OperandName
-	required.Namespace = descheduler.Namespace
+func (c *TargetConfigReconciler) manageDeployment(required *appsv1.Deployment, descheduler *deschedulerv1.KubeDescheduler, targetImagePullSpec string, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -1207,12 +1433,13 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 	}
 
 	images := map[string]string{
-		"${IMAGE}": c.targetImagePullSpec,
+		"${IMAGE}": targetImagePullSpec,
 	}
 	for i := range required.Spec.Template.Spec.Containers {
 		for pat, img := range images {
 			if required.Spec.Template.Spec.Containers[i].Image == pat {
 				required.Spec.Template.Spec.Containers[i].Image = img
+				required.Spec.Template.Spec.Containers[i].ImagePullPolicy = v1.PullAlways // TODO: remove me
 				break
 			}
 		}
@@ -1239,6 +1466,23 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 		c.eventRecorder,
 		required,
 		resourcemerge.ExpectedDeploymentGeneration(required, descheduler.Status.Generations))
+}
+
+func (c *TargetConfigReconciler) manageDeschedulerDeployment(descheduler *deschedulerv1.KubeDescheduler, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
+	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
+	required.Name = operatorclient.OperandName
+	required.Namespace = descheduler.Namespace
+	return c.manageDeployment(required, descheduler, c.deschedulerImagePullSpec, specAnnotations)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterDeployment(descheduler *deschedulerv1.KubeDescheduler, specAnnotations map[string]string, stEnabled bool) (*appsv1.Deployment, bool, error) {
+	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterdeployment.yaml"))
+	required.Name = operatorclient.SoftTainterOperandName
+	required.Namespace = descheduler.Namespace
+	if stEnabled {
+		return c.manageDeployment(required, descheduler, c.softtainterImagePullSpec, specAnnotations)
+	}
+	return resourceapply.DeleteDeployment(c.ctx, c.kubeClient.AppsV1(), c.eventRecorder, required)
 }
 
 // Run starts the kube-scheduler and blocks until stopCh is closed.
@@ -1286,4 +1530,44 @@ func (c *TargetConfigReconciler) eventHandler() cache.ResourceEventHandler {
 		UpdateFunc: func(old, new interface{}) { c.queue.Add(workQueueKey) },
 		DeleteFunc: func(obj interface{}) { c.queue.Add(workQueueKey) },
 	}
+}
+
+func (c *TargetConfigReconciler) checkNamepsaceMonitoringLabel() error {
+	operatorNamespace, err := c.kubeClient.CoreV1().Namespaces().Get(c.ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+	if err != nil {
+		klog.ErrorS(err, "error fetching operator namespace")
+		return err
+	}
+	if operatorNamespace.GetLabels()[operatorclient.OpenshiftClusterMonitoringLabelKey] != operatorclient.OpenshiftClusterMonitoringLabelValue {
+		return fmt.Errorf("namespace %v is not labeled with %v=%v", operatorclient.OperatorNamespace, operatorclient.OpenshiftClusterMonitoringLabelKey, operatorclient.OpenshiftClusterMonitoringLabelValue)
+	}
+	return nil
+}
+
+func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
+	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevEnableSoftTainter {
+		return true, nil
+	}
+	nodes, err := c.kubeClient.CoreV1().Nodes().List(c.ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+	leftoverSoftTaints := false
+	softTaints := []*v1.Taint{
+		{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintValue, Effect: v1.TaintEffectPreferNoSchedule},
+		{Key: softtainter.OverUtilizedSoftTaintKey, Value: softtainter.OverUtilizedSoftTaintValue, Effect: v1.TaintEffectPreferNoSchedule},
+	}
+	for _, node := range nodes.Items {
+		for _, t := range softTaints {
+			if taints.TaintExists(node.Spec.Taints, t) {
+				leftoverSoftTaints = true
+				klog.InfoS("The softtainter is disabled a leftover soft taint is still present", "node", node.Name, "taintKey", t.Key)
+			}
+		}
+	}
+	if leftoverSoftTaints {
+		klog.InfoS("Deploying the softtainter to cleanup leftover soft taints")
+	}
+	// TODO: can we schedule a quick reconciliation cycle waiting for the softtainer to complete its cleanup ?
+	return leftoverSoftTaints, nil
 }
