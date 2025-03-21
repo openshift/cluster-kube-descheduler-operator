@@ -1,10 +1,11 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.22 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 as builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 RUN make build --warn-undefined-variables
 
 FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/soft-tainter /usr/bin/
 RUN mkdir /licenses
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/LICENSE /licenses/.
 

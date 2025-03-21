@@ -1,5 +1,6 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
+nodeSelector: kubevirt.io/schedulable=true
 profiles:
 - name: DevKubeVirtRelieveAndMigrate
   pluginConfig:
@@ -9,6 +10,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
       targetThresholds:
         cpu: 70
