@@ -2,8 +2,14 @@ apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
 metricsCollector: {}
 profiles:
-- name: LongLifecycle
+- name: LifecycleAndUtilization
   pluginConfig:
+  - args:
+      maxPodLifeTimeSeconds: 86400
+      namespaces:
+        include:
+        - includedNamespace
+    name: PodLifeTime
   - args:
       includingInitContainers: true
       namespaces:
@@ -21,13 +27,13 @@ profiles:
       metricsUtilization:
         prometheus: {}
       targetThresholds:
-        cpu: 50
-        memory: 50
-        pods: 50
+        cpu: 30
+        memory: 30
+        pods: 30
       thresholds:
-        cpu: 20
-        memory: 20
-        pods: 20
+        cpu: 10
+        memory: 10
+        pods: 10
     name: LowNodeUtilization
   - args:
       ignorePvcPods: true
@@ -40,6 +46,7 @@ profiles:
     deschedule:
       disabled: null
       enabled:
+      - PodLifeTime
       - RemovePodsHavingTooManyRestarts
     filter:
       disabled: null
