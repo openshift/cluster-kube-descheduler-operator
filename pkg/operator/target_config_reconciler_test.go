@@ -128,6 +128,24 @@ func TestManageConfigMap(t *testing.T) {
 			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
 		{
+			name: "LowNodeUtilizationIncludedNamespace",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+						Namespaces: deschedulerv1.Namespaces{
+							Included: []string{"includedNamespace"},
+						},
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationIncludedNamespace.yaml"))},
+			},
+		},
+		{
 			name: "LowNodeUtilizationLow",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
