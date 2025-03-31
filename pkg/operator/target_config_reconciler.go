@@ -95,7 +95,7 @@ func NewTargetConfigReconciler(
 		klog.ErrorS(err, "error listing namespaces")
 		return nil
 	}
-	protectedNamespaces := []string{"kube-system", "hypershift"}
+	protectedNamespaces := []string{"kube-system", "hypershift", "openshift"}
 	for _, ns := range allNamespaces.Items {
 		if strings.HasPrefix(ns.Name, "openshift-") {
 			protectedNamespaces = append(protectedNamespaces, ns.Name)
