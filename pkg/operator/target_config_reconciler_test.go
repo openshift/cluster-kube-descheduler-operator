@@ -17,22 +17,36 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	utilptr "k8s.io/utils/ptr"
 
+	fakeconfigv1client "github.com/openshift/client-go/config/clientset/versioned/fake"
+	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
+	fakeroutev1client "github.com/openshift/client-go/route/clientset/versioned/fake"
+	routev1informers "github.com/openshift/client-go/route/informers/externalversions"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
+	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
 )
 
 var configLowNodeUtilization = &configv1.Scheduler{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "cluster",
+	},
 	Spec: configv1.SchedulerSpec{Policy: configv1.ConfigMapNameReference{Name: ""},
 		Profile: configv1.LowNodeUtilization,
 	},
 }
 
 var configHighNodeUtilization = &configv1.Scheduler{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "cluster",
+	},
 	Spec: configv1.SchedulerSpec{Policy: configv1.ConfigMapNameReference{Name: ""},
 		Profile: configv1.HighNodeUtilization,
 	},
@@ -45,12 +59,12 @@ func TestManageConfigMap(t *testing.T) {
 
 	fakeRecorder := NewFakeRecorder(1024)
 	tests := []struct {
-		name                   string
-		targetConfigReconciler *TargetConfigReconciler
-		want                   *corev1.ConfigMap
-		descheduler            *deschedulerv1.KubeDescheduler
-		err                    error
-		forceDeployment        bool
+		name            string
+		schedulerConfig *configv1.Scheduler
+		want            *corev1.ConfigMap
+		descheduler     *deschedulerv1.KubeDescheduler
+		err             error
+		forceDeployment bool
 	}{
 		{
 			name: "Podlifetime",
@@ -179,9 +193,6 @@ func TestManageConfigMap(t *testing.T) {
 		},
 		{
 			name: "AffinityAndTaintsWithNamespaces",
-			targetConfigReconciler: &TargetConfigReconciler{
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"AffinityAndTaints"},
@@ -197,9 +208,6 @@ func TestManageConfigMap(t *testing.T) {
 		},
 		{
 			name: "LongLifecycleWithNamespaces",
-			targetConfigReconciler: &TargetConfigReconciler{
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle"},
@@ -215,9 +223,6 @@ func TestManageConfigMap(t *testing.T) {
 		},
 		{
 			name: "LongLifecycleWithLocalStorage",
-			targetConfigReconciler: &TargetConfigReconciler{
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle", "EvictPodsWithLocalStorage"},
@@ -230,9 +235,6 @@ func TestManageConfigMap(t *testing.T) {
 		},
 		{
 			name: "SoftTopologyAndDuplicates",
-			targetConfigReconciler: &TargetConfigReconciler{
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates"},
@@ -245,9 +247,6 @@ func TestManageConfigMap(t *testing.T) {
 		},
 		{
 			name: "TopologyAndDuplicates",
-			targetConfigReconciler: &TargetConfigReconciler{
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"TopologyAndDuplicates"},
@@ -259,13 +258,8 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "CompactAndScaleWithNamespaces",
-			targetConfigReconciler: &TargetConfigReconciler{
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configHighNodeUtilization},
-				},
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
+			name:            "CompactAndScaleWithNamespaces",
+			schedulerConfig: configHighNodeUtilization,
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
@@ -280,13 +274,8 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "CompactAndScaleMinimal",
-			targetConfigReconciler: &TargetConfigReconciler{
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configHighNodeUtilization},
-				},
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
+			name:            "CompactAndScaleMinimal",
+			schedulerConfig: configHighNodeUtilization,
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
@@ -301,13 +290,8 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "CompactAndScaleModest",
-			targetConfigReconciler: &TargetConfigReconciler{
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configHighNodeUtilization},
-				},
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
+			name:            "CompactAndScaleModest",
+			schedulerConfig: configHighNodeUtilization,
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
@@ -322,13 +306,8 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "CompactAndScaleDefault",
-			targetConfigReconciler: &TargetConfigReconciler{
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configHighNodeUtilization},
-				},
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
+			name:            "CompactAndScaleDefault",
+			schedulerConfig: configHighNodeUtilization,
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
@@ -343,13 +322,8 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "CompactAndScaleModerate",
-			targetConfigReconciler: &TargetConfigReconciler{
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configHighNodeUtilization},
-				},
-				protectedNamespaces: []string{"openshift-kube-scheduler", "kube-system"},
-			},
+			name:            "CompactAndScaleModerate",
+			schedulerConfig: configHighNodeUtilization,
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
@@ -437,18 +411,62 @@ func TestManageConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.targetConfigReconciler == nil {
-				tt.targetConfigReconciler = &TargetConfigReconciler{}
+			if tt.schedulerConfig == nil {
+				tt.schedulerConfig = configLowNodeUtilization
 			}
-			tt.targetConfigReconciler.ctx = context.TODO()
-			tt.targetConfigReconciler.kubeClient = fake.NewSimpleClientset()
-			tt.targetConfigReconciler.eventRecorder = fakeRecorder
-			if tt.targetConfigReconciler.configSchedulerLister == nil {
-				tt.targetConfigReconciler.configSchedulerLister = &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
-				}
+
+			objects := []runtime.Object{
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "openshift-kube-scheduler",
+					},
+				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "kube-system",
+					},
+				},
 			}
-			got, forceDeployment, err := tt.targetConfigReconciler.manageConfigMap(tt.descheduler)
+
+			ctx, cancelFunc := context.WithCancel(context.TODO())
+			defer cancelFunc()
+			operatorConfigClient := operatorconfigclient.NewSimpleClientset()
+			operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
+			deschedulerClient := &operatorclient.DeschedulerClient{
+				Ctx:            ctx,
+				SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
+				OperatorClient: operatorConfigClient.KubedeschedulersV1(),
+			}
+
+			openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(tt.schedulerConfig)
+			configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
+			openshiftRouteClient := fakeroutev1client.NewSimpleClientset()
+			routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
+
+			scheme := runtime.NewScheme()
+
+			targetConfigReconciler := NewTargetConfigReconciler(
+				ctx,
+				"RELATED_IMAGE_OPERAND_IMAGE",
+				operatorConfigClient.KubedeschedulersV1(),
+				operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
+				deschedulerClient,
+				fake.NewSimpleClientset(objects...),
+				dynamicfake.NewSimpleDynamicClient(scheme),
+				configInformers,
+				routeInformers,
+				fakeRecorder,
+			)
+
+			operatorConfigInformers.Start(ctx.Done())
+			configInformers.Start(ctx.Done())
+			routeInformers.Start(ctx.Done())
+
+			operatorConfigInformers.WaitForCacheSync(ctx.Done())
+			configInformers.WaitForCacheSync(ctx.Done())
+			routeInformers.WaitForCacheSync(ctx.Done())
+
+			got, forceDeployment, err := targetConfigReconciler.manageConfigMap(tt.descheduler)
 			if tt.err != nil {
 				if err == nil {
 					t.Fatalf("Expected error, not nil\n")
