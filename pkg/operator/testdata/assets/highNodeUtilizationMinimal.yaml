@@ -7,8 +7,10 @@ profiles:
   - args:
       evictableNamespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       metricsUtilization:
         prometheus: {}
       thresholds:

@@ -8,15 +8,19 @@ profiles:
       includingInitContainers: true
       namespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       podRestartThreshold: 100
     name: RemovePodsHavingTooManyRestarts
   - args:
       evictableNamespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       metricsUtilization:
         prometheus: {}
       targetThresholds:
