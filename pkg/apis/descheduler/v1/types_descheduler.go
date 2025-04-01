@@ -180,6 +180,9 @@ var (
 
 	// CompactAndScale seeks to evict pods to enable the same workload to run on a smaller set of nodes.
 	CompactAndScale DeschedulerProfile = "CompactAndScale"
+
+	// RelieveAndMigrate seeks to evict pods from high-cost nodes to relieve overall expenses while considering workload migration.
+	RelieveAndMigrate DeschedulerProfile = "DevKubeVirtRelieveAndMigrate"
 )
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler

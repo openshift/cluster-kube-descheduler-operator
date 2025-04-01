@@ -13,7 +13,7 @@ type FakeKubedeschedulersV1 struct {
 }
 
 func (c *FakeKubedeschedulersV1) KubeDeschedulers(namespace string) v1.KubeDeschedulerInterface {
-	return &FakeKubeDeschedulers{c, namespace}
+	return newFakeKubeDeschedulers(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

@@ -3,8 +3,8 @@
 package v1
 
 import (
-	operatorv1 "github.com/openshift/api/operator/v1"
-	v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
+	apioperatorv1 "github.com/openshift/api/operator/v1"
+	operatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -12,12 +12,12 @@ import (
 // KubeDeschedulerSpecApplyConfiguration represents a declarative configuration of the KubeDeschedulerSpec type for use
 // with apply.
 type KubeDeschedulerSpecApplyConfiguration struct {
-	v1.OperatorSpecApplyConfiguration `json:",inline"`
-	Profiles                          []deschedulerv1.DeschedulerProfile       `json:"profiles,omitempty"`
-	DeschedulingIntervalSeconds       *int32                                   `json:"deschedulingIntervalSeconds,omitempty"`
-	EvictionLimits                    *EvictionLimitsApplyConfiguration        `json:"evictionLimits,omitempty"`
-	ProfileCustomizations             *ProfileCustomizationsApplyConfiguration `json:"profileCustomizations,omitempty"`
-	Mode                              *deschedulerv1.Mode                      `json:"mode,omitempty"`
+	operatorv1.OperatorSpecApplyConfiguration `json:",inline"`
+	Profiles                                  []deschedulerv1.DeschedulerProfile       `json:"profiles,omitempty"`
+	DeschedulingIntervalSeconds               *int32                                   `json:"deschedulingIntervalSeconds,omitempty"`
+	EvictionLimits                            *EvictionLimitsApplyConfiguration        `json:"evictionLimits,omitempty"`
+	ProfileCustomizations                     *ProfileCustomizationsApplyConfiguration `json:"profileCustomizations,omitempty"`
+	Mode                                      *deschedulerv1.Mode                      `json:"mode,omitempty"`
 }
 
 // KubeDeschedulerSpecApplyConfiguration constructs a declarative configuration of the KubeDeschedulerSpec type for use with
@@ -29,24 +29,24 @@ func KubeDeschedulerSpec() *KubeDeschedulerSpecApplyConfiguration {
 // WithManagementState sets the ManagementState field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ManagementState field is set to the value of the last call.
-func (b *KubeDeschedulerSpecApplyConfiguration) WithManagementState(value operatorv1.ManagementState) *KubeDeschedulerSpecApplyConfiguration {
-	b.ManagementState = &value
+func (b *KubeDeschedulerSpecApplyConfiguration) WithManagementState(value apioperatorv1.ManagementState) *KubeDeschedulerSpecApplyConfiguration {
+	b.OperatorSpecApplyConfiguration.ManagementState = &value
 	return b
 }
 
 // WithLogLevel sets the LogLevel field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LogLevel field is set to the value of the last call.
-func (b *KubeDeschedulerSpecApplyConfiguration) WithLogLevel(value operatorv1.LogLevel) *KubeDeschedulerSpecApplyConfiguration {
-	b.LogLevel = &value
+func (b *KubeDeschedulerSpecApplyConfiguration) WithLogLevel(value apioperatorv1.LogLevel) *KubeDeschedulerSpecApplyConfiguration {
+	b.OperatorSpecApplyConfiguration.LogLevel = &value
 	return b
 }
 
 // WithOperatorLogLevel sets the OperatorLogLevel field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the OperatorLogLevel field is set to the value of the last call.
-func (b *KubeDeschedulerSpecApplyConfiguration) WithOperatorLogLevel(value operatorv1.LogLevel) *KubeDeschedulerSpecApplyConfiguration {
-	b.OperatorLogLevel = &value
+func (b *KubeDeschedulerSpecApplyConfiguration) WithOperatorLogLevel(value apioperatorv1.LogLevel) *KubeDeschedulerSpecApplyConfiguration {
+	b.OperatorSpecApplyConfiguration.OperatorLogLevel = &value
 	return b
 }
 
@@ -54,7 +54,7 @@ func (b *KubeDeschedulerSpecApplyConfiguration) WithOperatorLogLevel(value opera
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UnsupportedConfigOverrides field is set to the value of the last call.
 func (b *KubeDeschedulerSpecApplyConfiguration) WithUnsupportedConfigOverrides(value runtime.RawExtension) *KubeDeschedulerSpecApplyConfiguration {
-	b.UnsupportedConfigOverrides = &value
+	b.OperatorSpecApplyConfiguration.UnsupportedConfigOverrides = &value
 	return b
 }
 
@@ -62,7 +62,7 @@ func (b *KubeDeschedulerSpecApplyConfiguration) WithUnsupportedConfigOverrides(v
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ObservedConfig field is set to the value of the last call.
 func (b *KubeDeschedulerSpecApplyConfiguration) WithObservedConfig(value runtime.RawExtension) *KubeDeschedulerSpecApplyConfiguration {
-	b.ObservedConfig = &value
+	b.OperatorSpecApplyConfiguration.ObservedConfig = &value
 	return b
 }
 
