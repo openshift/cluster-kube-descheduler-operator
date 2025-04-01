@@ -21,14 +21,11 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/controller-tools v0.17.0
-	sigs.k8s.io/descheduler v0.32.2
+	sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2
 )
 
-replace (
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
-	sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20250303164104-5223499539f1
-)
+replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
 
 require (
 	cel.dev/expr v0.18.0 // indirect

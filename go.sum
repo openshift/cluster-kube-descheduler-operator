@@ -164,8 +164,6 @@ github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2 h1:Pw
 github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2/go.mod h1:8jcm8UPtg2mCAsxfqKil1xrmRMI3a+XU2TZ9fF8A7TE=
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a h1:duO3JMrUOqVx50QhzxvDeOYIwTNOB8/EEuRLPyvAMBg=
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a/go.mod h1:Qw3ThpzVZ0bfTILpBNYg4LGyjtNxfyCiGh/uDLOOTP8=
-github.com/openshift/descheduler v0.5.1-0.20250303164104-5223499539f1 h1:p9kTHQnei1MuzjaLNZOL8Aql/q0lnDDj63ejfppRJhI=
-github.com/openshift/descheduler v0.5.1-0.20250303164104-5223499539f1/go.mod h1:YqnuvkQ1KO3kC7JxFXu42hpDBiskT/3VnhKYvzzzxHE=
 github.com/openshift/library-go v0.0.0-20250228164547-bad2d1bf3a37 h1:/YhxswjRkADbww682dqckHddV/AVfwQHFn/XTf2fjsk=
 github.com/openshift/library-go v0.0.0-20250228164547-bad2d1bf3a37/go.mod h1:GHwvopE5KXXCz4ULHp871sTPLLW+FB+hu/RIzlNwxx8=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
@@ -371,6 +369,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 h1:CPT0ExVicCzcp
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
 sigs.k8s.io/controller-tools v0.17.0 h1:KaEQZbhrdY6J3zLBHplt+0aKUp8PeIttlhtF2UDo6bI=
 sigs.k8s.io/controller-tools v0.17.0/go.mod h1:SKoWY8rwGWDzHtfnhmOwljn6fViG0JF7/xmnxpklgjo=
+sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e h1:JXv44E29SM5+VLVtEnlGfcHVGcRihp4Z/3yI+HAFtvc=
+sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e/go.mod h1:hJIYUlRKbxjhT85eQLVk9kZlDnmtraAjkqxBvbYsdLA=
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 h1:/Rv+M11QRah1itp8VhT6HoVx1Ray9eB4DBr+K+/sCJ8=
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3/go.mod h1:18nIHnGi6636UCz6m8i4DhaJ65T6EruyzmoQqI2BVDo=
 sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 h1:PFWFSkpArPNJxFX4ZKWAk9NSeRoZaXschn+ULa4xVek=
