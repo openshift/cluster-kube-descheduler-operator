@@ -689,10 +689,13 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 				}
 				query = strings.TrimPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:")
 			}
-			args.MetricsUtilization.Prometheus = nodeutilization.Prometheus{
-				Query: query,
+			args.MetricsUtilization = &nodeutilization.MetricsUtilization{
+				Source: deschedulerapi.MetricsSource(v1alpha2.PrometheusMetrics),
+				Prometheus: &nodeutilization.Prometheus{
+					Query: query,
+				},
 			}
-			resourceNames = []v1.ResourceName{nodeutilization.ResourceMetrics}
+			resourceNames = []v1.ResourceName{nodeutilization.MetricResource}
 		}
 
 		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[3]); err != nil {
@@ -877,8 +880,11 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			return nil, false, fmt.Errorf("Host for status.ingress[0] in openshift-monitoring/prometheus-k8s route is empty")
 		}
 		klog.InfoS("Detecting prometheus server url", "url", route.Status.Ingress[0].Host)
-		policy.Prometheus = v1alpha2.Prometheus{
-			URL: "https://" + route.Status.Ingress[0].Host,
+		policy.MetricsProviders = []v1alpha2.MetricsProvider{{
+			Source: v1alpha2.PrometheusMetrics,
+			Prometheus: &v1alpha2.Prometheus{
+				URL: "https://" + route.Status.Ingress[0].Host,
+			}},
 		}
 	}
 
