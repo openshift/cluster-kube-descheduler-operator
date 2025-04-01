@@ -1,6 +1,5 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
-metricsCollector: {}
 profiles:
 - name: SoftTopologyAndDuplicates
   pluginConfig:
@@ -48,6 +47,3 @@ profiles:
     sort:
       disabled: null
       enabled: null
-prometheus:
-  authToken:
-    secretReference: {}

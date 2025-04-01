@@ -1484,7 +1484,7 @@ sigs.k8s.io/controller-tools/pkg/schemapatcher
 sigs.k8s.io/controller-tools/pkg/schemapatcher/internal/yaml
 sigs.k8s.io/controller-tools/pkg/version
 sigs.k8s.io/controller-tools/pkg/webhook
-# sigs.k8s.io/descheduler v0.32.2 => github.com/openshift/descheduler v0.5.1-0.20250303164104-5223499539f1
+# sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e
 ## explicit; go 1.23.3
 sigs.k8s.io/descheduler/metrics
 sigs.k8s.io/descheduler/pkg/api
@@ -1498,6 +1498,8 @@ sigs.k8s.io/descheduler/pkg/features
 sigs.k8s.io/descheduler/pkg/framework/pluginregistry
 sigs.k8s.io/descheduler/pkg/framework/plugins/defaultevictor
 sigs.k8s.io/descheduler/pkg/framework/plugins/nodeutilization
+sigs.k8s.io/descheduler/pkg/framework/plugins/nodeutilization/classifier
+sigs.k8s.io/descheduler/pkg/framework/plugins/nodeutilization/normalizer
 sigs.k8s.io/descheduler/pkg/framework/plugins/podlifetime
 sigs.k8s.io/descheduler/pkg/framework/plugins/removeduplicates
 sigs.k8s.io/descheduler/pkg/framework/plugins/removepodshavingtoomanyrestarts
@@ -1531,4 +1533,3 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 # k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
-# sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20250303164104-5223499539f1

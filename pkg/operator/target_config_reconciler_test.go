@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	configv1 "github.com/openshift/api/config/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -63,6 +64,7 @@ func TestManageConfigMap(t *testing.T) {
 		schedulerConfig *configv1.Scheduler
 		want            *corev1.ConfigMap
 		descheduler     *deschedulerv1.KubeDescheduler
+		routes          []runtime.Object
 		err             error
 		forceDeployment bool
 	}{
@@ -249,6 +251,35 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithLocalStorage.yaml"))},
+			},
+		},
+		{
+			name: "LongLifecycleWithMetrics",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUUsageProfile,
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithMetrics.yaml"))},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
 			},
 		},
 		{
@@ -458,7 +489,7 @@ func TestManageConfigMap(t *testing.T) {
 
 			openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(tt.schedulerConfig)
 			configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
-			openshiftRouteClient := fakeroutev1client.NewSimpleClientset()
+			openshiftRouteClient := fakeroutev1client.NewSimpleClientset(tt.routes...)
 			routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 
 			scheme := runtime.NewScheme()
