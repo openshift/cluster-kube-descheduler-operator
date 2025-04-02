@@ -268,6 +268,64 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
+			name: "RelieveAndMigrateDynamicThresholdsLow",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsLow.yaml"))},
+			},
+		},
+		{
+			name: "RelieveAndMigrateDynamicThresholdsMedium",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds: &deschedulerv1.MediumDeviationThreshold,
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"))},
+			},
+		},
+		{
+			name: "RelieveAndMigrateDynamicThresholdsHigh",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds: &deschedulerv1.HighDeviationThreshold,
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"))},
+			},
+		},
+		{
+			name: "RelieveAndMigrateDynamicAndStaticThresholds",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
+						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+					},
+				},
+			},
+			err: fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
+		},
+		{
 			name: "AffinityAndTaintsWithNamespaces",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{

@@ -110,6 +110,15 @@ spec:
                       LowNodeUtilization plugin can consume the metrics for now.
                       Currently provided as an experimental feature.
                     type: string
+                  devDeviationThresholds:
+                    description: devDeviationThresholds enables dynamic thresholds
+                      based on average resource utilization
+                    enum:
+                    - Low
+                    - Medium
+                    - High
+                    - ""
+                    type: string
                   devEnableEvictionsInBackground:
                     description: |-
                       DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
@@ -185,6 +194,7 @@ spec:
                   - EvictPodsWithLocalStorage
                   - EvictPodsWithPVC
                   - CompactAndScale
+                  - DevKubeVirtRelieveAndMigrate
                   type: string
                 type: array
               unsupportedConfigOverrides:

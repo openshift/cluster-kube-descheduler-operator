@@ -1,0 +1,46 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: DevKubeVirtRelieveAndMigrate
+  pluginConfig:
+  - args:
+      evictableNamespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
+      targetThresholds:
+        cpu: 10
+        memory: 10
+        pods: 10
+      thresholds:
+        cpu: 10
+        memory: 10
+        pods: 10
+      useDeviationThresholds: true
+    name: LowNodeUtilization
+  - args:
+      evictLocalStoragePods: true
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - LowNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
