@@ -730,7 +730,7 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 	return profile, nil
 }
 
-func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
 		Name: string(deschedulerv1.RelieveAndMigrate),
 		PluginConfigs: []v1alpha2.PluginConfig{
@@ -747,8 +747,8 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 				Name: defaultevictor.PluginName,
 				Args: runtime.RawExtension{
 					Object: &defaultevictor.DefaultEvictorArgs{
-						IgnorePvcPods:         ignorePVCPods,
-						EvictLocalStoragePods: evictLocalStoragePods,
+						IgnorePvcPods:         false, // evict pvc pods by default
+						EvictLocalStoragePods: true,  // evict pods with local storage by default
 					},
 				},
 			},
@@ -1023,7 +1023,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.RelieveAndMigrate:
-			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}
