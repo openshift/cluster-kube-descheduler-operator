@@ -20,7 +20,7 @@ profiles:
         pods: 20
     name: LowNodeUtilization
   - args:
-      ignorePvcPods: true
+      evictLocalStoragePods: true
     name: DefaultEvictor
   plugins:
     balance:
