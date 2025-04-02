@@ -595,23 +595,43 @@ func setExcludedNamespacesForLowNodeUtilizationPlugin(lowNodeUtilizationArgs *no
 	}
 }
 
-func getLowNodeUtilizationThresholds(profileCustomizations *deschedulerv1.ProfileCustomizations) (deschedulerapi.Percentage, deschedulerapi.Percentage, error) {
+func getLowNodeUtilizationThresholds(profileCustomizations *deschedulerv1.ProfileCustomizations, ignoreDynamic bool) (deschedulerapi.Percentage, deschedulerapi.Percentage, error) {
 	lowThreshold := deschedulerapi.Percentage(20)
 	highThreshold := deschedulerapi.Percentage(50)
 
-	if profileCustomizations != nil && profileCustomizations.DevLowNodeUtilizationThresholds != nil {
-		switch *profileCustomizations.DevLowNodeUtilizationThresholds {
-		case deschedulerv1.LowThreshold:
-			lowThreshold = 10
-			highThreshold = 30
-		case deschedulerv1.MediumThreshold, "":
-			lowThreshold = 20
-			highThreshold = 50
-		case deschedulerv1.HighThreshold:
-			lowThreshold = 40
-			highThreshold = 70
-		default:
-			return 0, 0, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+	if profileCustomizations != nil {
+		if !ignoreDynamic && profileCustomizations.DevLowNodeUtilizationThresholds != nil && profileCustomizations.DevDeviationThresholds != nil {
+			return 0, 0, fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously")
+		}
+		if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+			switch *profileCustomizations.DevLowNodeUtilizationThresholds {
+			case deschedulerv1.LowThreshold:
+				lowThreshold = 10
+				highThreshold = 30
+			case deschedulerv1.MediumThreshold, "":
+				lowThreshold = 20
+				highThreshold = 50
+			case deschedulerv1.HighThreshold:
+				lowThreshold = 40
+				highThreshold = 70
+			default:
+				return 0, 0, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+			}
+		}
+		if !ignoreDynamic && profileCustomizations.DevDeviationThresholds != nil {
+			switch *profileCustomizations.DevDeviationThresholds {
+			case deschedulerv1.LowDeviationThreshold:
+				lowThreshold = 10
+				highThreshold = 10
+			case deschedulerv1.MediumDeviationThreshold:
+				lowThreshold = 20
+				highThreshold = 20
+			case deschedulerv1.HighDeviationThreshold:
+				lowThreshold = 30
+				highThreshold = 30
+			default:
+				return 0, 0, fmt.Errorf("unknown Descheduler DeviationThresholds threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevDeviationThresholds)
+			}
 		}
 	}
 
@@ -691,7 +711,7 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 		setExcludedNamespacesForLowNodeUtilizationPlugin(profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs), includedNamespaces, excludedNamespaces, protectedNamespaces)
 	}
 
-	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations)
+	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations, true)
 	if err != nil {
 		return nil, err
 	}
@@ -772,7 +792,7 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 		setExcludedNamespacesForLowNodeUtilizationPlugin(profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs), includedNamespaces, excludedNamespaces, protectedNamespaces)
 	}
 
-	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations)
+	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations, false)
 	if err != nil {
 		return nil, err
 	}
@@ -781,6 +801,9 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 	args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
 
 	if profileCustomizations != nil {
+		// enable deviation
+		args.UseDeviationThresholds = profileCustomizations.DevDeviationThresholds != nil && *profileCustomizations.DevDeviationThresholds != ""
+
 		if profileCustomizations.DevActualUtilizationProfile != "" {
 			query, err := utilizationProfileToPrometheusQuery(profileCustomizations.DevActualUtilizationProfile)
 			if err != nil {

@@ -90,6 +90,10 @@ type ProfileCustomizations struct {
 	// LowNodeUtilization plugin can consume the metrics for now.
 	// Currently provided as an experimental feature.
 	DevActualUtilizationProfile ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
+
+	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
+	// +kubebuilder:validation:Enum=Low;Medium;High;""
+	DevDeviationThresholds *DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
 }
 
 type LowNodeUtilizationThresholdsType string
@@ -121,6 +125,22 @@ var (
 	CompactModerateThreshold HighNodeUtilizationThresholdsType = "Moderate"
 )
 
+type DeviationThresholdsType string
+
+var (
+	// DeviationThresholdLow sets thresholds to 10%:10% ratio.
+	// The threshold value is subject to change.
+	LowDeviationThreshold DeviationThresholdsType = "Low"
+
+	// DeviationThresholdMedium sets thresholds to 20%:20% ratio.
+	// The threshold value is subject to change.
+	MediumDeviationThreshold DeviationThresholdsType = "Medium"
+
+	// DeviationThresholdHigh sets thresholds to 30%:30% ratio.
+	// The threshold value is subject to change.
+	HighDeviationThreshold DeviationThresholdsType = "High"
+)
+
 // ActualUtilizationProfile sets predefined Prometheus PromQL query
 type ActualUtilizationProfile string
 
@@ -146,7 +166,7 @@ type Namespaces struct {
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler
 // it allows multiple profiles to be enabled at once, which will have cumulative effects on the cluster.
-// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;LongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC;CompactAndScale
+// +kubebuilder:validation:Enum=AffinityAndTaints;TopologyAndDuplicates;LifecycleAndUtilization;DevPreviewLongLifecycle;LongLifecycle;SoftTopologyAndDuplicates;EvictPodsWithLocalStorage;EvictPodsWithPVC;CompactAndScale;DevKubeVirtRelieveAndMigrate
 type DeschedulerProfile string
 
 var (
