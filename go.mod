@@ -14,20 +14,22 @@ require (
 	github.com/openshift/library-go v0.0.0-20250402195024-951c2b547023
 	github.com/prometheus/client_golang v1.19.1
 	github.com/spf13/cobra v1.8.1
-	k8s.io/api v0.31.3
-	k8s.io/apiextensions-apiserver v0.31.2
-	k8s.io/apimachinery v0.31.3
-	k8s.io/client-go v0.31.3
-	k8s.io/code-generator v0.31.2
-	k8s.io/component-base v0.31.3
+	k8s.io/api v0.31.7
+	k8s.io/apiextensions-apiserver v0.31.7
+	k8s.io/apimachinery v0.31.7
+	k8s.io/client-go v0.31.7
+	k8s.io/code-generator v0.31.7
+	k8s.io/component-base v0.31.7
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/controller-tools v0.16.5
 	sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.2
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.1
 )
 
 replace (
+	// because of https://github.com/kubernetes/gengo/pull/265
+	k8s.io/gengo/v2 => k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
 	sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20250402205004-7d5c42b167e9
 )
@@ -121,13 +123,13 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiserver v0.31.3 // indirect
-	k8s.io/component-helpers v0.31.2 // indirect
+	k8s.io/apiserver v0.31.7 // indirect
+	k8s.io/component-helpers v0.31.7 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240911193312-2b36238f13e9 // indirect
-	k8s.io/kms v0.31.3 // indirect
+	k8s.io/kms v0.31.7 // indirect
 	k8s.io/kube-aggregator v0.31.1 // indirect
 	k8s.io/kube-openapi v0.30.0 // indirect
-	k8s.io/metrics v0.31.2 // indirect
+	k8s.io/metrics v0.31.7 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
