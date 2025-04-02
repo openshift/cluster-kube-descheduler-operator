@@ -3,10 +3,10 @@
 package v1
 
 import (
-	http "net/http"
+	"net/http"
 
-	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
-	scheme "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/scheme"
+	v1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -69,10 +69,10 @@ func New(c rest.Interface) *KubedeschedulersV1Client {
 }
 
 func setConfigDefaults(config *rest.Config) error {
-	gv := deschedulerv1.SchemeGroupVersion
+	gv := v1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(scheme.Scheme, scheme.Codecs).WithoutConversion()
+	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

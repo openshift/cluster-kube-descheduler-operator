@@ -3,13 +3,13 @@
 package v1
 
 import (
-	operatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
+	v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 )
 
 // KubeDeschedulerStatusApplyConfiguration represents a declarative configuration of the KubeDeschedulerStatus type for use
 // with apply.
 type KubeDeschedulerStatusApplyConfiguration struct {
-	operatorv1.OperatorStatusApplyConfiguration `json:",inline"`
+	v1.OperatorStatusApplyConfiguration `json:",inline"`
 }
 
 // KubeDeschedulerStatusApplyConfiguration constructs a declarative configuration of the KubeDeschedulerStatus type for use with
@@ -22,19 +22,19 @@ func KubeDeschedulerStatus() *KubeDeschedulerStatusApplyConfiguration {
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ObservedGeneration field is set to the value of the last call.
 func (b *KubeDeschedulerStatusApplyConfiguration) WithObservedGeneration(value int64) *KubeDeschedulerStatusApplyConfiguration {
-	b.OperatorStatusApplyConfiguration.ObservedGeneration = &value
+	b.ObservedGeneration = &value
 	return b
 }
 
 // WithConditions adds the given value to the Conditions field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Conditions field.
-func (b *KubeDeschedulerStatusApplyConfiguration) WithConditions(values ...*operatorv1.OperatorConditionApplyConfiguration) *KubeDeschedulerStatusApplyConfiguration {
+func (b *KubeDeschedulerStatusApplyConfiguration) WithConditions(values ...*v1.OperatorConditionApplyConfiguration) *KubeDeschedulerStatusApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithConditions")
 		}
-		b.OperatorStatusApplyConfiguration.Conditions = append(b.OperatorStatusApplyConfiguration.Conditions, *values[i])
+		b.Conditions = append(b.Conditions, *values[i])
 	}
 	return b
 }
@@ -43,7 +43,7 @@ func (b *KubeDeschedulerStatusApplyConfiguration) WithConditions(values ...*oper
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Version field is set to the value of the last call.
 func (b *KubeDeschedulerStatusApplyConfiguration) WithVersion(value string) *KubeDeschedulerStatusApplyConfiguration {
-	b.OperatorStatusApplyConfiguration.Version = &value
+	b.Version = &value
 	return b
 }
 
@@ -51,7 +51,7 @@ func (b *KubeDeschedulerStatusApplyConfiguration) WithVersion(value string) *Kub
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ReadyReplicas field is set to the value of the last call.
 func (b *KubeDeschedulerStatusApplyConfiguration) WithReadyReplicas(value int32) *KubeDeschedulerStatusApplyConfiguration {
-	b.OperatorStatusApplyConfiguration.ReadyReplicas = &value
+	b.ReadyReplicas = &value
 	return b
 }
 
@@ -59,19 +59,19 @@ func (b *KubeDeschedulerStatusApplyConfiguration) WithReadyReplicas(value int32)
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LatestAvailableRevision field is set to the value of the last call.
 func (b *KubeDeschedulerStatusApplyConfiguration) WithLatestAvailableRevision(value int32) *KubeDeschedulerStatusApplyConfiguration {
-	b.OperatorStatusApplyConfiguration.LatestAvailableRevision = &value
+	b.LatestAvailableRevision = &value
 	return b
 }
 
 // WithGenerations adds the given value to the Generations field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Generations field.
-func (b *KubeDeschedulerStatusApplyConfiguration) WithGenerations(values ...*operatorv1.GenerationStatusApplyConfiguration) *KubeDeschedulerStatusApplyConfiguration {
+func (b *KubeDeschedulerStatusApplyConfiguration) WithGenerations(values ...*v1.GenerationStatusApplyConfiguration) *KubeDeschedulerStatusApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithGenerations")
 		}
-		b.OperatorStatusApplyConfiguration.Generations = append(b.OperatorStatusApplyConfiguration.Generations, *values[i])
+		b.Generations = append(b.Generations, *values[i])
 	}
 	return b
 }

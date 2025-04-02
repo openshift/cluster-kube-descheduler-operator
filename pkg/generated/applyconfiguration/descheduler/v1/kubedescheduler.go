@@ -3,21 +3,21 @@
 package v1
 
 import (
-	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	apisdeschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	internal "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/applyconfiguration/internal"
-	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
-	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
 // KubeDeschedulerApplyConfiguration represents a declarative configuration of the KubeDescheduler type for use
 // with apply.
 type KubeDeschedulerApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
-	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *KubeDeschedulerSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                               *KubeDeschedulerStatusApplyConfiguration `json:"status,omitempty"`
+	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
+	Spec                             *KubeDeschedulerSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status                           *KubeDeschedulerStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // KubeDescheduler constructs a declarative configuration of the KubeDescheduler type for use with
@@ -42,18 +42,18 @@ func KubeDescheduler(name, namespace string) *KubeDeschedulerApplyConfiguration 
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 // Experimental!
-func ExtractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
+func ExtractKubeDescheduler(kubeDescheduler *apisdeschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
 	return extractKubeDescheduler(kubeDescheduler, fieldManager, "")
 }
 
 // ExtractKubeDeschedulerStatus is the same as ExtractKubeDescheduler except
 // that it extracts the status subresource applied configuration.
 // Experimental!
-func ExtractKubeDeschedulerStatus(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
+func ExtractKubeDeschedulerStatus(kubeDescheduler *apisdeschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
 	return extractKubeDescheduler(kubeDescheduler, fieldManager, "status")
 }
 
-func extractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string, subresource string) (*KubeDeschedulerApplyConfiguration, error) {
+func extractKubeDescheduler(kubeDescheduler *apisdeschedulerv1.KubeDescheduler, fieldManager string, subresource string) (*KubeDeschedulerApplyConfiguration, error) {
 	b := &KubeDeschedulerApplyConfiguration{}
 	err := managedfields.ExtractInto(kubeDescheduler, internal.Parser().Type("com.github.openshift.cluster-kube-descheduler-operator.pkg.apis.descheduler.v1.KubeDescheduler"), fieldManager, b, subresource)
 	if err != nil {
@@ -71,7 +71,7 @@ func extractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fiel
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithKind(value string) *KubeDeschedulerApplyConfiguration {
-	b.TypeMetaApplyConfiguration.Kind = &value
+	b.Kind = &value
 	return b
 }
 
@@ -79,7 +79,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithKind(value string) *KubeDeschedu
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithAPIVersion(value string) *KubeDeschedulerApplyConfiguration {
-	b.TypeMetaApplyConfiguration.APIVersion = &value
+	b.APIVersion = &value
 	return b
 }
 
@@ -88,7 +88,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithAPIVersion(value string) *KubeDe
 // If called multiple times, the Name field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithName(value string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.Name = &value
+	b.Name = &value
 	return b
 }
 
@@ -97,7 +97,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithName(value string) *KubeDeschedu
 // If called multiple times, the GenerateName field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithGenerateName(value string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.GenerateName = &value
+	b.GenerateName = &value
 	return b
 }
 
@@ -106,7 +106,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithGenerateName(value string) *Kube
 // If called multiple times, the Namespace field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithNamespace(value string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.Namespace = &value
+	b.Namespace = &value
 	return b
 }
 
@@ -115,7 +115,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithNamespace(value string) *KubeDes
 // If called multiple times, the UID field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithUID(value types.UID) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.UID = &value
+	b.UID = &value
 	return b
 }
 
@@ -124,7 +124,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithUID(value types.UID) *KubeDesche
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithResourceVersion(value string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
+	b.ResourceVersion = &value
 	return b
 }
 
@@ -133,25 +133,25 @@ func (b *KubeDeschedulerApplyConfiguration) WithResourceVersion(value string) *K
 // If called multiple times, the Generation field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithGeneration(value int64) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.Generation = &value
+	b.Generation = &value
 	return b
 }
 
 // WithCreationTimestamp sets the CreationTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
-func (b *KubeDeschedulerApplyConfiguration) WithCreationTimestamp(value apismetav1.Time) *KubeDeschedulerApplyConfiguration {
+func (b *KubeDeschedulerApplyConfiguration) WithCreationTimestamp(value metav1.Time) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
+	b.CreationTimestamp = &value
 	return b
 }
 
 // WithDeletionTimestamp sets the DeletionTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
-func (b *KubeDeschedulerApplyConfiguration) WithDeletionTimestamp(value apismetav1.Time) *KubeDeschedulerApplyConfiguration {
+func (b *KubeDeschedulerApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
+	b.DeletionTimestamp = &value
 	return b
 }
 
@@ -160,7 +160,7 @@ func (b *KubeDeschedulerApplyConfiguration) WithDeletionTimestamp(value apismeta
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
 func (b *KubeDeschedulerApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
+	b.DeletionGracePeriodSeconds = &value
 	return b
 }
 
@@ -170,11 +170,11 @@ func (b *KubeDeschedulerApplyConfiguration) WithDeletionGracePeriodSeconds(value
 // overwriting an existing map entries in Labels field with the same key.
 func (b *KubeDeschedulerApplyConfiguration) WithLabels(entries map[string]string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
-		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
+	if b.Labels == nil && len(entries) > 0 {
+		b.Labels = make(map[string]string, len(entries))
 	}
 	for k, v := range entries {
-		b.ObjectMetaApplyConfiguration.Labels[k] = v
+		b.Labels[k] = v
 	}
 	return b
 }
@@ -185,11 +185,11 @@ func (b *KubeDeschedulerApplyConfiguration) WithLabels(entries map[string]string
 // overwriting an existing map entries in Annotations field with the same key.
 func (b *KubeDeschedulerApplyConfiguration) WithAnnotations(entries map[string]string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
-		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
+	if b.Annotations == nil && len(entries) > 0 {
+		b.Annotations = make(map[string]string, len(entries))
 	}
 	for k, v := range entries {
-		b.ObjectMetaApplyConfiguration.Annotations[k] = v
+		b.Annotations[k] = v
 	}
 	return b
 }
@@ -197,13 +197,13 @@ func (b *KubeDeschedulerApplyConfiguration) WithAnnotations(entries map[string]s
 // WithOwnerReferences adds the given value to the OwnerReferences field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the OwnerReferences field.
-func (b *KubeDeschedulerApplyConfiguration) WithOwnerReferences(values ...*metav1.OwnerReferenceApplyConfiguration) *KubeDeschedulerApplyConfiguration {
+func (b *KubeDeschedulerApplyConfiguration) WithOwnerReferences(values ...*v1.OwnerReferenceApplyConfiguration) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithOwnerReferences")
 		}
-		b.ObjectMetaApplyConfiguration.OwnerReferences = append(b.ObjectMetaApplyConfiguration.OwnerReferences, *values[i])
+		b.OwnerReferences = append(b.OwnerReferences, *values[i])
 	}
 	return b
 }
@@ -214,14 +214,14 @@ func (b *KubeDeschedulerApplyConfiguration) WithOwnerReferences(values ...*metav
 func (b *KubeDeschedulerApplyConfiguration) WithFinalizers(values ...string) *KubeDeschedulerApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
-		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
+		b.Finalizers = append(b.Finalizers, values[i])
 	}
 	return b
 }
 
 func (b *KubeDeschedulerApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
 	if b.ObjectMetaApplyConfiguration == nil {
-		b.ObjectMetaApplyConfiguration = &metav1.ObjectMetaApplyConfiguration{}
+		b.ObjectMetaApplyConfiguration = &v1.ObjectMetaApplyConfiguration{}
 	}
 }
 
@@ -244,5 +244,5 @@ func (b *KubeDeschedulerApplyConfiguration) WithStatus(value *KubeDeschedulerSta
 // GetName retrieves the value of the Name field in the declarative configuration.
 func (b *KubeDeschedulerApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
-	return b.ObjectMetaApplyConfiguration.Name
+	return b.Name
 }
