@@ -163,7 +163,10 @@ Migration strategies may involve VM live migration, state transitions between st
 
 This profile enables the [`LowNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization) strategy
 with `EvictionsInBackground` alpha feature enabled.
-In the future, more configuration may be made available through the operator based on user feedback.
+At the same time, allow the eviction of pods with PVC or local storage (both disabled by default),
+as they are commonly encountered during VM eviction and migration.
+Equivalent to enabling both `EvictPodsWithPVC` and `EvictPodsWithLocalStorage` profiles in parallel.
+In the future, additional configurations may be introduced through the operator based on user feedback.
 
 The profile exposes the following customization:
 - `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
