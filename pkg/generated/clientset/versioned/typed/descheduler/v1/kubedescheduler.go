@@ -3,10 +3,10 @@
 package v1
 
 import (
-	"context"
+	context "context"
 
-	v1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
-	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/applyconfiguration/descheduler/v1"
+	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	applyconfigurationdeschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/applyconfiguration/descheduler/v1"
 	scheme "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -22,36 +22,37 @@ type KubeDeschedulersGetter interface {
 
 // KubeDeschedulerInterface has methods to work with KubeDescheduler resources.
 type KubeDeschedulerInterface interface {
-	Create(ctx context.Context, kubeDescheduler *v1.KubeDescheduler, opts metav1.CreateOptions) (*v1.KubeDescheduler, error)
-	Update(ctx context.Context, kubeDescheduler *v1.KubeDescheduler, opts metav1.UpdateOptions) (*v1.KubeDescheduler, error)
+	Create(ctx context.Context, kubeDescheduler *deschedulerv1.KubeDescheduler, opts metav1.CreateOptions) (*deschedulerv1.KubeDescheduler, error)
+	Update(ctx context.Context, kubeDescheduler *deschedulerv1.KubeDescheduler, opts metav1.UpdateOptions) (*deschedulerv1.KubeDescheduler, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, kubeDescheduler *v1.KubeDescheduler, opts metav1.UpdateOptions) (*v1.KubeDescheduler, error)
+	UpdateStatus(ctx context.Context, kubeDescheduler *deschedulerv1.KubeDescheduler, opts metav1.UpdateOptions) (*deschedulerv1.KubeDescheduler, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
-	Get(ctx context.Context, name string, opts metav1.GetOptions) (*v1.KubeDescheduler, error)
-	List(ctx context.Context, opts metav1.ListOptions) (*v1.KubeDeschedulerList, error)
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*deschedulerv1.KubeDescheduler, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*deschedulerv1.KubeDeschedulerList, error)
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.KubeDescheduler, err error)
-	Apply(ctx context.Context, kubeDescheduler *deschedulerv1.KubeDeschedulerApplyConfiguration, opts metav1.ApplyOptions) (result *v1.KubeDescheduler, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *deschedulerv1.KubeDescheduler, err error)
+	Apply(ctx context.Context, kubeDescheduler *applyconfigurationdeschedulerv1.KubeDeschedulerApplyConfiguration, opts metav1.ApplyOptions) (result *deschedulerv1.KubeDescheduler, err error)
 	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
-	ApplyStatus(ctx context.Context, kubeDescheduler *deschedulerv1.KubeDeschedulerApplyConfiguration, opts metav1.ApplyOptions) (result *v1.KubeDescheduler, err error)
+	ApplyStatus(ctx context.Context, kubeDescheduler *applyconfigurationdeschedulerv1.KubeDeschedulerApplyConfiguration, opts metav1.ApplyOptions) (result *deschedulerv1.KubeDescheduler, err error)
 	KubeDeschedulerExpansion
 }
 
 // kubeDeschedulers implements KubeDeschedulerInterface
 type kubeDeschedulers struct {
-	*gentype.ClientWithListAndApply[*v1.KubeDescheduler, *v1.KubeDeschedulerList, *deschedulerv1.KubeDeschedulerApplyConfiguration]
+	*gentype.ClientWithListAndApply[*deschedulerv1.KubeDescheduler, *deschedulerv1.KubeDeschedulerList, *applyconfigurationdeschedulerv1.KubeDeschedulerApplyConfiguration]
 }
 
 // newKubeDeschedulers returns a KubeDeschedulers
 func newKubeDeschedulers(c *KubedeschedulersV1Client, namespace string) *kubeDeschedulers {
 	return &kubeDeschedulers{
-		gentype.NewClientWithListAndApply[*v1.KubeDescheduler, *v1.KubeDeschedulerList, *deschedulerv1.KubeDeschedulerApplyConfiguration](
+		gentype.NewClientWithListAndApply[*deschedulerv1.KubeDescheduler, *deschedulerv1.KubeDeschedulerList, *applyconfigurationdeschedulerv1.KubeDeschedulerApplyConfiguration](
 			"kubedeschedulers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1.KubeDescheduler { return &v1.KubeDescheduler{} },
-			func() *v1.KubeDeschedulerList { return &v1.KubeDeschedulerList{} }),
+			func() *deschedulerv1.KubeDescheduler { return &deschedulerv1.KubeDescheduler{} },
+			func() *deschedulerv1.KubeDeschedulerList { return &deschedulerv1.KubeDeschedulerList{} },
+		),
 	}
 }

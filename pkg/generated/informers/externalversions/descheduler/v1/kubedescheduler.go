@@ -3,13 +3,13 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
+	apisdeschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	versioned "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions/internalinterfaces"
-	v1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/listers/descheduler/v1"
+	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/listers/descheduler/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -20,7 +20,7 @@ import (
 // KubeDeschedulers.
 type KubeDeschedulerInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.KubeDeschedulerLister
+	Lister() deschedulerv1.KubeDeschedulerLister
 }
 
 type kubeDeschedulerInformer struct {
@@ -55,7 +55,7 @@ func NewFilteredKubeDeschedulerInformer(client versioned.Interface, namespace st
 				return client.KubedeschedulersV1().KubeDeschedulers(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&deschedulerv1.KubeDescheduler{},
+		&apisdeschedulerv1.KubeDescheduler{},
 		resyncPeriod,
 		indexers,
 	)
@@ -66,9 +66,9 @@ func (f *kubeDeschedulerInformer) defaultInformer(client versioned.Interface, re
 }
 
 func (f *kubeDeschedulerInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&deschedulerv1.KubeDescheduler{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisdeschedulerv1.KubeDescheduler{}, f.defaultInformer)
 }
 
-func (f *kubeDeschedulerInformer) Lister() v1.KubeDeschedulerLister {
-	return v1.NewKubeDeschedulerLister(f.Informer().GetIndexer())
+func (f *kubeDeschedulerInformer) Lister() deschedulerv1.KubeDeschedulerLister {
+	return deschedulerv1.NewKubeDeschedulerLister(f.Informer().GetIndexer())
 }

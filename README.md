@@ -107,6 +107,7 @@ The following profiles are currently provided:
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
 * [`LongLifecycle`](#LongLifecycle)
 * [`CompactAndScale`](#compactandscale-techpreview)
+* [`devKubeVirtRelieveAndMigrate`](#devkubevirtrelieveandmigrate-techpreview)
 * [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
 
@@ -151,6 +152,22 @@ An under utilized node is any node consuming less than 20% of its available cpu,
 
 This profile enables the [`HighNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#highnodeutilization) strategy.
 In the future, more configuration may be made available through the operator based on user feedback.
+
+### devKubeVirtRelieveAndMigrate
+
+This profiles seeks to evict pods from high-cost nodes to relieve overall expenses while considering workload migration.
+Node cost can include:
+- Actual resource utilization: Increased resource pressure leads to higher overhead for running applications.
+- Node maintenance costs: A higher number of containers on a node results in greater resource counting.
+Migration strategies may involve VM live migration, state transitions between stateful set pods, and other methods.
+
+This profile enables the [`LowNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization) strategy
+with `EvictionsInBackground` alpha feature enabled.
+In the future, more configuration may be made available through the operator based on user feedback.
+
+The profile exposes the following customization:
+- `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
+- `devActualUtilizationProfile`: Enable load-aware descheduling.
 
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this

@@ -558,6 +558,66 @@ func softTopologyAndDuplicatesProfile(profileCustomizations *deschedulerv1.Profi
 	return profile, err
 }
 
+func utilizationProfileToPrometheusQuery(profile deschedulerv1.ActualUtilizationProfile) (string, error) {
+	switch profile {
+	case deschedulerv1.PrometheusCPUUsageProfile:
+		return "instance:node_cpu:rate:sum", nil
+	case deschedulerv1.PrometheusCPUPSIPressureProfile:
+		return "rate(node_pressure_cpu_waiting_seconds_total[1m])", nil
+	case deschedulerv1.PrometheusCPUPSIPressureByUtilizationProfile:
+		return "avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) and (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))) > 0.7 or avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0", nil
+	case deschedulerv1.PrometheusMemoryPSIPressureProfile:
+		return "rate(node_pressure_memory_waiting_seconds_total[1m])", nil
+	case deschedulerv1.PrometheusIOPSIPressureProfile:
+		return "rate(node_pressure_io_waiting_seconds_total[1m])", nil
+	default:
+		if !strings.HasPrefix(string(profile), "query:") {
+			return "", fmt.Errorf("unknown prometheus profile: %v", profile)
+		}
+		return strings.TrimPrefix(string(profile), "query:"), nil
+	}
+}
+
+func setExcludedNamespacesForLowNodeUtilizationPlugin(lowNodeUtilizationArgs *nodeutilization.LowNodeUtilizationArgs, includedNamespaces, excludedNamespaces, protectedNamespaces []string) {
+	if len(includedNamespaces) > 0 {
+		// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
+		klog.Warning("LowNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime). Falling back to a list of excluded protected namespaces.")
+		if len(excludedNamespaces) == 0 {
+			lowNodeUtilizationArgs.EvictableNamespaces = &deschedulerapi.Namespaces{
+				Exclude: protectedNamespaces,
+			}
+		}
+	}
+	if len(excludedNamespaces) > 0 {
+		lowNodeUtilizationArgs.EvictableNamespaces = &deschedulerapi.Namespaces{
+			Exclude: excludedNamespaces,
+		}
+	}
+}
+
+func getLowNodeUtilizationThresholds(profileCustomizations *deschedulerv1.ProfileCustomizations) (deschedulerapi.Percentage, deschedulerapi.Percentage, error) {
+	lowThreshold := deschedulerapi.Percentage(20)
+	highThreshold := deschedulerapi.Percentage(50)
+
+	if profileCustomizations != nil && profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+		switch *profileCustomizations.DevLowNodeUtilizationThresholds {
+		case deschedulerv1.LowThreshold:
+			lowThreshold = 10
+			highThreshold = 30
+		case deschedulerv1.MediumThreshold, "":
+			lowThreshold = 20
+			highThreshold = 50
+		case deschedulerv1.HighThreshold:
+			lowThreshold = 40
+			highThreshold = 70
+		default:
+			return 0, 0, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
+		}
+	}
+
+	return lowThreshold, highThreshold, nil
+}
+
 func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
 		Name: string(deschedulerv1.LifecycleAndUtilization),
@@ -628,66 +688,25 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 			Include: includedNamespaces,
 			Exclude: excludedNamespaces,
 		}
-		if len(includedNamespaces) > 0 {
-			// log a warning if user tries to enable ns inclusion with a profile that activates LowNodeUtilization
-			klog.Warning("LowNodeUtilization is enabled, however it does not support namespace inclusion. Namespace inclusion will only be considered by other strategies (like RemovePodsHavingTooManyRestarts and PodLifeTime). Falling back to a list of excluded protected namespaces.")
-			if len(excludedNamespaces) == 0 {
-				profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs).EvictableNamespaces = &deschedulerapi.Namespaces{
-					Exclude: protectedNamespaces,
-				}
-			}
-		}
-		if len(excludedNamespaces) > 0 {
-			profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs).EvictableNamespaces = &deschedulerapi.Namespaces{
-				Exclude: excludedNamespaces,
-			}
-		}
+		setExcludedNamespacesForLowNodeUtilizationPlugin(profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs), includedNamespaces, excludedNamespaces, protectedNamespaces)
+	}
+
+	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations)
+	if err != nil {
+		return nil, err
 	}
 
 	resourceNames := []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourcePods}
-	lowThreshold := deschedulerapi.Percentage(20)
-	highThreshold := deschedulerapi.Percentage(50)
 	args := profile.PluginConfigs[2].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
-
 	if profileCustomizations != nil {
 		if profileCustomizations.PodLifetime != nil {
 			profile.PluginConfigs[0].Args.Object.(*podlifetime.PodLifeTimeArgs).MaxPodLifeTimeSeconds = utilptr.To[uint](uint(profileCustomizations.PodLifetime.Seconds()))
 		}
 
-		if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
-			switch *profileCustomizations.DevLowNodeUtilizationThresholds {
-			case deschedulerv1.LowThreshold:
-				lowThreshold = 10
-				highThreshold = 30
-			case deschedulerv1.MediumThreshold, "":
-				lowThreshold = 20
-				highThreshold = 50
-			case deschedulerv1.HighThreshold:
-				lowThreshold = 40
-				highThreshold = 70
-			default:
-				return nil, fmt.Errorf("unknown Descheduler LowNodeUtilization threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevLowNodeUtilizationThresholds)
-			}
-		}
-
 		if profileCustomizations.DevActualUtilizationProfile != "" {
-			query := ""
-			switch profileCustomizations.DevActualUtilizationProfile {
-			case deschedulerv1.PrometheusCPUUsageProfile:
-				query = "instance:node_cpu:rate:sum"
-			case deschedulerv1.PrometheusCPUPSIPressureProfile:
-				query = "rate(node_pressure_cpu_waiting_seconds_total[1m])"
-			case deschedulerv1.PrometheusCPUPSIPressureByUtilizationProfile:
-				query = "avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) and (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))) > 0.7 or avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0"
-			case deschedulerv1.PrometheusMemoryPSIPressureProfile:
-				query = "rate(node_pressure_memory_waiting_seconds_total[1m])"
-			case deschedulerv1.PrometheusIOPSIPressureProfile:
-				query = "rate(node_pressure_io_waiting_seconds_total[1m])"
-			default:
-				if !strings.HasPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:") {
-					return nil, fmt.Errorf("unknown prometheus profile: %v", profileCustomizations.DevActualUtilizationProfile)
-				}
-				query = strings.TrimPrefix(string(profileCustomizations.DevActualUtilizationProfile), "query:")
+			query, err := utilizationProfileToPrometheusQuery(profileCustomizations.DevActualUtilizationProfile)
+			if err != nil {
+				return nil, err
 			}
 			args.MetricsUtilization = &nodeutilization.MetricsUtilization{
 				Source: deschedulerapi.MetricsSource(v1alpha2.PrometheusMetrics),
@@ -699,6 +718,84 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 		}
 
 		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[3]); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, resourceName := range resourceNames {
+		args.Thresholds[resourceName] = lowThreshold
+		args.TargetThresholds[resourceName] = highThreshold
+	}
+
+	return profile, nil
+}
+
+func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile := &v1alpha2.DeschedulerProfile{
+		Name: string(deschedulerv1.RelieveAndMigrate),
+		PluginConfigs: []v1alpha2.PluginConfig{
+			{
+				Name: nodeutilization.LowNodeUtilizationPluginName,
+				Args: runtime.RawExtension{
+					Object: &nodeutilization.LowNodeUtilizationArgs{
+						Thresholds:       deschedulerapi.ResourceThresholds{},
+						TargetThresholds: deschedulerapi.ResourceThresholds{},
+					},
+				},
+			},
+			{
+				Name: defaultevictor.PluginName,
+				Args: runtime.RawExtension{
+					Object: &defaultevictor.DefaultEvictorArgs{
+						IgnorePvcPods:         ignorePVCPods,
+						EvictLocalStoragePods: evictLocalStoragePods,
+					},
+				},
+			},
+		},
+		Plugins: v1alpha2.Plugins{
+			Filter: v1alpha2.PluginSet{
+				Enabled: []string{
+					defaultevictor.PluginName,
+				},
+			},
+			Balance: v1alpha2.PluginSet{
+				Enabled: []string{
+					nodeutilization.LowNodeUtilizationPluginName,
+				},
+			},
+		},
+	}
+
+	// exclude openshift namespaces from descheduling
+	if len(includedNamespaces) > 0 || len(excludedNamespaces) > 0 {
+		setExcludedNamespacesForLowNodeUtilizationPlugin(profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs), includedNamespaces, excludedNamespaces, protectedNamespaces)
+	}
+
+	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceNames := []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourcePods}
+	args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+
+	if profileCustomizations != nil {
+		if profileCustomizations.DevActualUtilizationProfile != "" {
+			query, err := utilizationProfileToPrometheusQuery(profileCustomizations.DevActualUtilizationProfile)
+			if err != nil {
+				return nil, err
+			}
+			args.MetricsUtilization = &nodeutilization.MetricsUtilization{
+				Source: deschedulerapi.MetricsSource(v1alpha2.PrometheusMetrics),
+				Prometheus: &nodeutilization.Prometheus{
+					Query: query,
+				},
+			}
+			resourceNames = []v1.ResourceName{nodeutilization.MetricResource}
+		}
+
+		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[1]); err != nil {
 			return nil, err
 		}
 	}
@@ -925,6 +1022,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.RelieveAndMigrate:
+			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}
@@ -973,6 +1072,18 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.LifecycleAndUtilization)
 	}
 
+	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.RelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.RelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.RelieveAndMigrate)
+	}
+
 	if profiles.Has(string(deschedulerv1.SoftTopologyAndDuplicates)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.SoftTopologyAndDuplicates, deschedulerv1.TopologyAndDuplicates)
 	}
@@ -989,9 +1100,14 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.DevPreviewLongLifecycle)
 	}
 
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.RelieveAndMigrate)
+	}
+
 	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.TopologyAndDuplicates)
 	}
+
 	return nil
 }
 
@@ -1015,7 +1131,14 @@ func (c *TargetConfigReconciler) manageDeployment(descheduler *deschedulerv1.Kub
 		fmt.Sprintf("--descheduling-interval=%ss", strconv.Itoa(int(*descheduler.Spec.DeschedulingIntervalSeconds))))
 
 	featureGates := []string{}
-	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevEnableEvictionsInBackground {
+	evictionsInBackgroundEnabled := descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevEnableEvictionsInBackground
+	for _, profile := range descheduler.Spec.Profiles {
+		if profile == deschedulerv1.RelieveAndMigrate {
+			evictionsInBackgroundEnabled = true
+			break
+		}
+	}
+	if evictionsInBackgroundEnabled {
 		featureGates = append(featureGates, "EvictionsInBackground=true")
 	}
 
