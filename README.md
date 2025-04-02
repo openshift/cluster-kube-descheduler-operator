@@ -171,6 +171,7 @@ In the future, additional configurations may be introduced through the operator 
 The profile exposes the following customization:
 - `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
+- `devDeviationThresholds`: Have the thresholds be based on the average utilization.
 
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
@@ -198,6 +199,7 @@ the `profileCustomizations` field:
 |`devEnableEvictionsInBackground`|`bool`| Enables descheduler's EvictionsInBackground alpha feature. The EvictionsInBackground alpha feature is a subject to change. Currently provided as an experimental feature.|
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
 |`devActualUtilizationProfile`|`string`| Sets a profile that gets translated into a predefined prometheus query |
+| `devDeviationThresholds` | `string` | Have the thresholds be based on the average utilization. Thresholds signify the distance from the average node utilization in the following setting: `Low`: 10%:10%, `Medium`: 20%:20%, `High`: 30%:30% |
 
 ## Prometheus query profiles
 The operator provides the following profiles:
