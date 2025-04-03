@@ -196,6 +196,11 @@ func (in *ProfileCustomizations) DeepCopyInto(out *ProfileCustomizations) {
 		*out = new(HighNodeUtilizationThresholdsType)
 		**out = **in
 	}
+	if in.DevDeviationThresholds != nil {
+		in, out := &in.DevDeviationThresholds, &out.DevDeviationThresholds
+		*out = new(DeviationThresholdsType)
+		**out = **in
+	}
 	return
 }
 

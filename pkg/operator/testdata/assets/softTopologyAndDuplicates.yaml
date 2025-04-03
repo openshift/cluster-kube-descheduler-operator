@@ -1,6 +1,5 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
-metricsCollector: {}
 profiles:
 - name: SoftTopologyAndDuplicates
   pluginConfig:
@@ -10,14 +9,18 @@ profiles:
       - ScheduleAnyway
       namespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
     name: RemovePodsViolatingTopologySpreadConstraint
   - args:
       namespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
     name: RemoveDuplicates
   - args:
       ignorePvcPods: true
@@ -44,6 +47,3 @@ profiles:
     sort:
       disabled: null
       enabled: null
-prometheus:
-  authToken:
-    secretReference: {}

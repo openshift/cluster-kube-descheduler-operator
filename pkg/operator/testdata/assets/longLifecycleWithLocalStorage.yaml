@@ -1,6 +1,5 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
-metricsCollector: {}
 profiles:
 - name: LongLifecycle
   pluginConfig:
@@ -8,17 +7,19 @@ profiles:
       includingInitContainers: true
       namespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       podRestartThreshold: 100
     name: RemovePodsHavingTooManyRestarts
   - args:
       evictableNamespaces:
         exclude:
-        - openshift-kube-scheduler
         - kube-system
-      metricsUtilization:
-        prometheus: {}
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       targetThresholds:
         cpu: 50
         memory: 50
@@ -54,6 +55,3 @@ profiles:
     sort:
       disabled: null
       enabled: null
-prometheus:
-  authToken:
-    secretReference: {}

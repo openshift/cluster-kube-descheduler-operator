@@ -11,6 +11,7 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 | 5.0.2       | 4.15, 4.16  | 1.29        | 1.21   |
 | 5.1.0       | 4.17, 4.18  | 1.30        | 1.22   |
 | 5.1.1       | 4.17, 4.18  | 1.31        | 1.22   |
+| 5.1.2       | 4.17, 4.18  | 1.31        | 1.22   |
 
 ## Deploy the operator
 
@@ -106,6 +107,7 @@ The following profiles are currently provided:
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
 * [`LongLifecycle`](#LongLifecycle)
 * [`CompactAndScale`](#compactandscale-techpreview)
+* [`devKubeVirtRelieveAndMigrate`](#devkubevirtrelieveandmigrate-techpreview)
 * [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
 
@@ -151,6 +153,26 @@ An under utilized node is any node consuming less than 20% of its available cpu,
 This profile enables the [`HighNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#highnodeutilization) strategy.
 In the future, more configuration may be made available through the operator based on user feedback.
 
+### devKubeVirtRelieveAndMigrate
+
+This profiles seeks to evict pods from high-cost nodes to relieve overall expenses while considering workload migration.
+Node cost can include:
+- Actual resource utilization: Increased resource pressure leads to higher overhead for running applications.
+- Node maintenance costs: A higher number of containers on a node results in greater resource counting.
+Migration strategies may involve VM live migration, state transitions between stateful set pods, and other methods.
+
+This profile enables the [`LowNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#lownodeutilization) strategy
+with `EvictionsInBackground` alpha feature enabled.
+At the same time, allow the eviction of pods with PVC or local storage (both disabled by default),
+as they are commonly encountered during VM eviction and migration.
+Equivalent to enabling both `EvictPodsWithPVC` and `EvictPodsWithLocalStorage` profiles in parallel.
+In the future, additional configurations may be introduced through the operator based on user feedback.
+
+The profile exposes the following customization:
+- `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
+- `devActualUtilizationProfile`: Enable load-aware descheduling.
+- `devDeviationThresholds`: Have the thresholds be based on the average utilization.
+
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
 profile in combination with any of the above profiles allows pods with PVCs to be
@@ -177,13 +199,15 @@ the `profileCustomizations` field:
 |`devEnableEvictionsInBackground`|`bool`| Enables descheduler's EvictionsInBackground alpha feature. The EvictionsInBackground alpha feature is a subject to change. Currently provided as an experimental feature.|
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
 |`devActualUtilizationProfile`|`string`| Sets a profile that gets translated into a predefined prometheus query |
+| `devDeviationThresholds` | `string` | Have the thresholds be based on the average utilization. Thresholds signify the distance from the average node utilization in the following setting: `Low`: 10%:10%, `Medium`: 20%:20%, `High`: 30%:30% |
 
 ## Prometheus query profiles
 The operator provides the following profiles:
 - `PrometheusCPUUsage`: `instance:node_cpu:rate:sum` (metric available in OpenShift by default)
-- `PrometheusCPUPSIPressure`: `rate(node_pressure_cpu_waiting_seconds_total[1m])` (`node_pressure_cpu_waiting_seconds_total` is a custom metric that needs to be provided)
-- `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is a custom metric that needs to be provided)
-- `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is a custom metric that needs to be provided)
+- `PrometheusCPUPSIPressure`: `rate(node_pressure_cpu_waiting_seconds_total[1m])` (`node_pressure_cpu_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
+- `PrometheusCPUPSIPressureByUtilization`: `avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) and (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m]))) > 0.7 or avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0` (`node_pressure_cpu_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument; the query is filtering out PSI pressure on nodes with average CPU utilization < 0.7 to filter out false positives pressure spikes due to self imposed CPU throttling)
+- `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
+- `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 
 ```yaml
 apiVersion: operator.openshift.io/v1

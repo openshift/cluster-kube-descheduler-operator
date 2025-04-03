@@ -1,19 +1,34 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
-metricsCollector: {}
 profiles:
 - name: LifecycleAndUtilization
   pluginConfig:
   - args:
       maxPodLifeTimeSeconds: 86400
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
     name: PodLifeTime
   - args:
       includingInitContainers: true
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       podRestartThreshold: 100
     name: RemovePodsHavingTooManyRestarts
   - args:
-      metricsUtilization:
-        prometheus: {}
+      evictableNamespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-scheduler
       targetThresholds:
         cpu: 50
         memory: 50
@@ -49,6 +64,3 @@ profiles:
     sort:
       disabled: null
       enabled: null
-prometheus:
-  authToken:
-    secretReference: {}
