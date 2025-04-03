@@ -2,9 +2,15 @@
 apiVersion: operator.openshift.io/v1alpha1
 kind: ImageDigestMirrorSet
 metadata:
-  name: example-mirror-set
+  name: mirror-set-kube-descheduler-operator-4-18
 spec:
   imageDigestMirrors:
     - mirrors:
-        - quay.io/my-namespace/valid-repo
-      source: registry.redhat.io/unreleased-image/or-inaccessible-image
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-18
+      source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
+    - mirrors:
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-18
+      source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
+    - mirrors:
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-18
+      source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
