@@ -16,7 +16,7 @@ spec:
         scope: "*"
   matchConditions:
     - name: 'openshift-descheduler-softtainter'
-      expression: "request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler-softtainter'"
+      expression: "request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler-softtainter' || request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler'"
   variables:
     - name: "oldNonDeschedulerTaints"
       expression: "has(oldObject.spec.taints) ? oldObject.spec.taints.filter(t, !t.key.contains('descheduler.kubernetes.io')) : []"
