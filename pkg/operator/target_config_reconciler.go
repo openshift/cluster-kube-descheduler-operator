@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/openshift/library-go/pkg/controller"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -41,7 +42,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
+	coreinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -62,6 +65,7 @@ import (
 )
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
+const kubeVirtShedulableLabelSelector = "kubevirt.io/schedulable=true"
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -80,6 +84,8 @@ type TargetConfigReconciler struct {
 	protectedNamespaces      []string
 	configSchedulerLister    configlistersv1.SchedulerLister
 	routeRouteLister         routelistersv1.RouteLister
+	namespaceLister          corev1listers.NamespaceLister
+	nodeLister               corev1listers.NodeLister
 	cache                    resourceapply.ResourceCache
 }
 
@@ -94,6 +100,7 @@ func NewTargetConfigReconciler(
 	dynamicClient dynamic.Interface,
 	configInformer configinformers.SharedInformerFactory,
 	routeInformers routeinformers.SharedInformerFactory,
+	coreInformers coreinformers.SharedInformerFactory,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
 	// make sure our list of excluded system namespaces is up to date
@@ -122,12 +129,16 @@ func NewTargetConfigReconciler(
 		softtainterImagePullSpec: softTainterImagePullSpec,
 		configSchedulerLister:    configInformer.Config().V1().Schedulers().Lister(),
 		routeRouteLister:         routeInformers.Route().V1().Routes().Lister(),
+		namespaceLister:          coreInformers.Core().V1().Namespaces().Lister(),
+		nodeLister:               coreInformers.Core().V1().Nodes().Lister(),
 		cache:                    resourceapply.NewResourceCache(),
 	}
+
 	configInformer.Config().V1().Schedulers().Informer().AddEventHandler(c.eventHandler())
 	routeInformers.Route().V1().Routes().Informer().AddEventHandler(c.eventHandler())
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
-
+	coreInformers.Core().V1().Nodes().Informer().AddEventHandler(c.eventHandler())
+	coreInformers.Core().V1().Namespaces().Informer().AddEventHandler(c.eventHandler())
 	return c
 }
 
@@ -1282,7 +1293,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.RelieveAndMigrate:
-			kubeVirtShedulable := "kubevirt.io/schedulable=true"
+			kubeVirtShedulable := kubeVirtShedulableLabelSelector
 			policy.NodeSelector = &kubeVirtShedulable
 			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
 		default:
@@ -1372,7 +1383,7 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(required *appsv1.Deployment, descheduler *deschedulerv1.KubeDescheduler, targetImagePullSpec string, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(required *appsv1.Deployment, descheduler *deschedulerv1.KubeDescheduler, targetImageKey, targetImagePullSpec string, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -1442,13 +1453,12 @@ func (c *TargetConfigReconciler) manageDeployment(required *appsv1.Deployment, d
 	}
 
 	images := map[string]string{
-		"${IMAGE}": targetImagePullSpec,
+		targetImageKey: targetImagePullSpec,
 	}
 	for i := range required.Spec.Template.Spec.Containers {
 		for pat, img := range images {
 			if required.Spec.Template.Spec.Containers[i].Image == pat {
 				required.Spec.Template.Spec.Containers[i].Image = img
-				required.Spec.Template.Spec.Containers[i].ImagePullPolicy = v1.PullAlways // TODO: remove me
 				break
 			}
 		}
@@ -1478,18 +1488,20 @@ func (c *TargetConfigReconciler) manageDeployment(required *appsv1.Deployment, d
 }
 
 func (c *TargetConfigReconciler) manageDeschedulerDeployment(descheduler *deschedulerv1.KubeDescheduler, specAnnotations map[string]string) (*appsv1.Deployment, bool, error) {
+	const targetImageKey = "${OPERAND_IMAGE}"
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/deployment.yaml"))
 	required.Name = operatorclient.OperandName
 	required.Namespace = descheduler.Namespace
-	return c.manageDeployment(required, descheduler, c.deschedulerImagePullSpec, specAnnotations)
+	return c.manageDeployment(required, descheduler, targetImageKey, c.deschedulerImagePullSpec, specAnnotations)
 }
 
 func (c *TargetConfigReconciler) manageSoftTainterDeployment(descheduler *deschedulerv1.KubeDescheduler, specAnnotations map[string]string, stEnabled bool) (*appsv1.Deployment, bool, error) {
+	const targetImageKey = "${SOFTTAINTER_IMAGE}"
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterdeployment.yaml"))
 	required.Name = operatorclient.SoftTainterOperandName
 	required.Namespace = descheduler.Namespace
 	if stEnabled {
-		return c.manageDeployment(required, descheduler, c.softtainterImagePullSpec, specAnnotations)
+		return c.manageDeployment(required, descheduler, targetImageKey, c.softtainterImagePullSpec, specAnnotations)
 	}
 	return resourceapply.DeleteDeployment(c.ctx, c.kubeClient.AppsV1(), c.eventRecorder, required)
 }
@@ -1542,7 +1554,7 @@ func (c *TargetConfigReconciler) eventHandler() cache.ResourceEventHandler {
 }
 
 func (c *TargetConfigReconciler) checkNamepsaceMonitoringLabel() error {
-	operatorNamespace, err := c.kubeClient.CoreV1().Namespaces().Get(c.ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+	operatorNamespace, err := c.namespaceLister.Get(operatorclient.OperatorNamespace)
 	if err != nil {
 		klog.ErrorS(err, "error fetching operator namespace")
 		return err
@@ -1557,7 +1569,11 @@ func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.
 	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevEnableSoftTainter {
 		return true, nil
 	}
-	nodes, err := c.kubeClient.CoreV1().Nodes().List(c.ctx, metav1.ListOptions{})
+	ls, err := labels.Parse(kubeVirtShedulableLabelSelector)
+	if err != nil {
+		return false, err
+	}
+	nodes, err := c.nodeLister.List(ls)
 	if err != nil {
 		return false, err
 	}
@@ -1566,7 +1582,7 @@ func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.
 		{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintValue, Effect: v1.TaintEffectPreferNoSchedule},
 		{Key: softtainter.OverUtilizedSoftTaintKey, Value: softtainter.OverUtilizedSoftTaintValue, Effect: v1.TaintEffectPreferNoSchedule},
 	}
-	for _, node := range nodes.Items {
+	for _, node := range nodes {
 		for _, t := range softTaints {
 			if taints.TaintExists(node.Spec.Taints, t) {
 				leftoverSoftTaints = true

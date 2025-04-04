@@ -391,6 +391,8 @@ spec:
                           fieldPath: metadata.namespace
                     - name: RELATED_IMAGE_OPERAND_IMAGE
                       value: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
+                    - name: RELATED_IMAGE_SOFTTAINTER_IMAGE
+                      value: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
                     - name: OPERAND_VERSION
                       value: 5.1.1
                   volumeMounts:

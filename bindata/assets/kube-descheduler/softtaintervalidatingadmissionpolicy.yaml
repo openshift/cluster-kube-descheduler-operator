@@ -18,16 +18,18 @@ spec:
     - name: 'openshift-descheduler-softtainter'
       expression: "request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler-softtainter' || request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler'"
   variables:
+    - name: "deschedulerTaintPrefix"
+      expression: "'descheduler.openshift.io'"
     - name: "oldNonDeschedulerTaints"
-      expression: "has(oldObject.spec.taints) ? oldObject.spec.taints.filter(t, !t.key.contains('descheduler.kubernetes.io')) : []"
+      expression: "has(oldObject.spec.taints) ? oldObject.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix)) : []"
     - name: "oldTaints"
       expression: "has(oldObject.spec.taints) ? oldObject.spec.taints : []"
     - name: "newNonDeschedulerTaints"
-      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, !t.key.contains('descheduler.kubernetes.io')) : []"
+      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix)) : []"
     - name: "newTaints"
       expression: "has(object.spec.taints) ? object.spec.taints : []"
     - name: "newDeschedulerTaints"
-      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, t.key.contains('descheduler.kubernetes.io')) : []"
+      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, t.key.contains(variables.deschedulerTaintPrefix)) : []"
   validations:
     - expression: |
         oldObject.metadata.filter(k, k != "resourceVersion" && k != "generation" && k != "managedFields").all(k, k in object.metadata) &&

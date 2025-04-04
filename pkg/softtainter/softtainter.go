@@ -36,9 +36,9 @@ import (
 
 const (
 	prometheusAuthTokenSecretKey        = "prometheusAuthToken"
-	OverUtilizedSoftTaintKey            = "nodeutilization.descheduler.kubernetes.io/overutilized"
+	OverUtilizedSoftTaintKey            = "nodeutilization.descheduler.openshift.io/overutilized"
 	OverUtilizedSoftTaintValue          = "true"
-	AppropriatelyUtilizedSoftTaintKey   = "nodeutilization.descheduler.kubernetes.io/appropriate"
+	AppropriatelyUtilizedSoftTaintKey   = "nodeutilization.descheduler.openshift.io/appropriate"
 	AppropriatelyUtilizedSoftTaintValue = "true"
 )
 
@@ -72,12 +72,14 @@ type NodeUtilization interface {
 	NodeUsageFromPrometheusMetrics(ctx context.Context) (map[string]map[corev1.ResourceName]*resource.Quantity, error)
 }
 
-type ActualNodeUtilization struct {
+type actualNodeUtilization struct {
 	promClient promapi.Client
 	promQuery  string
 }
 
-func (anu *ActualNodeUtilization) NodeUsageFromPrometheusMetrics(ctx context.Context) (map[string]map[corev1.ResourceName]*resource.Quantity, error) {
+var _ NodeUtilization = &actualNodeUtilization{}
+
+func (anu *actualNodeUtilization) NodeUsageFromPrometheusMetrics(ctx context.Context) (map[string]map[corev1.ResourceName]*resource.Quantity, error) {
 	return nodeutilization.NodeUsageFromPrometheusMetrics(ctx, anu.promClient, anu.promQuery)
 }
 
@@ -500,7 +502,7 @@ func (st *softTainter) dropTaint(ctx context.Context, node *corev1.Node, k, v st
 }
 
 func newNodeUtilizationFactory(promClient promapi.Client, promQuery string) NodeUtilization {
-	return &ActualNodeUtilization{promClient: promClient, promQuery: promQuery}
+	return &actualNodeUtilization{promClient: promClient, promQuery: promQuery}
 }
 
 // RegisterReconciler creates a new Reconciler and registers it into manager.

@@ -37,7 +37,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          image: ${IMAGE}
+          image: ${SOFTTAINTER_IMAGE}
           livenessProbe:
             failureThreshold: 1
             httpGet:

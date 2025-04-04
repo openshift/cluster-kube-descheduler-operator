@@ -168,6 +168,9 @@ as they are commonly encountered during VM eviction and migration.
 Equivalent to enabling both `EvictPodsWithPVC` and `EvictPodsWithLocalStorage` profiles in parallel.
 In the future, additional configurations may be introduced through the operator based on user feedback.
 
+This profile sets a nodeSelector (`kubevirt.io/schedulable=true`)
+in the Descheduler policy to limit its action to nodes that are considered schedulable for `KubeVirt`.
+
 The profile exposes the following customization:
 - `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
