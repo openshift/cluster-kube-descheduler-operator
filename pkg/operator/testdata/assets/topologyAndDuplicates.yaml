@@ -11,6 +11,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
     name: RemovePodsViolatingTopologySpreadConstraint
   - args:
@@ -19,6 +20,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
     name: RemoveDuplicates
   - args:

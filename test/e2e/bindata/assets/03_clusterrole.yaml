@@ -15,6 +15,7 @@ rules:
       - monitoring.coreos.com
     resources:
       - servicemonitors
+      - prometheusrules
     verbs:
       - get
       - watch
@@ -70,11 +71,20 @@ rules:
     resources:
       - namespaces
       - pods
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
       - nodes
     verbs:
       - get
       - watch
       - list
+      - patch
+      - update
   - apiGroups:
       - ""
     resources:
@@ -184,3 +194,17 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection

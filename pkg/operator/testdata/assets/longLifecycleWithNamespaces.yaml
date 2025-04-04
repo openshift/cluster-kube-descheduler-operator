@@ -16,6 +16,7 @@ profiles:
         - kube-system
         - hypershift
         - openshift
+        - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
       targetThresholds:
         cpu: 50

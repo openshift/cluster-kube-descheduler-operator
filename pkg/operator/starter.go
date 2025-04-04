@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
+	coreinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
@@ -50,6 +51,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	}
 
 	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
+
+	coreInformers := coreinformers.NewSharedInformerFactory(kubeClient, 10*time.Minute)
 
 	dynamicClient, err := dynamic.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
@@ -99,6 +102,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
 		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
+		os.Getenv("RELATED_IMAGE_SOFTTAINTER_IMAGE"),
 		operatorConfigClient.KubedeschedulersV1(),
 		operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
 		deschedulerClient,
@@ -106,6 +110,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		dynamicClient,
 		configInformers,
 		routeInformers,
+		coreInformers,
 		cc.EventRecorder,
 	)
 
@@ -116,6 +121,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	configInformers.Start(ctx.Done())
 	routeInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
+	coreInformers.Start(ctx.Done())
 
 	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)

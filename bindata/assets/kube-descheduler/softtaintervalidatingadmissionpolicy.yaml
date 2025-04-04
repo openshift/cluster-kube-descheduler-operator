@@ -1,0 +1,52 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: "openshift-descheduler-softtainter-vap"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups:   [""]
+        apiVersions: ["*"]
+        operations:  ["UPDATE"]
+        resources:   ["nodes"]
+        scope: "*"
+  matchConditions:
+    - name: 'openshift-descheduler-softtainter'
+      expression: "request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler-softtainter' || request.userInfo.username=='system:serviceaccount:openshift-kube-descheduler-operator:openshift-descheduler'"
+  variables:
+    - name: "deschedulerTaintPrefix"
+      expression: "'descheduler.openshift.io'"
+    - name: "oldNonDeschedulerTaints"
+      expression: "has(oldObject.spec.taints) ? oldObject.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix)) : []"
+    - name: "oldTaints"
+      expression: "has(oldObject.spec.taints) ? oldObject.spec.taints : []"
+    - name: "newNonDeschedulerTaints"
+      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix)) : []"
+    - name: "newTaints"
+      expression: "has(object.spec.taints) ? object.spec.taints : []"
+    - name: "newDeschedulerTaints"
+      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, t.key.contains(variables.deschedulerTaintPrefix)) : []"
+  validations:
+    - expression: |
+        oldObject.metadata.filter(k, k != "resourceVersion" && k != "generation" && k != "managedFields").all(k, k in object.metadata) &&
+        object.metadata.filter(k, k != "resourceVersion" && k != "generation" && k != "managedFields").all(k, k in oldObject.metadata && oldObject.metadata[k] == object.metadata[k])
+      messageExpression: "'User ' + string(request.userInfo.username) + ' is only allowed to update taints'"
+      reason: Forbidden
+    - expression: |
+        oldObject.spec.filter(k, k != "taints").all(k, k in object.spec) &&
+        object.spec.filter(k, k != "taints").all(k, k in oldObject.spec && oldObject.spec[k] == object.spec[k])
+      messageExpression: "'User ' + string(request.userInfo.username) + ' is only allowed to update taints'"
+      reason: Forbidden
+    - expression: "size(variables.newNonDeschedulerTaints) == size(variables.oldNonDeschedulerTaints)"
+      messageExpression: "'User ' + string(request.userInfo.username) + ' is not allowed to create/delete non descheduler taints'"
+      reason: Forbidden
+    - expression: "variables.newNonDeschedulerTaints.all(nt, size(variables.oldNonDeschedulerTaints.filter(ot, nt.key==ot.key)) > 0 ? variables.oldNonDeschedulerTaints.filter(ot, nt.key==ot.key)[0].?value.orValue('') == nt.?value.orValue('') && variables.oldNonDeschedulerTaints.filter(ot, nt.key==ot.key)[0].effect == nt.effect : true)"
+      messageExpression: "'User ' + string(request.userInfo.username) + ' is not allowed to update non descheduler taints'"
+      reason: Forbidden
+    - expression: "variables.newDeschedulerTaints.all(t, t.effect == 'PreferNoSchedule')"
+      messageExpression: "'User ' + string(request.userInfo.username) + ' is only allowed to set taints with PreferNoSchedule effect'"
+      reason: Forbidden

@@ -5,6 +5,7 @@ RUN make build --warn-undefined-variables
 
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.19
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/soft-tainter /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
 LABEL io.k8s.display-name="OpenShift Descheduler Operator" \
