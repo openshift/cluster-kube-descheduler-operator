@@ -846,6 +846,15 @@ func getLowNodeUtilizationThresholds(profileCustomizations *deschedulerv1.Profil
 			case deschedulerv1.HighDeviationThreshold:
 				lowThreshold = 30
 				highThreshold = 30
+			case deschedulerv1.AsymmetricLowDeviationThreshold:
+				lowThreshold = 0
+				highThreshold = 10
+			case deschedulerv1.AsymmetricMediumDeviationThreshold:
+				lowThreshold = 0
+				highThreshold = 20
+			case deschedulerv1.AsymmetricHighDeviationThreshold:
+				lowThreshold = 0
+				highThreshold = 30
 			default:
 				return 0, 0, fmt.Errorf("unknown Descheduler DeviationThresholds threshold %v, only 'Low', 'Medium' and 'High' are supported", *profileCustomizations.DevDeviationThresholds)
 			}

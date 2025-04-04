@@ -97,7 +97,7 @@ type ProfileCustomizations struct {
 	DevActualUtilizationProfile ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
 
 	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
-	// +kubebuilder:validation:Enum=Low;Medium;High;""
+	// +kubebuilder:validation:Enum=Low;Medium;High;AsymmetricLow;AsymmetricMedium;AsymmetricHigh;""
 	DevDeviationThresholds *DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
 }
 
@@ -133,17 +133,35 @@ var (
 type DeviationThresholdsType string
 
 var (
-	// DeviationThresholdLow sets thresholds to 10%:10% ratio.
+	// LowDeviationThreshold sets thresholds to 10%:10% ratio.
 	// The threshold value is subject to change.
 	LowDeviationThreshold DeviationThresholdsType = "Low"
 
-	// DeviationThresholdMedium sets thresholds to 20%:20% ratio.
+	// MediumDeviationThreshold sets thresholds to 20%:20% ratio.
 	// The threshold value is subject to change.
 	MediumDeviationThreshold DeviationThresholdsType = "Medium"
 
-	// DeviationThresholdHigh sets thresholds to 30%:30% ratio.
+	// HighDeviationThreshold sets thresholds to 30%:30% ratio.
 	// The threshold value is subject to change.
 	HighDeviationThreshold DeviationThresholdsType = "High"
+
+	// AsymmetricLowDeviationThreshold sets thresholds to 0%:10% ratio.
+	// An AsymmetricDeviationThreshold will force all nodes below the average
+	// to be considered as underutilized to help rebalancing overutilized outliers.
+	// The threshold value is subject to change.
+	AsymmetricLowDeviationThreshold DeviationThresholdsType = "AsymmetricLow"
+
+	// AsymmetricMediumDeviationThreshold sets thresholds to 0%:20% ratio.
+	// An AsymmetricDeviationThreshold will force all nodes below the average
+	// to be considered as underutilized to help rebalancing overutilized outliers.
+	// The threshold value is subject to change.
+	AsymmetricMediumDeviationThreshold DeviationThresholdsType = "AsymmetricMedium"
+
+	// AsymmetricHighDeviationThreshold sets thresholds to 0%:30% ratio.
+	// An AsymmetricDeviationThreshold will force all nodes below the average
+	// to be considered as underutilized to help rebalancing overutilized outliers.
+	// The threshold value is subject to change.
+	AsymmetricHighDeviationThreshold DeviationThresholdsType = "AsymmetricHigh"
 )
 
 // ActualUtilizationProfile sets predefined Prometheus PromQL query
