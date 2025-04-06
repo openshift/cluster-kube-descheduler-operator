@@ -21,7 +21,7 @@ require (
 	k8s.io/code-generator v0.31.7
 	k8s.io/component-base v0.31.7
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20241210054802-24370beab758
+	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/controller-tools v0.16.5
 	sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1
