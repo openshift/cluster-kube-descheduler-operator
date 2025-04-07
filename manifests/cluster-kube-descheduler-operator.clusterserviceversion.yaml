@@ -151,6 +151,7 @@ spec:
           - monitoring.coreos.com
           resources:
           - servicemonitors
+          - prometheusrules
           verbs:
           - get
           - watch
@@ -206,11 +207,20 @@ spec:
           resources:
           - namespaces
           - pods
-          - nodes
           verbs:
           - get
           - watch
           - list
+        - apiGroups:
+            - ""
+          resources:
+            - nodes
+          verbs:
+            - get
+            - watch
+            - list
+            - patch
+            - update
         - apiGroups:
           - ""
           resources:
@@ -320,6 +330,20 @@ spec:
           - get
           - watch
           - list
+        - apiGroups:
+            - admissionregistration.k8s.io
+          resources:
+            - validatingadmissionpolicies
+            - validatingadmissionpolicybindings
+          verbs:
+            - get
+            - watch
+            - list
+            - create
+            - update
+            - patch
+            - delete
+            - deletecollection
       deployments:
       - name: descheduler-operator
         spec:
@@ -367,6 +391,8 @@ spec:
                           fieldPath: metadata.namespace
                     - name: RELATED_IMAGE_OPERAND_IMAGE
                       value: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
+                    - name: RELATED_IMAGE_SOFTTAINTER_IMAGE
+                      value: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
                     - name: OPERAND_VERSION
                       value: 5.1.1
                   volumeMounts:

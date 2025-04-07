@@ -7,11 +7,14 @@ COPY ./LICENSE licenses/.
 
 ARG OPERATOR_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:bdb5ff7379e50fa7a9d3bd230c33f24f1bd858bf0aa6e61aa072f9a3809d3663
 ARG OPERAND_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:e7f1e09ea814190f9c08c7e6a233d1008c937116b278ef92e9de18bcbf10807e
+ARG SOFTTAINER_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:426baca9e36c7833d335262a7b8f73c318cd749ca7767726fc86109948a44d96
 ARG REPLACED_OPERATOR_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
 ARG REPLACED_OPERAND_IMG=registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
+ARG REPLACED_SOFTTAINER_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
 
 RUN hack/replace-image.sh manifests ${REPLACED_OPERATOR_IMG} ${OPERATOR_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_OPERAND_IMG} ${OPERAND_IMAGE}
+RUN hack/replace-image.sh manifests ${REPLACED_SOFTTAINER_IMG} ${SOFTTAINER_IMAGE}
 
 FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4
 
