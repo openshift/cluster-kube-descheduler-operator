@@ -15,6 +15,7 @@ type ProfileCustomizationsApplyConfiguration struct {
 	ThresholdPriorityClassName       *string                                              `json:"thresholdPriorityClassName,omitempty"`
 	Namespaces                       *NamespacesApplyConfiguration                        `json:"namespaces,omitempty"`
 	DevLowNodeUtilizationThresholds  *apisdeschedulerv1.LowNodeUtilizationThresholdsType  `json:"devLowNodeUtilizationThresholds,omitempty"`
+	DevEnableSoftTainter             *bool                                                `json:"devEnableSoftTainter,omitempty"`
 	DevEnableEvictionsInBackground   *bool                                                `json:"devEnableEvictionsInBackground,omitempty"`
 	DevHighNodeUtilizationThresholds *apisdeschedulerv1.HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds,omitempty"`
 	DevActualUtilizationProfile      *apisdeschedulerv1.ActualUtilizationProfile          `json:"devActualUtilizationProfile,omitempty"`
@@ -64,6 +65,14 @@ func (b *ProfileCustomizationsApplyConfiguration) WithNamespaces(value *Namespac
 // If called multiple times, the DevLowNodeUtilizationThresholds field is set to the value of the last call.
 func (b *ProfileCustomizationsApplyConfiguration) WithDevLowNodeUtilizationThresholds(value apisdeschedulerv1.LowNodeUtilizationThresholdsType) *ProfileCustomizationsApplyConfiguration {
 	b.DevLowNodeUtilizationThresholds = &value
+	return b
+}
+
+// WithDevEnableSoftTainter sets the DevEnableSoftTainter field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevEnableSoftTainter field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevEnableSoftTainter(value bool) *ProfileCustomizationsApplyConfiguration {
+	b.DevEnableSoftTainter = &value
 	return b
 }
 

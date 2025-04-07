@@ -1,0 +1,7 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: "openshift-descheduler-softtainter-vap-binding"
+spec:
+  policyName: "openshift-descheduler-softtainter-vap"
+  validationActions: [Deny]

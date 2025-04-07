@@ -1,0 +1,39 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: descheduler-rules
+  namespace: openshift-kube-descheduler-operator
+spec:
+  groups:
+    - name: recordingRules.rules
+      rules:
+        - record: descheduler:nodeutilization:cpu:avg1m
+          expr: avg by (instance) (1 - rate(node_cpu_seconds_total{mode='idle'}[1m]))
+
+        - record: descheduler:averageworkersutilization:cpu:avg1m
+          expr: avg(descheduler:nodeutilization:cpu:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
+
+        - record: descheduler:nodepressure:cpu:avg1m
+          # return the cpu pressure if the cpu usage is over 70% otherwise
+          # return cpu pressure as zero to (partially) filter out false
+          # positives pressure spikes due to CPU limited pods.
+          # See: https://github.com/kubernetes/enhancements/issues/5062
+          expr: |-
+            avg by (instance) (
+              rate(node_pressure_cpu_waiting_seconds_total[1m])
+            ) and (
+              1 - avg by (instance) (
+                rate(node_cpu_seconds_total{mode='idle'}[1m])
+              )
+            ) > 0.7
+            or
+            avg by (instance) (
+              rate(node_pressure_cpu_waiting_seconds_total[1m])
+            ) * 0    
+
+        - record: descheduler:combined_utilization_and_pressure:avg1m
+          expr: |-
+            (descheduler:nodeutilization:cpu:avg1m and on() descheduler:averageworkersutilization:cpu:avg1m < 0.8)
+            or
+            (descheduler:nodepressure:cpu:avg1m)

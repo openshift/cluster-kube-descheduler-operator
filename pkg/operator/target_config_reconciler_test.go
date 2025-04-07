@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	utilptr "k8s.io/utils/ptr"
@@ -33,6 +34,8 @@ import (
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/softtainter"
+	coreinformers "k8s.io/client-go/informers"
 )
 
 var configLowNodeUtilization = &configv1.Scheduler{
@@ -235,6 +238,36 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateMediumConfig.yaml"))},
+			},
+		},
+		{
+			name: "RelieveAndMigrateDeviationLowWithCombinedMetrics",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDeviationLowWithCombinedMetrics.yaml"))},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
 			},
 		},
 		{
@@ -619,6 +652,12 @@ func TestManageConfigMap(t *testing.T) {
 						Name: "kube-system",
 					},
 				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   operatorclient.OperatorNamespace,
+						Labels: map[string]string{operatorclient.OpenshiftClusterMonitoringLabelKey: operatorclient.OpenshiftClusterMonitoringLabelValue},
+					},
+				},
 			}
 
 			ctx, cancelFunc := context.WithCancel(context.TODO())
@@ -630,34 +669,40 @@ func TestManageConfigMap(t *testing.T) {
 				SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
 				OperatorClient: operatorConfigClient.KubedeschedulersV1(),
 			}
+			fakeKubeClient := fake.NewSimpleClientset(objects...)
 
 			openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(tt.schedulerConfig)
 			configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
 			openshiftRouteClient := fakeroutev1client.NewSimpleClientset(tt.routes...)
 			routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
+			coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
 
 			scheme := runtime.NewScheme()
 
 			targetConfigReconciler := NewTargetConfigReconciler(
 				ctx,
 				"RELATED_IMAGE_OPERAND_IMAGE",
+				"RELATED_IMAGE_SOFTTAINTER_IMAGE",
 				operatorConfigClient.KubedeschedulersV1(),
 				operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
 				deschedulerClient,
-				fake.NewSimpleClientset(objects...),
+				fakeKubeClient,
 				dynamicfake.NewSimpleDynamicClient(scheme),
 				configInformers,
 				routeInformers,
+				coreInformers,
 				fakeRecorder,
 			)
 
 			operatorConfigInformers.Start(ctx.Done())
 			configInformers.Start(ctx.Done())
 			routeInformers.Start(ctx.Done())
+			coreInformers.Start(ctx.Done())
 
 			operatorConfigInformers.WaitForCacheSync(ctx.Done())
 			configInformers.WaitForCacheSync(ctx.Done())
 			routeInformers.WaitForCacheSync(ctx.Done())
+			coreInformers.WaitForCacheSync(ctx.Done())
 
 			got, forceDeployment, err := targetConfigReconciler.manageConfigMap(tt.descheduler)
 			if tt.err != nil {
@@ -842,7 +887,7 @@ func TestManageDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := tt.targetConfigReconciler.manageDeployment(tt.descheduler, nil)
+			got, _, err := tt.targetConfigReconciler.manageDeschedulerDeployment(tt.descheduler, nil)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v\n", err)
 			}
@@ -859,6 +904,336 @@ func TestManageDeployment(t *testing.T) {
 			} else {
 				if !apiequality.Semantic.DeepEqual(tt.want, got) {
 					t.Errorf("manageDeployment diff \n\n %+v", cmp.Diff(tt.want, got))
+				}
+			}
+		})
+	}
+}
+
+func TestManageSoftTainterDeployment(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	defer cancelFunc()
+	fakeRecorder := NewFakeRecorder(1024)
+	expectedSoftTainterDeployment := &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "softtainter",
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "8876109bce3c5c9336bcde77e391abd07b117797b8646bd5d61322509f3df970"},
+			Labels:          map[string]string{"app": "softtainer"},
+			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler"}},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: utilptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "softtainer",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      map[string]string{"app": "softtainer"},
+					Annotations: map[string]string{"kubectl.kubernetes.io/default-container": "openshift-softtainer"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "openshift-softtainer",
+							Command: []string{"/usr/bin/soft-tainter"},
+							Args: []string{
+								"--policy-config-file=/policy-dir/policy.yaml",
+								"-v=2",
+							},
+							Image: "RELATED_IMAGE_SOFTTAINTER_IMAGE",
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(6060), Scheme: corev1.URISchemeHTTP}},
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       5,
+								FailureThreshold:    1,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(6060), Scheme: corev1.URISchemeHTTP}},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       5,
+								FailureThreshold:    1,
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("500Mi"),
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: utilptr.To(false),
+								Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+								ReadOnlyRootFilesystem:   utilptr.To(true),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "policy-volume",
+									MountPath: "/policy-dir",
+								},
+								{
+									Name:      "certs-dir",
+									MountPath: "/certs-dir",
+								},
+							},
+						},
+					},
+					PriorityClassName: "system-cluster-critical",
+					RestartPolicy:     corev1.RestartPolicyAlways,
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: utilptr.To(true),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
+					ServiceAccountName: "openshift-descheduler-softtainter",
+					Volumes: []corev1.Volume{
+						{
+							Name:         "policy-volume",
+							VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{}}},
+						},
+						{
+							Name:         "certs-dir",
+							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "kube-descheduler-serving-cert"}},
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                   string
+		want                   *appsv1.Deployment
+		descheduler            *deschedulerv1.KubeDescheduler
+		objects                []runtime.Object
+		checkContainerOnly     bool
+		checkContainerArgsOnly bool
+	}{
+		{
+			name: "RelieveAndMigrate with the softtainer",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+						DevEnableSoftTainter:        true,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+				},
+			},
+			checkContainerOnly:     false,
+			checkContainerArgsOnly: false,
+			want:                   expectedSoftTainterDeployment,
+		},
+		{
+			name: "RelieveAndMigrate without the softtainer and no leftovers on existing nodes",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+						DevEnableSoftTainter:        false,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+				},
+			},
+			objects: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{Key: "extra1", Value: "extra1", Effect: corev1.TaintEffectNoSchedule},
+						},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{Key: "extra2", Value: "extra2", Effect: corev1.TaintEffectPreferNoSchedule},
+						},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node3",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
+			checkContainerOnly:     false,
+			checkContainerArgsOnly: false,
+			want:                   nil,
+		},
+		{
+			name: "RelieveAndMigrate without the softtainer but a leftover on existing nodes - 1",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+						DevEnableSoftTainter:        false,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+				},
+			},
+			objects: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintKey, Effect: corev1.TaintEffectPreferNoSchedule},
+						},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node3",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
+			checkContainerOnly:     false,
+			checkContainerArgsOnly: false,
+			want:                   expectedSoftTainterDeployment,
+		},
+		{
+			name: "RelieveAndMigrate without the softtainer but a leftover on existing nodes - 2",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+						DevEnableSoftTainter:        false,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+				},
+			},
+			objects: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{Key: softtainter.OverUtilizedSoftTaintKey, Value: softtainter.OverUtilizedSoftTaintKey, Effect: corev1.TaintEffectPreferNoSchedule},
+						},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintKey, Effect: corev1.TaintEffectPreferNoSchedule},
+							{Key: softtainter.OverUtilizedSoftTaintKey, Value: softtainter.OverUtilizedSoftTaintKey, Effect: corev1.TaintEffectPreferNoSchedule},
+						},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node3",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintKey, Effect: corev1.TaintEffectPreferNoSchedule},
+						},
+					},
+				},
+			},
+			checkContainerOnly:     false,
+			checkContainerArgsOnly: false,
+			want:                   expectedSoftTainterDeployment,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeKubeClient := fake.NewSimpleClientset(tt.objects...)
+			operatorConfigClient := operatorconfigclient.NewSimpleClientset()
+			operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
+			deschedulerClient := &operatorclient.DeschedulerClient{
+				Ctx:            ctx,
+				SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
+				OperatorClient: operatorConfigClient.KubedeschedulersV1(),
+			}
+			openshiftConfigClient := fakeconfigv1client.NewSimpleClientset()
+			configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
+			openshiftRouteClient := fakeroutev1client.NewSimpleClientset()
+			routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
+			coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+			scheme := runtime.NewScheme()
+
+			targetConfigReconciler := NewTargetConfigReconciler(
+				ctx,
+				"RELATED_IMAGE_OPERAND_IMAGE",
+				"RELATED_IMAGE_SOFTTAINTER_IMAGE",
+				operatorConfigClient.KubedeschedulersV1(),
+				operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
+				deschedulerClient,
+				fakeKubeClient,
+				dynamicfake.NewSimpleDynamicClient(scheme),
+				configInformers,
+				routeInformers,
+				coreInformers,
+				fakeRecorder,
+			)
+
+			operatorConfigInformers.Start(ctx.Done())
+			configInformers.Start(ctx.Done())
+			routeInformers.Start(ctx.Done())
+			coreInformers.Start(ctx.Done())
+
+			operatorConfigInformers.WaitForCacheSync(ctx.Done())
+			configInformers.WaitForCacheSync(ctx.Done())
+			routeInformers.WaitForCacheSync(ctx.Done())
+			coreInformers.WaitForCacheSync(ctx.Done())
+
+			enabled, err := targetConfigReconciler.isSoftTainterNeeded(tt.descheduler)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
+			}
+			got, _, err := targetConfigReconciler.manageSoftTainterDeployment(tt.descheduler, nil, enabled)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
+			}
+			if tt.checkContainerOnly {
+				if tt.checkContainerArgsOnly {
+					if !apiequality.Semantic.DeepEqual(tt.want.Spec.Template.Spec.Containers[0].Args, got.Spec.Template.Spec.Containers[0].Args) {
+						t.Errorf("manageSoftTainterDeployment diff \n\n %+v", cmp.Diff(tt.want.Spec.Template.Spec.Containers[0].Args, got.Spec.Template.Spec.Containers[0].Args))
+					}
+				} else {
+					if !apiequality.Semantic.DeepEqual(tt.want.Spec.Template.Spec.Containers[0], got.Spec.Template.Spec.Containers[0]) {
+						t.Errorf("manageSoftTainterDeployment diff \n\n %+v", cmp.Diff(tt.want.Spec.Template.Spec.Containers[0], got.Spec.Template.Spec.Containers[0]))
+					}
+				}
+			} else {
+				if !apiequality.Semantic.DeepEqual(tt.want, got) {
+					t.Errorf("manageSoftTainterDeployment diff \n\n %+v", cmp.Diff(tt.want, got))
 				}
 			}
 		})
