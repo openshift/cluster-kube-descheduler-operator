@@ -68,6 +68,7 @@ func TestManageConfigMap(t *testing.T) {
 		want            *corev1.ConfigMap
 		descheduler     *deschedulerv1.KubeDescheduler
 		routes          []runtime.Object
+		nodes           []runtime.Object
 		err             error
 		forceDeployment bool
 	}{
@@ -226,6 +227,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
 			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 		},
 		{
 			name: "RelieveAndMigrateMedium",
@@ -238,6 +253,20 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateMediumConfig.yaml"))},
+			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
 			},
 		},
 		{
@@ -269,6 +298,20 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 		},
 		{
 			name: "RelieveAndMigrateHigh",
@@ -281,6 +324,20 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateHighConfig.yaml"))},
+			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
 			},
 		},
 		{
@@ -299,6 +356,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateIncludedNamespace.yaml"))},
 			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 		},
 		{
 			name: "RelieveAndMigrateDynamicThresholdsLow",
@@ -313,6 +384,20 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsLow.yaml"))},
+			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
 			},
 		},
 		{
@@ -329,6 +414,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"))},
 			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 		},
 		{
 			name: "RelieveAndMigrateDynamicThresholdsHigh",
@@ -344,6 +443,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"))},
 			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 		},
 		{
 			name: "RelieveAndMigrateDynamicAndStaticThresholds",
@@ -356,7 +469,47 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 			err: fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
+		},
+		{
+			name: "RelieveAndMigrateWithoutKubeVirt",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
+						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+					},
+				},
+			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node2",
+					},
+				},
+			},
+			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when KubeVirt is properly deployed"),
+			forceDeployment: true,
 		},
 		{
 			name: "AffinityAndTaintsWithNamespaces",
@@ -659,6 +812,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			}
+			objects = append(objects, tt.nodes...)
 
 			ctx, cancelFunc := context.WithCancel(context.TODO())
 			defer cancelFunc()

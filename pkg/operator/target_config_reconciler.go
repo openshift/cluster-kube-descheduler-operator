@@ -1298,6 +1298,13 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.RelieveAndMigrate:
+			kvDeployed, kverr := c.isKubeVirtDeployed()
+			if kverr != nil {
+				return nil, false, kverr
+			}
+			if !kvDeployed {
+				return nil, true, fmt.Errorf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate)
+			}
 			kubeVirtShedulable := kubeVirtShedulableLabelSelector
 			policy.NodeSelector = &kubeVirtShedulable
 			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
@@ -1570,6 +1577,21 @@ func (c *TargetConfigReconciler) checkNamepsaceMonitoringLabel() error {
 		return fmt.Errorf("namespace %v is not labeled with %v=%v", operatorclient.OperatorNamespace, operatorclient.OpenshiftClusterMonitoringLabelKey, operatorclient.OpenshiftClusterMonitoringLabelValue)
 	}
 	return nil
+}
+
+func (c *TargetConfigReconciler) isKubeVirtDeployed() (bool, error) {
+	ls, err := labels.Parse(kubeVirtShedulableLabelSelector)
+	if err != nil {
+		return false, err
+	}
+	nodes, err := c.nodeLister.List(ls)
+	if err != nil {
+		return false, err
+	}
+	if len(nodes) > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
