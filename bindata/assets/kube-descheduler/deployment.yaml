@@ -37,7 +37,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          image: ${IMAGE}
+          image: ${OPERAND_IMAGE}
           resources:
             requests:
               cpu: "100m"

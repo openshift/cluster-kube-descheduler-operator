@@ -71,9 +71,14 @@ type ProfileCustomizations struct {
 	// the default exclusion of all openshift-*, kube-system and hypershift namespaces
 	Namespaces Namespaces `json:"namespaces"`
 
-	// LowNodeUtilizationThresholds enumerates predefined experimental thresholds
+	// DevLowNodeUtilizationThresholds enumerates predefined experimental thresholds
 	// +kubebuilder:validation:Enum=Low;Medium;High;""
 	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
+
+	// DevEnableSoftTainter enables SoftTainter alpha feature.
+	// The EnableSoftTainter alpha feature is a subject to change.
+	// Currently provided as an experimental feature.
+	DevEnableSoftTainter bool `json:"devEnableSoftTainter"`
 
 	// DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
 	// The EvictionsInBackground alpha feature is a subject to change.
@@ -92,7 +97,7 @@ type ProfileCustomizations struct {
 	DevActualUtilizationProfile ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
 
 	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
-	// +kubebuilder:validation:Enum=Low;Medium;High;""
+	// +kubebuilder:validation:Enum=Low;Medium;High;AsymmetricLow;AsymmetricMedium;AsymmetricHigh;""
 	DevDeviationThresholds *DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
 }
 
@@ -128,17 +133,35 @@ var (
 type DeviationThresholdsType string
 
 var (
-	// DeviationThresholdLow sets thresholds to 10%:10% ratio.
+	// LowDeviationThreshold sets thresholds to 10%:10% ratio.
 	// The threshold value is subject to change.
 	LowDeviationThreshold DeviationThresholdsType = "Low"
 
-	// DeviationThresholdMedium sets thresholds to 20%:20% ratio.
+	// MediumDeviationThreshold sets thresholds to 20%:20% ratio.
 	// The threshold value is subject to change.
 	MediumDeviationThreshold DeviationThresholdsType = "Medium"
 
-	// DeviationThresholdHigh sets thresholds to 30%:30% ratio.
+	// HighDeviationThreshold sets thresholds to 30%:30% ratio.
 	// The threshold value is subject to change.
 	HighDeviationThreshold DeviationThresholdsType = "High"
+
+	// AsymmetricLowDeviationThreshold sets thresholds to 0%:10% ratio.
+	// An AsymmetricDeviationThreshold will force all nodes below the average
+	// to be considered as underutilized to help rebalancing overutilized outliers.
+	// The threshold value is subject to change.
+	AsymmetricLowDeviationThreshold DeviationThresholdsType = "AsymmetricLow"
+
+	// AsymmetricMediumDeviationThreshold sets thresholds to 0%:20% ratio.
+	// An AsymmetricDeviationThreshold will force all nodes below the average
+	// to be considered as underutilized to help rebalancing overutilized outliers.
+	// The threshold value is subject to change.
+	AsymmetricMediumDeviationThreshold DeviationThresholdsType = "AsymmetricMedium"
+
+	// AsymmetricHighDeviationThreshold sets thresholds to 0%:30% ratio.
+	// An AsymmetricDeviationThreshold will force all nodes below the average
+	// to be considered as underutilized to help rebalancing overutilized outliers.
+	// The threshold value is subject to change.
+	AsymmetricHighDeviationThreshold DeviationThresholdsType = "AsymmetricHigh"
 )
 
 // ActualUtilizationProfile sets predefined Prometheus PromQL query
@@ -155,6 +178,8 @@ const (
 	PrometheusMemoryPSIPressureProfile ActualUtilizationProfile = "PrometheusMemoryPSIPressure"
 	// PrometheusIOPSIPressureProfile sets rate(node_pressure_io_waiting_seconds_total[1m]) query
 	PrometheusIOPSIPressureProfile ActualUtilizationProfile = "PrometheusIOPSIPressure"
+	// PrometheusCPUCombinedProfile uses a combination of CPU utilization and CPU pressure based on a recording rule
+	PrometheusCPUCombinedProfile ActualUtilizationProfile = "PrometheusCPUCombined"
 )
 
 // Namespaces overrides included and excluded namespaces while keeping
