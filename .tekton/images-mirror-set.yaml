@@ -13,4 +13,4 @@ spec:
       source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-18
-      source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
+      source: registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9
