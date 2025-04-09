@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8sclient "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/util/taints"
@@ -336,6 +337,104 @@ func TestSoftTainterDeployment(t *testing.T) {
 		}
 	}
 	klog.Infof("All the test softtaints got properly cleaned up")
+
+}
+
+func TestSoftTainterVAP(t *testing.T) {
+	kubeClient := getKubeClientOrDie()
+	ctx, cancelFnc := context.WithCancel(context.TODO())
+	defer cancelFnc()
+
+	// label all the nodes to mock a KubeVirt deployment
+	if err := applyKubeVirtNodeLabel(ctx, kubeClient); err != nil {
+		t.Fatalf("Failed applying KubeVirt node label: %v", err)
+	}
+	defer func(ctx context.Context, kubeClient *k8sclient.Clientset) {
+		err := dropKubeVirtNodeLabel(ctx, kubeClient)
+		if err != nil {
+			t.Fatalf("Failed reverting KubeVirt node label: %v", err)
+		}
+	}(ctx, kubeClient)
+
+	// apply devKubeVirtRelieveAndMigrate CR for the operator
+	if err := operatorConfigsAppliers["devKubeVirtRelieveAndMigrate"](); err != nil {
+		t.Fatalf("Unable to apply a CR for Descheduler operator: %v", err)
+	}
+	klog.Infof("Descheduler operator is now configured with devKubeVirtRelieveAndMigrate profile")
+	defer func() {
+		if err := operatorConfigsAppliers["base"](); err != nil {
+			t.Fatalf("Failed restoring base profile: %v", err)
+		}
+	}()
+
+	// wait for softtainter pod to be running
+	stPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.SoftTainterOperandName, "")
+	if err != nil {
+		t.Fatalf("Unable to wait for the softtainter pod to run")
+	}
+	klog.Infof("SoftTainter pod running in %v", stPod.Name)
+
+	saKubeconfig := os.Getenv("KUBECONFIG")
+	saConfig, err := clientcmd.BuildConfigFromFlags("", saKubeconfig)
+	if err != nil {
+		t.Fatalf("Unable to build config: %v", err)
+	}
+	saConfig.Impersonate = rest.ImpersonationConfig{
+		UserName: fmt.Sprintf("system:serviceaccount:%v:%v", operatorclient.OperatorNamespace, softTainterServiceAccountName),
+	}
+
+	stClientset, err := k8sclient.NewForConfig(saConfig)
+	if err != nil {
+		t.Fatalf("Unable to build client: %v", err)
+	}
+
+	nodes, err := stClientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: workersLabelSelector})
+	if err != nil {
+		t.Fatalf("Unable to fetch nodes: %v", err)
+	}
+	if len(nodes.Items) < 1 {
+		t.Fatalf("Unable to find a test node: %v", err)
+	}
+	tNode := &nodes.Items[0]
+
+	defer func(ctx context.Context, kubeClient *k8sclient.Clientset) {
+		err := removeSoftTaints(ctx, kubeClient)
+		if err != nil {
+			t.Fatalf("Failed cleaning softtaints: %v", err)
+		}
+	}(ctx, kubeClient)
+
+	softTaint := v1.Taint{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintValue, Effect: v1.TaintEffectPreferNoSchedule}
+	tryAddingTaintWithExpectedSuccess(ctx, t, stClientset, tNode, &softTaint)
+	klog.Infof("softtainter SA is allowed to apply a softtaint with the right key prefix")
+
+	tryRemovingTaintWithExpectedSuccess(ctx, t, stClientset, tNode, &softTaint)
+	klog.Infof("softtainter SA is allowed to delete a softtaint with the right key prefix")
+
+	badSoftTaint := v1.Taint{Key: "wrongKey", Value: softtainter.AppropriatelyUtilizedSoftTaintValue, Effect: v1.TaintEffectPreferNoSchedule}
+	tryAddingTaintWithExpectedFailure(ctx, t, stClientset, tNode, &badSoftTaint)
+	klog.Infof("softtainter SA is not allowed to apply a softtaint with a wrong key prefix")
+
+	hardTaint := v1.Taint{Key: softtainter.AppropriatelyUtilizedSoftTaintKey, Value: softtainter.AppropriatelyUtilizedSoftTaintValue, Effect: v1.TaintEffectNoSchedule}
+	tryAddingTaintWithExpectedFailure(ctx, t, stClientset, tNode, &hardTaint)
+	klog.Infof("softtainter SA is not allowed to apply hard taints")
+
+	// apply wrong softtaint and hard taint as test executor
+	unremovableTaints := []*v1.Taint{&badSoftTaint, &hardTaint}
+	for _, taint := range unremovableTaints {
+		tryAddingTaintWithExpectedSuccess(ctx, t, kubeClient, tNode, taint)
+	}
+	defer func(ctx context.Context, kubeClient *k8sclient.Clientset, node *v1.Node, taints []*v1.Taint) {
+		for _, taint := range taints {
+			tryRemovingTaintWithExpectedSuccess(ctx, t, kubeClient, tNode, taint)
+		}
+	}(ctx, kubeClient, tNode, unremovableTaints)
+
+	tryRemovingTaintWithExpectedFailure(ctx, t, stClientset, tNode, &badSoftTaint)
+	klog.Infof("softtainter SA is not allowed to remove a softtaint with a wrong key prefix")
+
+	tryRemovingTaintWithExpectedFailure(ctx, t, stClientset, tNode, &hardTaint)
+	klog.Infof("softtainter SA is not allowed to remove a hard taint")
 
 }
 
@@ -722,4 +821,66 @@ func updateNodeAndRetryOnConflicts(ctx context.Context, kubeClient *k8sclient.Cl
 		return uerr
 	}
 	return nil
+}
+
+func tryUpdatingTaintWithExpectation(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint, add, expectedSuccess bool) {
+	rnode, err := clientSet.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Failed refreshing node: %v", err)
+	}
+	var tNode *corev1.Node
+	var updated bool
+	var tErr error
+	var taintOperation string
+	if add {
+		tNode, updated, tErr = taints.AddOrUpdateTaint(rnode, taint)
+		if tErr != nil {
+			t.Fatalf("Failed applying taint: %v", tErr)
+		}
+		taintOperation = "apply"
+	} else {
+		tNode, updated, tErr = taints.RemoveTaint(rnode, taint)
+		if tErr != nil {
+			t.Fatalf("Failed removing taint: %v", tErr)
+		}
+		taintOperation = "remove"
+	}
+	if updated {
+		uerr := updateNodeAndRetryOnConflicts(ctx, clientSet, tNode, metav1.UpdateOptions{})
+		if expectedSuccess {
+			if uerr != nil {
+				t.Fatalf("Failed trying to %v taint to node: %v: %v", taintOperation, tNode.Name, uerr)
+			}
+		} else {
+			expectedErr := fmt.Sprintf(
+				"is forbidden: ValidatingAdmissionPolicy '%v' with binding '%v' denied request: User system:serviceaccount:%v:%v is",
+				softTainterValidatingAdmissionPolicyName,
+				softTainterValidatingAdmissionPolicyBindingName,
+				operatorclient.OperatorNamespace,
+				softTainterServiceAccountName)
+			if uerr == nil {
+				t.Fatalf("softtaint SA was allowed to %v taint %v, %v to node: %v", taintOperation, taint.Key, taint.Effect, tNode.Name)
+			} else if !strings.Contains(uerr.Error(), expectedErr) {
+				t.Fatalf("unexpected error: %v", uerr)
+			}
+		}
+	} else {
+		t.Fatalf("trying to %v taint %v, %v on/from node %v produces no changes", taintOperation, taint.Key, taint.Effect, tNode.Name)
+	}
+}
+
+func tryAddingTaintWithExpectedSuccess(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint) {
+	tryUpdatingTaintWithExpectation(ctx, t, clientSet, node, taint, true, true)
+}
+
+func tryAddingTaintWithExpectedFailure(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint) {
+	tryUpdatingTaintWithExpectation(ctx, t, clientSet, node, taint, true, false)
+}
+
+func tryRemovingTaintWithExpectedSuccess(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint) {
+	tryUpdatingTaintWithExpectation(ctx, t, clientSet, node, taint, false, true)
+}
+
+func tryRemovingTaintWithExpectedFailure(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint) {
+	tryUpdatingTaintWithExpectation(ctx, t, clientSet, node, taint, false, false)
 }
