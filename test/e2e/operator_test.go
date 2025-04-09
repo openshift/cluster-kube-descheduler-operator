@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +32,11 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 )
+
+var operatorConfigs = map[string]string{
+	"base": "assets/07_descheduler-operator.cr.yaml",
+}
+var operatorConfigsAppliers = map[string]func() error{}
 
 func TestMain(m *testing.M) {
 	if os.Getenv("KUBECONFIG") == "" {
@@ -116,7 +122,7 @@ func TestMain(m *testing.M) {
 					if env.Name == "RELATED_IMAGE_OPERAND_IMAGE" {
 						required.Spec.Template.Spec.Containers[0].Env[i].Value = "quay.io/jchaloup/descheduler:v5.1.1-8"
 					} else if env.Name == "RELATED_IMAGE_SOFTTAINTER_IMAGE" {
-						required.Spec.Template.Spec.Containers[0].Env[i].Value = operator_image
+						required.Spec.Template.Spec.Containers[0].Env[i].Value = registry + "/" + os.Getenv("NAMESPACE") + "/" + operator_image
 					}
 				}
 				_, _, err := resourceapply.ApplyDeployment(
@@ -136,20 +142,42 @@ func TestMain(m *testing.M) {
 				return err
 			},
 		},
-		{
-			path: "assets/07_descheduler-operator.cr.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(descv1.SchemeGroupVersion), objBytes)
-				if err != nil {
-					klog.Errorf("Unable to decode assets/07_descheduler-operator.cr.yaml: %v", err)
+	}
+
+	for k, path := range operatorConfigs {
+		operatorConfigsAppliers[k] = func() error {
+			requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(descv1.SchemeGroupVersion), bindata.MustAsset(path))
+			if err != nil {
+				klog.Errorf("Unable to decode %v: %v", path, err)
+				return err
+			}
+			requiredDesch := requiredObj.(*descv1.KubeDescheduler)
+			existingDesch, err := deschClient.KubedeschedulersV1().KubeDeschedulers(requiredDesch.Namespace).Get(ctx, requiredDesch.Name, metav1.GetOptions{})
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(requiredDesch.Namespace).Create(ctx, requiredDesch, metav1.CreateOptions{})
+					return err
+				} else {
 					return err
 				}
-				requiredDesch := requiredObj.(*descv1.KubeDescheduler)
-
-				_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(requiredDesch.Namespace).Create(ctx, requiredDesch, metav1.CreateOptions{})
-				return err
-			},
-		},
+			}
+			requiredDesch.Spec.DeepCopyInto(&existingDesch.Spec)
+			existingDesch.ObjectMeta.Annotations = requiredDesch.ObjectMeta.Annotations
+			existingDesch.ObjectMeta.Labels = requiredDesch.ObjectMeta.Labels
+			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(requiredDesch.Namespace).Update(ctx, existingDesch, metav1.UpdateOptions{})
+			// retry once on conflicts
+			if apierrors.IsConflict(err) {
+				existingDesch, err = deschClient.KubedeschedulersV1().KubeDeschedulers(requiredDesch.Namespace).Get(ctx, requiredDesch.Name, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				requiredDesch.Spec.DeepCopyInto(&existingDesch.Spec)
+				existingDesch.ObjectMeta.Annotations = requiredDesch.ObjectMeta.Annotations
+				existingDesch.ObjectMeta.Labels = requiredDesch.ObjectMeta.Labels
+				_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(requiredDesch.Namespace).Update(ctx, existingDesch, metav1.UpdateOptions{})
+			}
+			return err
+		}
 	}
 
 	// create required resources, e.g. namespace, crd, roles
@@ -168,61 +196,29 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	var deschOpPod *corev1.Pod
-	// Wait until the descheduler operator pod is running
-	if err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
-		klog.Infof("Listing pods...")
-		podItems, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			klog.Errorf("Unable to list pods: %v", err)
-			return false, nil
-		}
-		for _, pod := range podItems.Items {
-			// skip if pod.Name doesn't have operatorclient.OperandName + '-operator'
-			if !strings.HasPrefix(pod.Name, operatorclient.OperandName+"-operator") {
-				continue
-			}
-			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
-				deschOpPod = pod.DeepCopy()
-				return true, nil
-			}
-		}
-		return false, nil
-	}); err != nil {
+	// apply base CR for the operator
+	err := operatorConfigsAppliers["base"]()
+	if err != nil {
+		klog.Errorf("Unable to apply a CR for Descheduler operator: %v", err)
+		os.Exit(1)
+	}
+
+	// wait for descheduler operator pod to be running
+	deschOpPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName+"-operator", "")
+	if err != nil {
 		klog.Errorf("Unable to wait for the Descheduler operator pod to run")
 		os.Exit(1)
 	}
 	klog.Infof("Descheduler operator pod running in %v", deschOpPod.Name)
 
-	var deschPod *corev1.Pod
-	// Wait until the descheduler pod is running
-	if err := wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
-		klog.Infof("Listing pods...")
-		podItems, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			klog.Errorf("Unable to list pods: %v", err)
-			return false, nil
-		}
-		for _, pod := range podItems.Items {
-			// skip if pod.Name _doesn't_ have operatorclient.OperandName (operand should have this)
-			// or if it _has_ operatorclient.OperandName + '-operator'
-			if !strings.HasPrefix(pod.Name, operatorclient.OperandName) || strings.HasPrefix(pod.Name, operatorclient.OperandName+"-operator") {
-				continue
-			}
-			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
-				deschPod = pod.DeepCopy()
-				return true, nil
-			}
-		}
-		return false, nil
-	}); err != nil {
-		klog.Errorf("Unable to wait for the Descheduler (operand) pod to run")
+	// wait for descheduler pod to be running
+	deschPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	if err != nil {
+		klog.Errorf("Unable to wait for the Descheduler pod to run")
 		os.Exit(1)
 	}
-
 	klog.Infof("Descheduler (operand) pod running in %v", deschPod.Name)
+
 	os.Exit(m.Run())
 }
 
@@ -401,4 +397,31 @@ func waitForPodsRunning(ctx context.Context, t *testing.T, clientSet *k8sclient.
 	}); err != nil {
 		t.Fatalf("Error waiting for pods running: %v", err)
 	}
+}
+
+func waitForPodRunningByNamePrefix(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, nameprefix, excludedprefix string) (*v1.Pod, error) {
+	var expectedPod *corev1.Pod
+	// Wait until the expected pod is running
+	if err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
+		klog.Infof("Listing pods...")
+		podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			klog.Errorf("Unable to list pods: %v", err)
+			return false, nil
+		}
+		for _, pod := range podItems.Items {
+			if !strings.HasPrefix(pod.Name, nameprefix) || (excludedprefix != "" && strings.HasPrefix(pod.Name, excludedprefix)) {
+				continue
+			}
+			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
+			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
+				expectedPod = pod.DeepCopy()
+				return true, nil
+			}
+		}
+		return false, nil
+	}); err != nil {
+		return nil, err
+	}
+	return expectedPod, nil
 }

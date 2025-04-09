@@ -117,12 +117,21 @@ spec:
                     - Low
                     - Medium
                     - High
+                    - AsymmetricLow
+                    - AsymmetricMedium
+                    - AsymmetricHigh
                     - ""
                     type: string
                   devEnableEvictionsInBackground:
                     description: |-
                       DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
                       The EvictionsInBackground alpha feature is a subject to change.
+                      Currently provided as an experimental feature.
+                    type: boolean
+                  devEnableSoftTainter:
+                    description: |-
+                      DevEnableSoftTainter enables SoftTainter alpha feature.
+                      The EnableSoftTainter alpha feature is a subject to change.
                       Currently provided as an experimental feature.
                     type: boolean
                   devHighNodeUtilizationThresholds:
@@ -137,7 +146,7 @@ spec:
                     - ""
                     type: string
                   devLowNodeUtilizationThresholds:
-                    description: LowNodeUtilizationThresholds enumerates predefined
+                    description: DevLowNodeUtilizationThresholds enumerates predefined
                       experimental thresholds
                     enum:
                     - Low
