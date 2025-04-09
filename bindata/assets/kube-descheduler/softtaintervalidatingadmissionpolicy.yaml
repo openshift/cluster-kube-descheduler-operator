@@ -20,16 +20,18 @@ spec:
   variables:
     - name: "deschedulerTaintPrefix"
       expression: "'descheduler.openshift.io'"
+    - name: "deschedulerTaintEffect"
+      expression: "'PreferNoSchedule'"
     - name: "oldNonDeschedulerTaints"
-      expression: "has(oldObject.spec.taints) ? oldObject.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix)) : []"
+      expression: "has(oldObject.spec.taints) ? oldObject.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix) || t.effect != variables.deschedulerTaintEffect) : []"
     - name: "oldTaints"
       expression: "has(oldObject.spec.taints) ? oldObject.spec.taints : []"
     - name: "newNonDeschedulerTaints"
-      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix)) : []"
+      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, !t.key.contains(variables.deschedulerTaintPrefix) || t.effect != variables.deschedulerTaintEffect) : []"
     - name: "newTaints"
       expression: "has(object.spec.taints) ? object.spec.taints : []"
     - name: "newDeschedulerTaints"
-      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, t.key.contains(variables.deschedulerTaintPrefix)) : []"
+      expression: "has(object.spec.taints) ? object.spec.taints.filter(t, t.key.contains(variables.deschedulerTaintPrefix) && t.effect == variables.deschedulerTaintEffect) : []"
   validations:
     - expression: |
         oldObject.metadata.filter(k, k != "resourceVersion" && k != "generation" && k != "managedFields").all(k, k in object.metadata) &&
