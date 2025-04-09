@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,7 +31,8 @@ import (
 	fakeroutev1client "github.com/openshift/client-go/route/clientset/versioned/fake"
 	routev1informers "github.com/openshift/client-go/route/informers/externalversions"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
-	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
+	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
+	operatorconfigclientfake "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
@@ -56,12 +58,55 @@ var configHighNodeUtilization = &configv1.Scheduler{
 	},
 }
 
+func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configObjects, routesObjects, deschedulerObjects []runtime.Object) (*TargetConfigReconciler, operatorconfigclient.Interface) {
+	fakeKubeClient := fake.NewSimpleClientset(kubeClientObjects...)
+	operatorConfigClient := operatorconfigclientfake.NewSimpleClientset(deschedulerObjects...)
+	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
+	deschedulerClient := &operatorclient.DeschedulerClient{
+		Ctx:            ctx,
+		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
+		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
+	}
+	openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(configObjects...)
+	configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
+	openshiftRouteClient := fakeroutev1client.NewSimpleClientset(routesObjects...)
+	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
+	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+	scheme := runtime.NewScheme()
+
+	targetConfigReconciler := NewTargetConfigReconciler(
+		ctx,
+		"RELATED_IMAGE_OPERAND_IMAGE",
+		"RELATED_IMAGE_SOFTTAINTER_IMAGE",
+		operatorConfigClient.KubedeschedulersV1(),
+		operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
+		deschedulerClient,
+		fakeKubeClient,
+		dynamicfake.NewSimpleDynamicClient(scheme),
+		configInformers,
+		routeInformers,
+		coreInformers,
+		NewFakeRecorder(1024),
+	)
+
+	operatorConfigInformers.Start(ctx.Done())
+	configInformers.Start(ctx.Done())
+	routeInformers.Start(ctx.Done())
+	coreInformers.Start(ctx.Done())
+
+	operatorConfigInformers.WaitForCacheSync(ctx.Done())
+	configInformers.WaitForCacheSync(ctx.Done())
+	routeInformers.WaitForCacheSync(ctx.Done())
+	coreInformers.WaitForCacheSync(ctx.Done())
+
+	return targetConfigReconciler, operatorConfigClient
+}
+
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
 	priority := int32(1000)
 
-	fakeRecorder := NewFakeRecorder(1024)
 	tests := []struct {
 		name            string
 		schedulerConfig *configv1.Scheduler
@@ -816,47 +861,8 @@ func TestManageConfigMap(t *testing.T) {
 
 			ctx, cancelFunc := context.WithCancel(context.TODO())
 			defer cancelFunc()
-			operatorConfigClient := operatorconfigclient.NewSimpleClientset()
-			operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
-			deschedulerClient := &operatorclient.DeschedulerClient{
-				Ctx:            ctx,
-				SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
-				OperatorClient: operatorConfigClient.KubedeschedulersV1(),
-			}
-			fakeKubeClient := fake.NewSimpleClientset(objects...)
 
-			openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(tt.schedulerConfig)
-			configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
-			openshiftRouteClient := fakeroutev1client.NewSimpleClientset(tt.routes...)
-			routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
-			coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
-
-			scheme := runtime.NewScheme()
-
-			targetConfigReconciler := NewTargetConfigReconciler(
-				ctx,
-				"RELATED_IMAGE_OPERAND_IMAGE",
-				"RELATED_IMAGE_SOFTTAINTER_IMAGE",
-				operatorConfigClient.KubedeschedulersV1(),
-				operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
-				deschedulerClient,
-				fakeKubeClient,
-				dynamicfake.NewSimpleDynamicClient(scheme),
-				configInformers,
-				routeInformers,
-				coreInformers,
-				fakeRecorder,
-			)
-
-			operatorConfigInformers.Start(ctx.Done())
-			configInformers.Start(ctx.Done())
-			routeInformers.Start(ctx.Done())
-			coreInformers.Start(ctx.Done())
-
-			operatorConfigInformers.WaitForCacheSync(ctx.Done())
-			configInformers.WaitForCacheSync(ctx.Done())
-			routeInformers.WaitForCacheSync(ctx.Done())
-			coreInformers.WaitForCacheSync(ctx.Done())
+			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, objects, []runtime.Object{tt.schedulerConfig}, tt.routes, nil)
 
 			got, forceDeployment, err := targetConfigReconciler.manageConfigMap(tt.descheduler)
 			if tt.err != nil {
@@ -1067,7 +1073,6 @@ func TestManageDeployment(t *testing.T) {
 func TestManageSoftTainterDeployment(t *testing.T) {
 	ctx, cancelFunc := context.WithCancel(context.TODO())
 	defer cancelFunc()
-	fakeRecorder := NewFakeRecorder(1024)
 	expectedSoftTainterDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -1327,45 +1332,8 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeKubeClient := fake.NewSimpleClientset(tt.objects...)
-			operatorConfigClient := operatorconfigclient.NewSimpleClientset()
-			operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
-			deschedulerClient := &operatorclient.DeschedulerClient{
-				Ctx:            ctx,
-				SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
-				OperatorClient: operatorConfigClient.KubedeschedulersV1(),
-			}
-			openshiftConfigClient := fakeconfigv1client.NewSimpleClientset()
-			configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
-			openshiftRouteClient := fakeroutev1client.NewSimpleClientset()
-			routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
-			coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
-			scheme := runtime.NewScheme()
 
-			targetConfigReconciler := NewTargetConfigReconciler(
-				ctx,
-				"RELATED_IMAGE_OPERAND_IMAGE",
-				"RELATED_IMAGE_SOFTTAINTER_IMAGE",
-				operatorConfigClient.KubedeschedulersV1(),
-				operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
-				deschedulerClient,
-				fakeKubeClient,
-				dynamicfake.NewSimpleDynamicClient(scheme),
-				configInformers,
-				routeInformers,
-				coreInformers,
-				fakeRecorder,
-			)
-
-			operatorConfigInformers.Start(ctx.Done())
-			configInformers.Start(ctx.Done())
-			routeInformers.Start(ctx.Done())
-			coreInformers.Start(ctx.Done())
-
-			operatorConfigInformers.WaitForCacheSync(ctx.Done())
-			configInformers.WaitForCacheSync(ctx.Done())
-			routeInformers.WaitForCacheSync(ctx.Done())
-			coreInformers.WaitForCacheSync(ctx.Done())
+			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, tt.objects, nil, nil, nil)
 
 			enabled, err := targetConfigReconciler.isSoftTainterNeeded(tt.descheduler)
 			if err != nil {
@@ -1401,6 +1369,7 @@ func TestSync(t *testing.T) {
 		targetConfigReconciler *TargetConfigReconciler
 		descheduler            *deschedulerv1.KubeDescheduler
 		err                    error
+		condition              *operatorv1.OperatorCondition
 	}{
 		{
 			name: "Invalid priority threshold configuration",
@@ -1425,12 +1394,63 @@ func TestSync(t *testing.T) {
 			},
 			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
+		{
+			name: "TargetConfigControllerDegraded kubevirt not deployed with RelieveAndMigrate profile",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "KubeDescheduler"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      operatorclient.OperatorConfigName,
+					Namespace: operatorclient.OperatorNamespace,
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{},
+				},
+			},
+			condition: &operatorv1.OperatorCondition{
+				Type:   "TargetConfigControllerDegraded",
+				Status: operatorv1.ConditionTrue,
+				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate),
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.targetConfigReconciler.operatorClient = operatorconfigclient.NewSimpleClientset(tt.descheduler).KubedeschedulersV1()
-			err := tt.targetConfigReconciler.sync()
+
+			ctx := context.TODO()
+
+			targetConfigReconciler, operatorClient := initTargetConfigReconciler(
+				ctx,
+				[]runtime.Object{
+					&appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      operatorclient.OperandName,
+							Namespace: operatorclient.OperatorNamespace,
+						},
+						Spec: appsv1.DeploymentSpec{
+							Replicas: utilptr.To[int32](1),
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{},
+							},
+						},
+					},
+				},
+				[]runtime.Object{configLowNodeUtilization},
+				nil,
+				[]runtime.Object{tt.descheduler},
+			)
+
+			err := targetConfigReconciler.sync()
 			if tt.err != nil {
 				if err == nil {
 					t.Fatalf("Expected error, not nil\n")
@@ -1442,6 +1462,28 @@ func TestSync(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("Unexpected error: %v\n", err)
+			}
+			if tt.condition != nil {
+				kubeDeschedulerObj, err := operatorClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+				if err != nil {
+					t.Fatalf("Unable to get kubedescheduler object: %v", err)
+				}
+				found := false
+				for _, condition := range kubeDeschedulerObj.Status.Conditions {
+					if condition.Type == tt.condition.Type {
+						found = true
+						if condition.Status != tt.condition.Status {
+							t.Fatalf("Expected %q condition status to be %v, got %v instead", condition.Type, tt.condition.Status, condition.Status)
+						}
+						if condition.Reason != tt.condition.Reason {
+							t.Fatalf("Expected %q condition reason to be %q, got %q instead", condition.Type, tt.condition.Reason, condition.Reason)
+						}
+						break
+					}
+				}
+				if !found {
+					t.Fatalf("Unable to find %q condition in the kubedescheduler's status", tt.condition.Type)
+				}
 			}
 		})
 	}
