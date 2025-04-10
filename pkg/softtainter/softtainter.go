@@ -50,7 +50,6 @@ type softTainterArgs struct {
 	useDeviationThresholds bool
 	thresholds             api.ResourceThresholds
 	targetThresholds       api.ResourceThresholds
-	applySoftTaints        bool
 	mode                   desv1.Mode
 }
 
@@ -108,6 +107,39 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 	}
 	st.resyncPeriod = time.Duration(*des.Spec.DeschedulingIntervalSeconds) * time.Second
 
+	nodeSelector := labels.Everything()
+	if policy.NodeSelector != nil {
+		sel, err := labels.Parse(*policy.NodeSelector)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		nodeSelector = sel
+	}
+
+	nl := corev1.NodeList{}
+	err = st.client.List(ctx, &nl, &client.ListOptions{LabelSelector: nodeSelector})
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	nodeList := make([]*corev1.Node, len(nl.Items))
+	for i, node := range nl.Items {
+		nodeList[i] = &node
+	}
+
+	enableSoftTainter := false
+	if des.Spec.ProfileCustomizations != nil && des.Spec.ProfileCustomizations.DevEnableSoftTainter {
+		enableSoftTainter = true
+	}
+
+	if !enableSoftTainter {
+		logger.Info("SoftTainter is disabled, cleaning up eventual leftover taints")
+		err = st.cleanAllSoftTaints(ctx, nodeList)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{RequeueAfter: st.resyncPeriod}, nil
+	}
+
 	var lnargs *nodeutilization.LowNodeUtilizationArgs
 
 	for _, p := range policy.Profiles {
@@ -124,17 +156,10 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 		logger.Error(err, "reconciliation failed")
 		return reconcile.Result{}, err
 	}
-
-	enableSoftTainter := false
-	if des.Spec.ProfileCustomizations != nil && des.Spec.ProfileCustomizations.DevEnableSoftTainter {
-		enableSoftTainter = true
-	}
-
 	st.args = &softTainterArgs{
 		useDeviationThresholds: lnargs.UseDeviationThresholds,
 		thresholds:             lnargs.Thresholds,
 		targetThresholds:       lnargs.TargetThresholds,
-		applySoftTaints:        enableSoftTainter,
 		mode:                   des.Spec.Mode,
 	}
 
@@ -172,36 +197,9 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 
 	st.resourceNames = getResourceNames(st.args.thresholds)
 
-	nodeSelector := labels.Everything()
-	if policy.NodeSelector != nil {
-		sel, err := labels.Parse(*policy.NodeSelector)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		nodeSelector = sel
-	}
-
-	nl := corev1.NodeList{}
-	err = st.client.List(ctx, &nl, &client.ListOptions{LabelSelector: nodeSelector})
+	err = st.syncSoftTaints(ctx, nodeList)
 	if err != nil {
 		return reconcile.Result{}, err
-	}
-	nodeList := make([]*corev1.Node, len(nl.Items))
-	for i, node := range nl.Items {
-		nodeList[i] = &node
-	}
-
-	if st.args.applySoftTaints {
-		err = st.syncSoftTaints(ctx, nodeList)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	} else {
-		logger.Info("SoftTainter is disabled, cleaning up eventual leftover taints")
-		err = st.cleanAllSoftTaints(ctx, nodeList)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
 	}
 	return reconcile.Result{RequeueAfter: st.resyncPeriod}, nil
 }
