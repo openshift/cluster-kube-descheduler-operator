@@ -39,6 +39,8 @@ import (
 )
 
 const (
+	baseConf                                           = "base"
+	kubeVirtRelieveAndMigrateConf                      = "devKubeVirtRelieveAndMigrate"
 	kubeVirtLabelKey                                   = "kubevirt.io/schedulable"
 	kubeVirtLabelValue                                 = "true"
 	workersLabelSelector                               = "node-role.kubernetes.io/worker="
@@ -52,8 +54,8 @@ const (
 )
 
 var operatorConfigs = map[string]string{
-	"base":                         "assets/07_descheduler-operator.cr.yaml",
-	"devKubeVirtRelieveAndMigrate": "assets/07_descheduler-operator.cr.devKubeVirtRelieveAndMigrate.yaml",
+	baseConf:                      "assets/07_descheduler-operator.cr.yaml",
+	kubeVirtRelieveAndMigrateConf: "assets/07_descheduler-operator.cr.devKubeVirtRelieveAndMigrate.yaml",
 }
 var operatorConfigsAppliers = map[string]func() error{}
 
@@ -216,7 +218,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// apply base CR for the operator
-	err := operatorConfigsAppliers["base"]()
+	err := operatorConfigsAppliers[baseConf]()
 	if err != nil {
 		klog.Errorf("Unable to apply a CR for Descheduler operator: %v", err)
 		os.Exit(1)
@@ -264,12 +266,12 @@ func TestSoftTainterDeployment(t *testing.T) {
 	}(ctx, kubeClient)
 
 	// apply devKubeVirtRelieveAndMigrate CR for the operator
-	if err := operatorConfigsAppliers["devKubeVirtRelieveAndMigrate"](); err != nil {
+	if err := operatorConfigsAppliers[kubeVirtRelieveAndMigrateConf](); err != nil {
 		t.Fatalf("Unable to apply a CR for Descheduler operator: %v", err)
 	}
 	klog.Infof("Descheduler operator is now configured with devKubeVirtRelieveAndMigrate profile")
 	defer func() {
-		if err := operatorConfigsAppliers["base"](); err != nil {
+		if err := operatorConfigsAppliers[baseConf](); err != nil {
 			t.Fatalf("Failed restoring base profile: %v", err)
 		}
 	}()
@@ -357,12 +359,12 @@ func TestSoftTainterVAP(t *testing.T) {
 	}(ctx, kubeClient)
 
 	// apply devKubeVirtRelieveAndMigrate CR for the operator
-	if err := operatorConfigsAppliers["devKubeVirtRelieveAndMigrate"](); err != nil {
+	if err := operatorConfigsAppliers[kubeVirtRelieveAndMigrateConf](); err != nil {
 		t.Fatalf("Unable to apply a CR for Descheduler operator: %v", err)
 	}
 	klog.Infof("Descheduler operator is now configured with devKubeVirtRelieveAndMigrate profile")
 	defer func() {
-		if err := operatorConfigsAppliers["base"](); err != nil {
+		if err := operatorConfigsAppliers[baseConf](); err != nil {
 			t.Fatalf("Failed restoring base profile: %v", err)
 		}
 	}()
