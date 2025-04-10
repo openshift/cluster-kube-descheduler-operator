@@ -841,7 +841,7 @@
     "schema": "olm.bundle",
     "name": "clusterkubedescheduleroperator.v5.1.2",
     "package": "cluster-kube-descheduler-operator",
-    "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8e1e349e702a4540ee7e1b03959a35f0a87ef4d1fdc4585b58dd80ef89d481bd",
+    "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:ded1d306d7a5098c609c4e45af23a59d40106f3e4fb19a6b86c099ca34ceb670",
     "properties": [
         {
             "type": "olm.gvk",
@@ -867,7 +867,7 @@
                     "categories": "OpenShift Optional",
                     "certified": "false",
                     "console.openshift.io/operator-monitoring-default": "true",
-                    "containerImage": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:426baca9e36c7833d335262a7b8f73c318cd749ca7767726fc86109948a44d96",
+                    "containerImage": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:f5e92109288a163e0969253f2bcddc4dcced3a827b4f38d3c632c47d20c33fb1",
                     "createdAt": "2025/04/03",
                     "description": "An operator to run descheduler in Openshift cluster.",
                     "features.operators.openshift.io/cnf": "false",
@@ -953,11 +953,11 @@
     "relatedImages": [
         {
             "name": "",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8e1e349e702a4540ee7e1b03959a35f0a87ef4d1fdc4585b58dd80ef89d481bd"
+            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:ded1d306d7a5098c609c4e45af23a59d40106f3e4fb19a6b86c099ca34ceb670"
         },
         {
             "name": "",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:426baca9e36c7833d335262a7b8f73c318cd749ca7767726fc86109948a44d96"
+            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:f5e92109288a163e0969253f2bcddc4dcced3a827b4f38d3c632c47d20c33fb1"
         }
     ]
 }
