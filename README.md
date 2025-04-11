@@ -107,7 +107,7 @@ The following profiles are currently provided:
 * [`LifecycleAndUtilization`](#LifecycleAndUtilization)
 * [`LongLifecycle`](#LongLifecycle)
 * [`CompactAndScale`](#compactandscale-techpreview)
-* [`devKubeVirtRelieveAndMigrate`](#devkubevirtrelieveandmigrate-techpreview)
+* [`DevKubeVirtRelieveAndMigrate`](#devkubevirtrelieveandmigrate)
 * [`EvictPodsWithPVC`](#EvictPodsWithPVC)
 * [`EvictPodsWithLocalStorage`](#EvictPodsWithLocalStorage)
 
@@ -153,7 +153,7 @@ An under utilized node is any node consuming less than 20% of its available cpu,
 This profile enables the [`HighNodeUtilization`](https://github.com/kubernetes-sigs/descheduler/#highnodeutilization) strategy.
 In the future, more configuration may be made available through the operator based on user feedback.
 
-### devKubeVirtRelieveAndMigrate
+### DevKubeVirtRelieveAndMigrate
 
 This profiles seeks to evict pods from high-cost nodes to relieve overall expenses while considering workload migration.
 Node cost can include:
