@@ -180,6 +180,9 @@ relevant asymmetry between the descheduling and successive scheduling decisions.
 The soft taints set by the descheduler soft-tainter act as a hint for the scheduler to mitigate
 this asymmetry and foster a quicker convergence.
 
+This profile requires [PSI](https://docs.kernel.org/accounting/psi.html) metrics to be enabled (psi=1 kernel parameter)
+for all the worker nodes.
+
 The profile exposes the following customization:
 - `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
 - `devActualUtilizationProfile`: Enable load-aware descheduling.

@@ -59,6 +59,8 @@ var operatorConfigs = map[string]string{
 }
 var operatorConfigsAppliers = map[string]func() error{}
 
+const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
+
 func TestMain(m *testing.M) {
 	if os.Getenv("KUBECONFIG") == "" {
 		klog.Errorf("KUBECONFIG environment variable not set")
@@ -265,6 +267,24 @@ func TestSoftTainterDeployment(t *testing.T) {
 		}
 	}(ctx, kubeClient)
 
+	// patch the operator deployment to mock PSI
+	prevDisablePSIcheck, foundDisablePSIcheck := os.LookupEnv(EXPERIMENTAL_DISABLE_PSI_CHECK)
+	if err := mockPSIEnv(ctx, kubeClient); err != nil {
+		t.Fatalf("Failed mocking PSI path enviromental variable to the operator depoyment: %v", err)
+	}
+	defer func(ctx context.Context, kubeClient *k8sclient.Clientset, prevDisablePSIcheck string, foundDisablePSIcheck bool) {
+		err := unmockPSIEnv(ctx, kubeClient, prevDisablePSIcheck, foundDisablePSIcheck)
+		if err != nil {
+			t.Fatalf("Failed PSI path enviromental variable: %v", err)
+		}
+	}(ctx, kubeClient, prevDisablePSIcheck, foundDisablePSIcheck)
+	// wait for descheduler operator pod to be running
+	deschOpPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	if err != nil {
+		t.Fatalf("Unable to wait for the Descheduler operator pod to run")
+	}
+	klog.Infof("Descheduler pod running in %v", deschOpPod.Name)
+
 	// apply devKubeVirtRelieveAndMigrate CR for the operator
 	if err := operatorConfigsAppliers[kubeVirtRelieveAndMigrateConf](); err != nil {
 		t.Fatalf("Unable to apply a CR for Descheduler operator: %v", err)
@@ -357,6 +377,24 @@ func TestSoftTainterVAP(t *testing.T) {
 			t.Fatalf("Failed reverting KubeVirt node label: %v", err)
 		}
 	}(ctx, kubeClient)
+
+	// patch the operator deployment to mock PSI
+	prevDisablePSIcheck, foundDisablePSIcheck := os.LookupEnv(EXPERIMENTAL_DISABLE_PSI_CHECK)
+	if err := mockPSIEnv(ctx, kubeClient); err != nil {
+		t.Fatalf("Failed mocking PSI path enviromental variable to the operator depoyment: %v", err)
+	}
+	defer func(ctx context.Context, kubeClient *k8sclient.Clientset, prevDisablePSIcheck string, foundDisablePSIcheck bool) {
+		err := unmockPSIEnv(ctx, kubeClient, prevDisablePSIcheck, foundDisablePSIcheck)
+		if err != nil {
+			t.Fatalf("Failed PSI path enviromental variable: %v", err)
+		}
+	}(ctx, kubeClient, prevDisablePSIcheck, foundDisablePSIcheck)
+	// wait for descheduler operator pod to be running
+	deschOpPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	if err != nil {
+		t.Fatalf("Unable to wait for the Descheduler operator pod to run")
+	}
+	klog.Infof("Descheduler pod running in %v", deschOpPod.Name)
 
 	// apply devKubeVirtRelieveAndMigrate CR for the operator
 	if err := operatorConfigsAppliers[kubeVirtRelieveAndMigrateConf](); err != nil {
@@ -825,6 +863,27 @@ func updateNodeAndRetryOnConflicts(ctx context.Context, kubeClient *k8sclient.Cl
 	return nil
 }
 
+func updateDeploymentAndRetryOnConflicts(ctx context.Context, kubeClient *k8sclient.Clientset, deployment *appsv1.Deployment, opts metav1.UpdateOptions) error {
+	uDeployment, uerr := kubeClient.AppsV1().Deployments(deployment.Namespace).Update(ctx, deployment, opts)
+	if uerr != nil {
+		if apierrors.IsConflict(uerr) {
+			if uDeployment.Name == "" {
+				uDeployment, uerr = kubeClient.AppsV1().Deployments(uDeployment.Namespace).Get(ctx, uDeployment.Name, metav1.GetOptions{})
+				if uerr != nil {
+					return uerr
+				}
+			}
+			deployment.Spec.DeepCopyInto(&uDeployment.Spec)
+			uDeployment.ObjectMeta.Labels = deployment.ObjectMeta.Labels
+			uDeployment.ObjectMeta.Annotations = deployment.ObjectMeta.Annotations
+			_, err := kubeClient.AppsV1().Deployments(deployment.Namespace).Update(ctx, deployment, opts)
+			return err
+		}
+		return uerr
+	}
+	return nil
+}
+
 func tryUpdatingTaintWithExpectation(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint, add, expectedSuccess bool) {
 	rnode, err := clientSet.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 	if err != nil {
@@ -885,4 +944,41 @@ func tryRemovingTaintWithExpectedSuccess(ctx context.Context, t *testing.T, clie
 
 func tryRemovingTaintWithExpectedFailure(ctx context.Context, t *testing.T, clientSet *k8sclient.Clientset, node *corev1.Node, taint *corev1.Taint) {
 	tryUpdatingTaintWithExpectation(ctx, t, clientSet, node, taint, false, false)
+}
+
+func mockPSIEnv(ctx context.Context, kubeClient *k8sclient.Clientset) error {
+	operatorDeployment, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName+"-operator", metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	operatorDeployment.Spec.Template.Spec.Containers[0].Env = append(
+		operatorDeployment.Spec.Template.Spec.Containers[0].Env,
+		v1.EnvVar{
+			Name:  EXPERIMENTAL_DISABLE_PSI_CHECK,
+			Value: "true",
+		})
+	return updateDeploymentAndRetryOnConflicts(ctx, kubeClient, operatorDeployment, metav1.UpdateOptions{})
+}
+
+func unmockPSIEnv(ctx context.Context, kubeClient *k8sclient.Clientset, prevDisablePSIcheck string, foundDisablePSIcheck bool) error {
+	operatorDeployment, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName+"-operator", metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	var envVars []v1.EnvVar
+	for _, e := range operatorDeployment.Spec.Template.Spec.Containers[0].Env {
+		if e.Name != EXPERIMENTAL_DISABLE_PSI_CHECK {
+			envVars = append(envVars, e)
+		}
+	}
+	if foundDisablePSIcheck {
+		operatorDeployment.Spec.Template.Spec.Containers[0].Env = append(
+			envVars,
+			v1.EnvVar{
+				Name:  EXPERIMENTAL_DISABLE_PSI_CHECK,
+				Value: prevDisablePSIcheck,
+			})
+	}
+	operatorDeployment.Spec.Template.Spec.Containers[0].Env = envVars
+	return updateDeploymentAndRetryOnConflicts(ctx, kubeClient, operatorDeployment, metav1.UpdateOptions{})
 }

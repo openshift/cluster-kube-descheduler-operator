@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -67,6 +68,8 @@ import (
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 const kubeVirtShedulableLabelSelector = "kubevirt.io/schedulable=true"
+const psiPath = "/proc/pressure/"
+const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -88,6 +91,7 @@ type TargetConfigReconciler struct {
 	namespaceLister          corev1listers.NamespaceLister
 	nodeLister               corev1listers.NodeLister
 	cache                    resourceapply.ResourceCache
+	psiPath                  string
 }
 
 func NewTargetConfigReconciler(
@@ -133,6 +137,7 @@ func NewTargetConfigReconciler(
 		namespaceLister:          coreInformers.Core().V1().Namespaces().Lister(),
 		nodeLister:               coreInformers.Core().V1().Nodes().Lister(),
 		cache:                    resourceapply.NewResourceCache(),
+		psiPath:                  psiPath,
 	}
 
 	configInformer.Config().V1().Schedulers().Informer().AddEventHandler(c.eventHandler())
@@ -322,6 +327,16 @@ func (c TargetConfigReconciler) sync() error {
 		specAnnotations["clusterrolebindings/openshift-descheduler-operand"] = resourceVersion
 	}
 
+	if softtainterPSIAlert, _, err := c.managePSIAlert(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if softtainterPSIAlert != nil {
+			resourceVersion = softtainterPSIAlert.GetResourceVersion()
+		}
+		specAnnotations["prometheusrule/descheduler-psi-alert"] = resourceVersion
+	}
+
 	if role, _, err := c.manageRole(descheduler); err != nil {
 		return err
 	} else {
@@ -474,6 +489,22 @@ func (c *TargetConfigReconciler) managePrometheusRule(descheduler *deschedulerv1
 	required.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
 	controller.EnsureOwnerRef(required, ownerReference)
 	return resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) managePSIAlert(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*unstructured.Unstructured, bool, error) {
+	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/psialert.yaml"))
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+	}
+	return resourceapply.DeleteKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageSoftTainterValidatingAdmissionPolicy(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*admissionv1.ValidatingAdmissionPolicy, bool, error) {
@@ -1340,6 +1371,13 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			if !kvDeployed {
 				return nil, true, fmt.Errorf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate)
 			}
+			psiEnabled, psierr := c.isPSIenabled()
+			if psierr != nil {
+				return nil, false, psierr
+			}
+			if !psiEnabled {
+				return nil, true, fmt.Errorf("profile %v can only be used when PSI metrics are enabled for the worker nodes", deschedulerv1.RelieveAndMigrate)
+			}
 			kubeVirtShedulable := kubeVirtShedulableLabelSelector
 			policy.NodeSelector = &kubeVirtShedulable
 			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
@@ -1627,6 +1665,22 @@ func (c *TargetConfigReconciler) isKubeVirtDeployed() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func (c *TargetConfigReconciler) isPSIenabled() (bool, error) {
+	if boolValue, err := strconv.ParseBool(os.Getenv(EXPERIMENTAL_DISABLE_PSI_CHECK)); err == nil && boolValue {
+		return true, nil
+	}
+
+	_, err := os.Stat(c.psiPath)
+	if err == nil {
+		return true, nil
+	} else {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
 }
 
 func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
