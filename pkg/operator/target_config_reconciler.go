@@ -35,6 +35,7 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -176,7 +177,7 @@ func (c TargetConfigReconciler) sync() error {
 					},
 				},
 				metav1.UpdateOptions{})
-			if err != nil {
+			if err != nil && !errors.IsNotFound(err) {
 				return err
 			}
 			_, _, err = v1helpers.UpdateStatus(c.ctx, c.deschedulerClient,
