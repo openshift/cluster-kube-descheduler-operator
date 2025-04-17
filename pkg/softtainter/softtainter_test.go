@@ -109,7 +109,6 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   true,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
@@ -146,7 +145,6 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   true,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
@@ -183,7 +181,6 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   true,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
@@ -226,7 +223,6 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   true,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
@@ -263,7 +259,6 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   true,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
@@ -300,7 +295,6 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   true,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
@@ -308,7 +302,7 @@ func TestReconcile(t *testing.T) {
 			testfilename: "policy.yaml",
 		},
 		{
-			description: "3 nodes, softTainter is disabled",
+			description: "3 nodes, RelieveAndMigrate is disabled",
 			nodes: []*corev1.Node{
 				buildTestNodeWithTaints("node1", true, false, false, true),
 				buildTestNodeWithTaints("node2", true, false, false, true),
@@ -337,15 +331,14 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   false,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
 			},
-			testfilename: "policy.yaml",
+			testfilename: "policyNoRelieveAndMigrate.yaml",
 		},
 		{
-			description: "3 nodes, softTainter is disabled, leftover taints",
+			description: "3 nodes, RelieveAndMigrate is disabled, leftover taints",
 			nodes: []*corev1.Node{
 				buildTestNodeWithTaints("node1", true, true, false, true),
 				buildTestNodeWithTaints("node2", true, false, true, true),
@@ -374,12 +367,11 @@ func TestReconcile(t *testing.T) {
 					DeschedulingIntervalSeconds: pointer.Int32(30),
 					Mode:                        deschedulerv1.Automatic,
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevEnableSoftTainter:   false,
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
 				},
 			},
-			testfilename: "policy.yaml",
+			testfilename: "policyNoRelieveAndMigrate.yaml",
 		},
 	}
 	for _, tc := range tests {

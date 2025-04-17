@@ -126,20 +126,6 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 		nodeList[i] = &node
 	}
 
-	enableSoftTainter := false
-	if des.Spec.ProfileCustomizations != nil && des.Spec.ProfileCustomizations.DevEnableSoftTainter {
-		enableSoftTainter = true
-	}
-
-	if !enableSoftTainter {
-		logger.Info("SoftTainter is disabled, cleaning up eventual leftover taints")
-		err = st.cleanAllSoftTaints(ctx, nodeList)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{RequeueAfter: st.resyncPeriod}, nil
-	}
-
 	var lnargs *nodeutilization.LowNodeUtilizationArgs
 
 	for _, p := range policy.Profiles {
@@ -151,11 +137,16 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 			}
 		}
 	}
+
 	if lnargs == nil {
-		err := fmt.Errorf("unable to read LowNodeUtilizationArgs")
-		logger.Error(err, "reconciliation failed")
-		return reconcile.Result{}, err
+		logger.Info("SoftTainter is disabled, cleaning up eventual leftover taints")
+		err = st.cleanAllSoftTaints(ctx, nodeList)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{RequeueAfter: st.resyncPeriod}, nil
 	}
+
 	st.args = &softTainterArgs{
 		useDeviationThresholds: lnargs.UseDeviationThresholds,
 		thresholds:             lnargs.Thresholds,

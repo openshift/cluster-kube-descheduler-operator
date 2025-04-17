@@ -1170,14 +1170,13 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		checkContainerArgsOnly bool
 	}{
 		{
-			name: "RelieveAndMigrate with the softtainer",
+			name: "RelieveAndMigrate",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-						DevEnableSoftTainter:        true,
 					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
 				},
@@ -1187,14 +1186,13 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			want:                   expectedSoftTainterDeployment,
 		},
 		{
-			name: "RelieveAndMigrate without the softtainer and no leftovers on existing nodes",
+			name: "LifecycleAndUtilization (without the softtainer) and no leftovers on existing nodes",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-						DevEnableSoftTainter:        false,
 					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
 				},
@@ -1234,14 +1232,13 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			want:                   nil,
 		},
 		{
-			name: "RelieveAndMigrate without the softtainer but a leftover on existing nodes - 1",
+			name: "LifecycleAndUtilization (without the softtainer) but a leftover on existing nodes - 1",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-						DevEnableSoftTainter:        false,
 					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
 				},
@@ -1276,14 +1273,13 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			want:                   expectedSoftTainterDeployment,
 		},
 		{
-			name: "RelieveAndMigrate without the softtainer but a leftover on existing nodes - 2",
+			name: "LifecycleAndUtilization (without the softtainer) but a leftover on existing nodes - 2",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-						DevEnableSoftTainter:        false,
 					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
 				},
