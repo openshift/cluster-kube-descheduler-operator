@@ -180,6 +180,9 @@ The profile exposes the following customization:
 - `devDeviationThresholds`: Have the thresholds be based on the average utilization.
 - `devEnableSoftTainter`: Have the operator deploying the soft-tainter component to dynamically set/remove soft taints according to the same criteria used for load aware descheduling. Scheduling and descheduling decisions are in general fully independent. In case of load-aware descheduling we can potentially have a relevant asymmetry between the descheduling and successive scheduling decisions. The soft taints set by the descheduler soft-tainter act as a hint for the scheduler to mitigate this asymmetry and foster a quicker convergence.
 
+By default, this profile will enable load-aware descheduling based on the `PrometheusCPUCombinedProfile` Prometheus query.
+By default, the thresholds will be dynamic (based on the distance from the average utilization) and asymmetric (all the nodes below the average will be considered as underutilized to help rebalancing overutilized outliers) tolerating low deviations (10%).
+
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
 profile in combination with any of the above profiles allows pods with PVCs to be

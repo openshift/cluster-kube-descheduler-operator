@@ -12,14 +12,14 @@ profiles:
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
+      metricsUtilization:
+        prometheus:
+          query: descheduler:combined_utilization_and_pressure:avg1m
+        source: Prometheus
       targetThresholds:
-        cpu: 30
-        memory: 30
-        pods: 30
+        MetricResource: 30
       thresholds:
-        cpu: 30
-        memory: 30
-        pods: 30
+        MetricResource: 30
       useDeviationThresholds: true
     name: LowNodeUtilization
   - args:

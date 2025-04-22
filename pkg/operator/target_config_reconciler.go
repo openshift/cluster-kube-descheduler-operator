@@ -881,6 +881,26 @@ func getLowNodeUtilizationThresholds(profileCustomizations *deschedulerv1.Profil
 	return lowThreshold, highThreshold, nil
 }
 
+func getRelieveAndMigrateThresholds(profileCustomizations *deschedulerv1.ProfileCustomizations, useDeviationThresholds bool) (deschedulerapi.Percentage, deschedulerapi.Percentage, error) {
+	if profileCustomizations != nil && (profileCustomizations.DevLowNodeUtilizationThresholds != nil || profileCustomizations.DevDeviationThresholds != nil) {
+		return getLowNodeUtilizationThresholds(profileCustomizations, false)
+	}
+
+	const defaultAssymetricDeviatonThresholdLow = 0
+	const defaultAssymetricDeviatonThresholdHigh = 10
+	const defaultThresholdLow = 20
+	const defaultThresholdHigh = 50
+
+	lowThreshold := deschedulerapi.Percentage(defaultAssymetricDeviatonThresholdLow)
+	highThreshold := deschedulerapi.Percentage(defaultAssymetricDeviatonThresholdHigh)
+	if !useDeviationThresholds {
+		lowThreshold = deschedulerapi.Percentage(defaultThresholdLow)
+		highThreshold = deschedulerapi.Percentage(defaultThresholdHigh)
+	}
+
+	return lowThreshold, highThreshold, nil
+}
+
 func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
 		Name: string(deschedulerv1.LifecycleAndUtilization),
@@ -1035,17 +1055,33 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 		setExcludedNamespacesForLowNodeUtilizationPlugin(profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs), includedNamespaces, excludedNamespaces, protectedNamespaces)
 	}
 
-	lowThreshold, highThreshold, err := getLowNodeUtilizationThresholds(profileCustomizations, false)
+	args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+
+	// profile defaults
+	const defaultActualUtilizationProfile = deschedulerv1.PrometheusCPUCombinedProfile
+	args.UseDeviationThresholds = true
+	query, err := utilizationProfileToPrometheusQuery(defaultActualUtilizationProfile)
 	if err != nil {
 		return nil, err
 	}
-
-	resourceNames := []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourcePods}
-	args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+	args.MetricsUtilization = &nodeutilization.MetricsUtilization{
+		Source: deschedulerapi.MetricsSource(v1alpha2.PrometheusMetrics),
+		Prometheus: &nodeutilization.Prometheus{
+			Query: query,
+		},
+	}
+	resourceNames := []v1.ResourceName{nodeutilization.MetricResource}
 
 	if profileCustomizations != nil {
 		// enable deviation
-		args.UseDeviationThresholds = profileCustomizations.DevDeviationThresholds != nil && *profileCustomizations.DevDeviationThresholds != ""
+		if profileCustomizations.DevDeviationThresholds != nil && profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+			return nil, fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously")
+		}
+		if profileCustomizations.DevDeviationThresholds != nil {
+			args.UseDeviationThresholds = *profileCustomizations.DevDeviationThresholds != ""
+		} else if profileCustomizations.DevLowNodeUtilizationThresholds != nil {
+			args.UseDeviationThresholds = *profileCustomizations.DevLowNodeUtilizationThresholds == ""
+		}
 
 		if profileCustomizations.DevActualUtilizationProfile != "" {
 			query, err := utilizationProfileToPrometheusQuery(profileCustomizations.DevActualUtilizationProfile)
@@ -1066,6 +1102,10 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 		}
 	}
 
+	lowThreshold, highThreshold, err := getRelieveAndMigrateThresholds(profileCustomizations, args.UseDeviationThresholds)
+	if err != nil {
+		return nil, err
+	}
 	for _, resourceName := range resourceNames {
 		args.Thresholds[resourceName] = lowThreshold
 		args.TargetThresholds[resourceName] = highThreshold
