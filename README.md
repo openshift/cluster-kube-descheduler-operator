@@ -185,6 +185,9 @@ The profile exposes the following customization:
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
 - `devDeviationThresholds`: Have the thresholds be based on the average utilization.
 
+By default, this profile will enable load-aware descheduling based on the `PrometheusCPUCombinedProfile` Prometheus query.
+By default, the thresholds will be dynamic (based on the distance from the average utilization) and asymmetric (all the nodes below the average will be considered as underutilized to help rebalancing overutilized outliers) tolerating low deviations (10%).
+
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
 profile in combination with any of the above profiles allows pods with PVCs to be
