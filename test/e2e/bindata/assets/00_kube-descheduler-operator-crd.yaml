@@ -133,6 +133,7 @@ spec:
                       DevEnableSoftTainter enables SoftTainter alpha feature.
                       The EnableSoftTainter alpha feature is a subject to change.
                       Currently provided as an experimental feature.
+                      Deprecated: DevEnableSoftTainter field is deprecated and ignored.
                     type: boolean
                   devHighNodeUtilizationThresholds:
                     description: |-

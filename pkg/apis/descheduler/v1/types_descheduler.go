@@ -78,6 +78,8 @@ type ProfileCustomizations struct {
 	// DevEnableSoftTainter enables SoftTainter alpha feature.
 	// The EnableSoftTainter alpha feature is a subject to change.
 	// Currently provided as an experimental feature.
+	// +kubebuilder:deprecatedversion:warning="devEnableSoftTainter field is deprecated and ignored"
+	// Deprecated: DevEnableSoftTainter field is deprecated and ignored.
 	DevEnableSoftTainter bool `json:"devEnableSoftTainter"`
 
 	// DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.

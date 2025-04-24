@@ -11,7 +11,6 @@ spec:
     - DevKubeVirtRelieveAndMigrate
   profileCustomizations:
     podLifetime: 10s
-    devEnableSoftTainter: true
     namespaces:
       included:
       - e2e-testdescheduling
