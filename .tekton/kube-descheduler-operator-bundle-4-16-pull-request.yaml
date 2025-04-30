@@ -466,7 +466,8 @@ spec:
       optional: true
     - name: netrc
       optional: true
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-kube-descheduler-operator-bundle-4-16
   workspaces:
   - name: git-auth
     secret:
