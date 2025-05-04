@@ -3,6 +3,8 @@ package operator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"testing"
 	"time"
 	"unsafe"
@@ -107,6 +109,17 @@ func TestManageConfigMap(t *testing.T) {
 	fiveMinutes := metav1.Duration{Duration: fm}
 	priority := int32(1000)
 
+	tempPSIPath, err := os.MkdirTemp("", "unittest")
+	if err != nil {
+		t.Fatalf("Failed test: %v", err)
+	}
+	defer func(tempPSIPath string) {
+		err := os.RemoveAll(tempPSIPath)
+		if err != nil {
+			t.Fatalf("Failed test: %v", err)
+		}
+	}(tempPSIPath)
+
 	tests := []struct {
 		name            string
 		schedulerConfig *configv1.Scheduler
@@ -116,6 +129,7 @@ func TestManageConfigMap(t *testing.T) {
 		nodes           []runtime.Object
 		err             error
 		forceDeployment bool
+		missingPSI      bool
 	}{
 		{
 			name: "Podlifetime",
@@ -584,6 +598,36 @@ func TestManageConfigMap(t *testing.T) {
 			forceDeployment: true,
 		},
 		{
+			name: "RelieveAndMigrateWithoutPSI",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
+			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
+			missingPSI:      true,
+			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when PSI metrics are enabled for the worker nodes"),
+			forceDeployment: true,
+		},
+		{
 			name: "AffinityAndTaintsWithNamespaces",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
@@ -889,7 +933,13 @@ func TestManageConfigMap(t *testing.T) {
 			ctx, cancelFunc := context.WithCancel(context.TODO())
 			defer cancelFunc()
 
+			testPSIPath := tempPSIPath
+			if tt.missingPSI {
+				testPSIPath = path.Join(tempPSIPath, "MISSING")
+			}
+
 			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, objects, []runtime.Object{tt.schedulerConfig}, tt.routes, nil)
+			targetConfigReconciler.psiPath = testPSIPath
 
 			got, forceDeployment, err := targetConfigReconciler.manageConfigMap(tt.descheduler)
 			if tt.err != nil {
@@ -1100,6 +1150,18 @@ func TestManageDeployment(t *testing.T) {
 func TestManageSoftTainterDeployment(t *testing.T) {
 	ctx, cancelFunc := context.WithCancel(context.TODO())
 	defer cancelFunc()
+
+	tempPSIPath, err := os.MkdirTemp("", "unittest")
+	if err != nil {
+		t.Fatalf("Failed test: %v", err)
+	}
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed test: %v", err)
+		}
+	}(tempPSIPath)
+
 	expectedSoftTainterDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -1387,6 +1449,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 
 func TestSync(t *testing.T) {
 	fakeRecorder := NewFakeRecorder(1024)
+
 	tests := []struct {
 		name                   string
 		targetConfigReconciler *TargetConfigReconciler
