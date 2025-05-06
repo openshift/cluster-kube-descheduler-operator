@@ -20,7 +20,7 @@ require (
 	k8s.io/code-generator v0.29.4
 	k8s.io/component-base v0.29.4
 	k8s.io/klog/v2 v2.110.1
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/controller-tools v0.4.1
 	sigs.k8s.io/descheduler v0.28.0
 )
