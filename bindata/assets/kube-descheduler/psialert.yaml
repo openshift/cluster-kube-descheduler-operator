@@ -1,0 +1,23 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: descheduler-psi-alert
+  namespace: openshift-kube-descheduler-operator
+spec:
+  groups:
+    - name: recordingRules.alerts
+      rules:
+        - alert: DeschedulerPSIDisabled
+          expr: |-
+            count(kube_node_role{role="worker"}) > 
+            (count(
+              descheduler:nodepressure:cpu:avg1m * on (instance) group_left (node) label_replace(kube_node_role{role="worker"}, "instance", "$1", "node", "(.+)")) 
+              OR on() vector(0)
+            )
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: Kube Descheduler Operator is configured to consume a PSI metric but PSI is not enabled
+            description: "Kube Descheduler Operator is configured (devActualUtilizationProfile) to consume a PSI metric but PSI is not enabled for all the worker nodes (psi=1 kernel argument)"
