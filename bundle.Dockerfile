@@ -1,4 +1,4 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.22 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 as builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 
@@ -36,8 +36,8 @@ LABEL com.redhat.component="kube-descheduler-operator-bundle-container"
 LABEL description="Descheduler support for OpenShift based on RHEL 9"
 LABEL distribution-scope="public"
 LABEL name="cluster-kube-descheduler-operator-metadata-rhel-9"
-LABEL release="5.1.2"
-LABEL version="5.1.2"
+LABEL release="5.2.0"
+LABEL version="5.2.0"
 LABEL url="https://github.com/openshift/cluster-kube-descheduler-operator"
 LABEL vendor="Red Hat, Inc."
 LABEL summary="Descheduler support for OpenShift"
@@ -46,7 +46,7 @@ LABEL io.k8s.display-name="kube-descheduler-operator based on RHEL 9"
 LABEL io.k8s.description="Descheduler support for OpenShift based on RHEL 9"
 LABEL io.openshift.tags="openshift,kube-descheduler-operator"
 LABEL com.redhat.delivery.operator.bundle=true
-LABEL com.redhat.openshift.versions="v4.17"
+LABEL com.redhat.openshift.versions="v4.19"
 LABEL com.redhat.delivery.appregistry=true
 LABEL maintainer="AOS workloads team, <aos-workloads-staff@redhat.com>"
 
