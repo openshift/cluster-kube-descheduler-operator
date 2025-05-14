@@ -8,13 +8,13 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "fbc-4.18"
+      == "fbc-4.19"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-18
-    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-18
+    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-19
+    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-19
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-fbc-4-18-on-push
+  name: kube-descheduler-operator-fbc-4-19-on-push
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -23,7 +23,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-18:{{revision}}
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-19:{{revision}}
   - name: build-platforms
     value:
     - linux/x86_64
@@ -33,7 +33,7 @@ spec:
   - name: dockerfile
     value: catalog.Dockerfile
   - name: path-context
-    value: v4.18
+    value: v4.19
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/advanced-how-tos/building-olm.adoc#building-the-file-based-catalog).
@@ -398,7 +398,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-18
+    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-19
   workspaces:
   - name: git-auth
     secret:
