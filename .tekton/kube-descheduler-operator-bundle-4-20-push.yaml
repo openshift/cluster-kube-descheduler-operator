@@ -8,13 +8,13 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "release-4.19"
+      == "release-4.20"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-4-19
-    appstudio.openshift.io/component: kube-descheduler-operator-bundle-4-19
+    appstudio.openshift.io/application: kube-descheduler-operator-4-20
+    appstudio.openshift.io/component: kube-descheduler-operator-bundle-4-20
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-bundle-4-19-on-push
+  name: kube-descheduler-operator-bundle-4-20-on-push
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -23,7 +23,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-19:{{revision}}
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-20:{{revision}}
   - name: dockerfile
     value: bundle.Dockerfile
   pipelineSpec:
@@ -590,7 +590,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-bundle-4-19
+    serviceAccountName: build-pipeline-kube-descheduler-operator-bundle-4-20
   workspaces:
   - name: git-auth
     secret:
