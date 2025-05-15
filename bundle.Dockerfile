@@ -1,13 +1,13 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.22 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 as builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 
 RUN mkdir licenses
 COPY ./LICENSE licenses/.
 
-ARG OPERATOR_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:bdb5ff7379e50fa7a9d3bd230c33f24f1bd858bf0aa6e61aa072f9a3809d3663
-ARG OPERAND_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:e7f1e09ea814190f9c08c7e6a233d1008c937116b278ef92e9de18bcbf10807e
-ARG SOFTTAINER_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:426baca9e36c7833d335262a7b8f73c318cd749ca7767726fc86109948a44d96
+ARG OPERATOR_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:f7675a6efa5941b3c0e2411d223b391b34d892cbada9c6d40c55b6603337b1ba
+ARG OPERAND_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:4257096daf40a3d90c637ace85c847b903dff57b69037bb39f6327f80c2f6c32
+ARG SOFTTAINER_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:f7675a6efa5941b3c0e2411d223b391b34d892cbada9c6d40c55b6603337b1ba
 ARG REPLACED_OPERATOR_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
 ARG REPLACED_OPERAND_IMG=registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
 ARG REPLACED_SOFTTAINER_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
@@ -36,8 +36,8 @@ LABEL com.redhat.component="kube-descheduler-operator-bundle-container"
 LABEL description="Descheduler support for OpenShift based on RHEL 9"
 LABEL distribution-scope="public"
 LABEL name="cluster-kube-descheduler-operator-metadata-rhel-9"
-LABEL release="5.1.2"
-LABEL version="5.1.2"
+LABEL release="5.2.0"
+LABEL version="5.2.0"
 LABEL url="https://github.com/openshift/cluster-kube-descheduler-operator"
 LABEL vendor="Red Hat, Inc."
 LABEL summary="Descheduler support for OpenShift"
@@ -46,7 +46,7 @@ LABEL io.k8s.display-name="kube-descheduler-operator based on RHEL 9"
 LABEL io.k8s.description="Descheduler support for OpenShift based on RHEL 9"
 LABEL io.openshift.tags="openshift,kube-descheduler-operator"
 LABEL com.redhat.delivery.operator.bundle=true
-LABEL com.redhat.openshift.versions="v4.17"
+LABEL com.redhat.openshift.versions="v4.19"
 LABEL com.redhat.delivery.appregistry=true
 LABEL maintainer="AOS workloads team, <aos-workloads-staff@redhat.com>"
 
