@@ -189,7 +189,7 @@ The profile exposes the following customization:
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
 - `devDeviationThresholds`: Have the thresholds be based on the average utilization.
 
-By default, this profile will enable load-aware descheduling based on the `PrometheusCPUCombinedProfile` Prometheus query.
+By default, this profile will enable load-aware descheduling based on the `PrometheusCPUCombined` Prometheus query.
 By default, the thresholds will be dynamic (based on the distance from the average utilization) and asymmetric (all the nodes below the average will be considered as underutilized to help rebalancing overutilized outliers) tolerating low deviations (10%).
 
 ### EvictPodsWithPVC
@@ -227,7 +227,7 @@ The operator provides the following profiles:
 - `PrometheusCPUPSIPressureByUtilization`: `avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) and (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m]))) > 0.7 or avg by (instance) ( rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0` (`node_pressure_cpu_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument; the query is filtering out PSI pressure on nodes with average CPU utilization < 0.7 to filter out false positives pressure spikes due to self imposed CPU throttling)
 - `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 - `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
-- `PrometheusCPUCombinedProfile`: `descheduler:combined_utilization_and_pressure:avg1m` (`descheduler:combined_utilization_and_pressure:avg1m` uses a combination of CPU utilization and CPU PSI pressure based on a recording rule; CPU PSI pressure is reported in OpenShift only for nodes configured with psi=1 kernel argument)
+- `PrometheusCPUCombined`: `descheduler:combined_utilization_and_pressure:avg1m` (`descheduler:combined_utilization_and_pressure:avg1m` uses a combination of CPU utilization and CPU PSI pressure based on a recording rule; CPU PSI pressure is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 
 ```yaml
 apiVersion: operator.openshift.io/v1
