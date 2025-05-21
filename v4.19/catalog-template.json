@@ -57,18 +57,6 @@
         },
         {
             "schema": "olm.bundle",
-            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:b473fba287414d3ccb09aaabc64f463af2c912c322ca2c41723020b216d98d14"
-        },
-        {
-            "schema": "olm.bundle",
-            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:3c58df18403c681b637ecb7032c9c925298edf0e8e015dfac4ce10446f54b769"
-        },
-        {
-            "schema": "olm.bundle",
-            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:ea86b2d5414480f9907a7536e01f3a0f21445a43f93ec47e3378457b94e4b8ca"
-        },
-        {
-            "schema": "olm.bundle",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:b26e5ebec8ffcfaf18c8c4acb8c25a71318ea7d3b372c9e3e170b6026a681a89"
         },
         {
