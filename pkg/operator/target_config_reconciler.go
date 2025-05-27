@@ -1301,19 +1301,19 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		}
 	}
 
-	if descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevActualUtilizationProfile != "" {
+	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {
 		// detect the prometheus server url
 		route, err := c.routeRouteLister.Routes("openshift-monitoring").Get("prometheus-k8s")
 		if err != nil {
-			return nil, false, fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: %v", err)
+			return nil, true, fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: %v", err)
 		}
 		if len(route.Status.Ingress) == 0 {
-			return nil, false, fmt.Errorf("No ingress found in openshift-monitoring/prometheus-k8s route")
+			return nil, true, fmt.Errorf("No ingress found in openshift-monitoring/prometheus-k8s route")
 		}
 		if route.Status.Ingress[0].Host == "" {
-			return nil, false, fmt.Errorf("Host for status.ingress[0] in openshift-monitoring/prometheus-k8s route is empty")
+			return nil, true, fmt.Errorf("Host for status.ingress[0] in openshift-monitoring/prometheus-k8s route is empty")
 		}
-		err = c.checkNamepsaceMonitoringLabel()
+		err = c.checkNamespaceMonitoringLabel()
 		if err != nil {
 			return nil, false, err
 		}
@@ -1640,7 +1640,7 @@ func (c *TargetConfigReconciler) eventHandler() cache.ResourceEventHandler {
 	}
 }
 
-func (c *TargetConfigReconciler) checkNamepsaceMonitoringLabel() error {
+func (c *TargetConfigReconciler) checkNamespaceMonitoringLabel() error {
 	operatorNamespace, err := c.namespaceLister.Get(operatorclient.OperatorNamespace)
 	if err != nil {
 		klog.ErrorS(err, "error fetching operator namespace")
@@ -1713,4 +1713,15 @@ func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.
 		klog.InfoS("Deploying the softtainter to cleanup leftover soft taints")
 	}
 	return leftoverSoftTaints, nil
+}
+
+// isPrometheusAsMetricsProviderForProfiles returns true when at least a profile that by default relies on PrometheusMetrics is in use
+// or the user is explicitly configuring DevActualUtilizationProfile profile customization
+func (c *TargetConfigReconciler) isPrometheusAsMetricsProviderForProfiles(descheduler *deschedulerv1.KubeDescheduler) bool {
+	if descheduler != nil &&
+		(slices.Contains(descheduler.Spec.Profiles, deschedulerv1.RelieveAndMigrate) ||
+			(descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevActualUtilizationProfile != "")) {
+		return true
+	}
+	return false
 }
