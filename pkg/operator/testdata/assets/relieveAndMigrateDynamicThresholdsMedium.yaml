@@ -1,5 +1,9 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
+metricsProviders:
+- prometheus:
+    url: https://prometheus-k8s-openshift-monitoring.apps.example.com
+  source: Prometheus
 nodeSelector: kubevirt.io/schedulable=true
 profiles:
 - name: DevKubeVirtRelieveAndMigrate
