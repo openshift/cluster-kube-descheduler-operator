@@ -28,7 +28,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
 )
 
-replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
+replace k8s.io/kube-openapi => k8s.io/kube-openapi c8a335a9a2ff
 
 require (
 	cel.dev/expr v0.18.0 // indirect
