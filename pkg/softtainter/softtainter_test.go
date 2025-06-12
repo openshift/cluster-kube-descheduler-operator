@@ -2,7 +2,6 @@ package softtainter
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path"
 	"strings"
@@ -75,7 +74,7 @@ func TestReconcile(t *testing.T) {
 		nodes           []*corev1.Node
 		expectednodes   []*corev1.Node
 		nodeUtilization MockNodeUtilization
-		expectedErr     error
+		expectedErr     string
 		kubedescheduler deschedulerv1.KubeDescheduler
 		testfilename    string
 	}{
@@ -99,7 +98,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -135,7 +133,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -171,7 +168,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -213,7 +209,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -249,7 +244,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -285,7 +279,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -321,7 +314,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -357,7 +349,6 @@ func TestReconcile(t *testing.T) {
 				},
 				mockErrors: nil,
 			},
-			expectedErr: nil,
 			kubedescheduler: deschedulerv1.KubeDescheduler{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: operatorclient.OperatorNamespace,
@@ -372,6 +363,22 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			testfilename: "policyNoRelieveAndMigrate.yaml",
+		},
+		{
+			description: "zeroed out descheduling interval",
+			nodes:       []*corev1.Node{},
+			expectedErr: "descheduler should have an interval set and it should be greater than 0",
+			kubedescheduler: deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: operatorclient.OperatorNamespace,
+					Name:      operatorclient.OperatorConfigName,
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: pointer.Int32(0),
+					Mode:                        deschedulerv1.Automatic,
+				},
+			},
+			testfilename: "policy.yaml",
 		},
 	}
 	for _, tc := range tests {
@@ -389,8 +396,14 @@ func TestReconcile(t *testing.T) {
 				nodeUtilizationFactory: tc.nodeUtilization.newNodeUtilizationFactory,
 			}
 			result, err := st.Reconcile(ctx, reconcile.Request{})
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Test %#v failed, test case error: %v, expected error: %v", tc.description, err, tc.expectedErr)
+			if err != nil {
+				if tc.expectedErr == "" {
+					t.Errorf("Test %#v failed, unexpected error: %v", tc.description, err)
+				} else if !strings.Contains(err.Error(), tc.expectedErr) {
+					t.Errorf("Test %#v failed, test case error: %v, expected error to contain: %v", tc.description, err, tc.expectedErr)
+				}
+			} else if tc.expectedErr != "" {
+				t.Errorf("Test %#v failed, expected error: %v, but got no error", tc.description, tc.expectedErr)
 			}
 
 			if tc.kubedescheduler.Spec.DeschedulingIntervalSeconds == nil || result.RequeueAfter != time.Duration(*tc.kubedescheduler.Spec.DeschedulingIntervalSeconds)*time.Second {

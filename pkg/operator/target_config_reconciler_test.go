@@ -1508,6 +1508,29 @@ func TestSync(t *testing.T) {
 				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate),
 			},
 		},
+		{
+			name: "Zeroed out descheduling interval",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](0),
+					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
+				},
+			},
+			err: fmt.Errorf("descheduler should have an interval set and it should be greater than 0"),
+		},
 	}
 
 	for _, tt := range tests {
