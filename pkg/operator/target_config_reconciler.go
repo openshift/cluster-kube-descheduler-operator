@@ -155,8 +155,8 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if descheduler.Spec.DeschedulingIntervalSeconds == nil {
-		return fmt.Errorf("descheduler should have an interval set")
+	if descheduler.Spec.DeschedulingIntervalSeconds == nil || *descheduler.Spec.DeschedulingIntervalSeconds <= 0 {
+		return fmt.Errorf("descheduler should have an interval set and it should be greater than 0")
 	}
 
 	specAnnotations := map[string]string{

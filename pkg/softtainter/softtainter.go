@@ -102,8 +102,8 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 		return reconcile.Result{}, err
 	}
 
-	if des.Spec.DeschedulingIntervalSeconds == nil {
-		return reconcile.Result{}, fmt.Errorf("descheduler should have an interval set")
+	if des.Spec.DeschedulingIntervalSeconds == nil || *des.Spec.DeschedulingIntervalSeconds <= 0 {
+		return reconcile.Result{}, fmt.Errorf("descheduler should have an interval set and it should be greater than 0")
 	}
 	st.resyncPeriod = time.Duration(*des.Spec.DeschedulingIntervalSeconds) * time.Second
 
