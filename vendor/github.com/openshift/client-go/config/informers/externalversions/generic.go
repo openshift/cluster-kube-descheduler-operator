@@ -3,10 +3,11 @@
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1 "github.com/openshift/api/config/v1"
 	v1alpha1 "github.com/openshift/api/config/v1alpha1"
+	v1alpha2 "github.com/openshift/api/config/v1alpha2"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -86,10 +87,16 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().Backups().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clusterimagepolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().ClusterImagePolicies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("clustermonitorings"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().ClusterMonitorings().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("imagepolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().ImagePolicies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("insightsdatagathers"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().InsightsDataGathers().Informer()}, nil
+
+		// Group=config.openshift.io, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("insightsdatagathers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha2().InsightsDataGathers().Informer()}, nil
 
 	}
 
