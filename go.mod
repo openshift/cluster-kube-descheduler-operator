@@ -1,6 +1,8 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.21
+go 1.23.0
+
+toolchain go1.23.9
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -94,7 +96,7 @@ require (
 	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/oauth2 v0.10.0 // indirect
-	golang.org/x/sync v0.5.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
