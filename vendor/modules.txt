@@ -199,7 +199,7 @@ github.com/munnerz/goautoneg
 # github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f
 ## explicit
 github.com/mwitkow/go-conntrack
-# github.com/openshift/api v0.0.0-20250430175214-d22fca85e3b9
+# github.com/openshift/api v0.0.0-20250517062239-9cbdb71c92bb
 ## explicit; go 1.23.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -271,7 +271,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda
+# github.com/openshift/build-machinery-go v0.0.0-20250530140348-dc5b2804eeee
 ## explicit; go 1.22.0
 github.com/openshift/build-machinery-go
 github.com/openshift/build-machinery-go/make
@@ -281,11 +281,12 @@ github.com/openshift/build-machinery-go/make/targets/golang
 github.com/openshift/build-machinery-go/make/targets/openshift
 github.com/openshift/build-machinery-go/make/targets/openshift/operator
 github.com/openshift/build-machinery-go/scripts
-# github.com/openshift/client-go v0.0.0-20250425165505-5f55ff6979a1
+# github.com/openshift/client-go v0.0.0-20250603093317-900624865677
 ## explicit; go 1.23.0
 github.com/openshift/client-go/config/applyconfigurations
 github.com/openshift/client-go/config/applyconfigurations/config/v1
 github.com/openshift/client-go/config/applyconfigurations/config/v1alpha1
+github.com/openshift/client-go/config/applyconfigurations/config/v1alpha2
 github.com/openshift/client-go/config/applyconfigurations/internal
 github.com/openshift/client-go/config/clientset/versioned
 github.com/openshift/client-go/config/clientset/versioned/fake
@@ -294,13 +295,17 @@ github.com/openshift/client-go/config/clientset/versioned/typed/config/v1
 github.com/openshift/client-go/config/clientset/versioned/typed/config/v1/fake
 github.com/openshift/client-go/config/clientset/versioned/typed/config/v1alpha1
 github.com/openshift/client-go/config/clientset/versioned/typed/config/v1alpha1/fake
+github.com/openshift/client-go/config/clientset/versioned/typed/config/v1alpha2
+github.com/openshift/client-go/config/clientset/versioned/typed/config/v1alpha2/fake
 github.com/openshift/client-go/config/informers/externalversions
 github.com/openshift/client-go/config/informers/externalversions/config
 github.com/openshift/client-go/config/informers/externalversions/config/v1
 github.com/openshift/client-go/config/informers/externalversions/config/v1alpha1
+github.com/openshift/client-go/config/informers/externalversions/config/v1alpha2
 github.com/openshift/client-go/config/informers/externalversions/internalinterfaces
 github.com/openshift/client-go/config/listers/config/v1
 github.com/openshift/client-go/config/listers/config/v1alpha1
+github.com/openshift/client-go/config/listers/config/v1alpha2
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1
 github.com/openshift/client-go/route/applyconfigurations
