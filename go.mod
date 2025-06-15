@@ -22,7 +22,7 @@ require (
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/controller-tools v0.4.1
-	sigs.k8s.io/descheduler v0.28.0
+	sigs.k8s.io/descheduler v0.33.0
 )
 
 require (
