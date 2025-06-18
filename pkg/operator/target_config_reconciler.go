@@ -70,6 +70,8 @@ const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 const kubeVirtShedulableLabelSelector = "kubevirt.io/schedulable=true"
 const psiPath = "/proc/pressure/"
 const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
+const defaultKVParallelMigrationsPerCluster = 5
+const defaultKVParallelOutboundMigrationsPerNode = 2
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -1295,14 +1297,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		Profiles: []v1alpha2.DeschedulerProfile{},
 	}
 
-	if descheduler.Spec.EvictionLimits != nil {
-		if descheduler.Spec.EvictionLimits.Total != nil {
-			policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Total))
-		}
-		if descheduler.Spec.EvictionLimits.Node != nil {
-			policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
-		}
-	}
+	c.setEvictionsLimits(descheduler, policy)
 
 	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {
 		// detect the prometheus server url
@@ -1727,4 +1722,24 @@ func (c *TargetConfigReconciler) isPrometheusAsMetricsProviderForProfiles(desche
 		return true
 	}
 	return false
+}
+
+func (c *TargetConfigReconciler) setEvictionsLimits(descheduler *deschedulerv1.KubeDescheduler, policy *v1alpha2.DeschedulerPolicy) {
+	if descheduler == nil || policy == nil {
+		return
+	}
+
+	if slices.Contains(descheduler.Spec.Profiles, deschedulerv1.RelieveAndMigrate) {
+		policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(defaultKVParallelMigrationsPerCluster))
+		policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(defaultKVParallelOutboundMigrationsPerNode))
+	}
+
+	if descheduler.Spec.EvictionLimits != nil {
+		if descheduler.Spec.EvictionLimits.Total != nil {
+			policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Total))
+		}
+		if descheduler.Spec.EvictionLimits.Node != nil {
+			policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
+		}
+	}
 }
