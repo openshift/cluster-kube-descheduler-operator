@@ -333,6 +333,51 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
+			name: "RelieveAndMigrateEvictionLimits",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: nil,
+					EvictionLimits: &deschedulerv1.EvictionLimits{
+						Total: utilptr.To[int32](10),
+						Node:  utilptr.To[int32](3),
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateEvictionLimits.yaml"))},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
+		},
+		{
 			name: "RelieveAndMigrateLow",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
