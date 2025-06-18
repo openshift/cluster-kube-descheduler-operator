@@ -286,6 +286,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDefaults.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -313,6 +327,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -339,6 +367,20 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateMediumConfig.yaml"))},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
 			},
 			nodes: []runtime.Object{
 				&corev1.Node{
@@ -411,6 +453,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateHighConfig.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -442,6 +498,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateIncludedNamespace.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -470,6 +540,20 @@ func TestManageConfigMap(t *testing.T) {
 			want: &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsLow.yaml"))},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
 			},
 			nodes: []runtime.Object{
 				&corev1.Node{
@@ -500,6 +584,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -529,6 +627,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -552,6 +664,20 @@ func TestManageConfigMap(t *testing.T) {
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
 						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+					},
+				},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
 					},
 				},
 			},
@@ -582,6 +708,20 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -609,6 +749,20 @@ func TestManageConfigMap(t *testing.T) {
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -625,6 +779,36 @@ func TestManageConfigMap(t *testing.T) {
 			},
 			missingPSI:      true,
 			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when PSI metrics are enabled for the worker nodes"),
+			forceDeployment: true,
+		},
+		{
+			name: "RelieveAndMigrateWithoutPrometheusRoute",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
+			},
+			routes: []runtime.Object{},
+			nodes: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node2",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
+			err:             fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: route.route.openshift.io \"prometheus-k8s\" not found"),
 			forceDeployment: true,
 		},
 		{
@@ -879,6 +1063,20 @@ func TestManageConfigMap(t *testing.T) {
 					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.RelieveAndMigrate},
 				},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.RelieveAndMigrate),
 			forceDeployment: true,
 		},
@@ -889,6 +1087,20 @@ func TestManageConfigMap(t *testing.T) {
 					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LongLifecycle, deschedulerv1.RelieveAndMigrate},
 				},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.RelieveAndMigrate),
 			forceDeployment: true,
 		},
@@ -897,6 +1109,20 @@ func TestManageConfigMap(t *testing.T) {
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization, deschedulerv1.RelieveAndMigrate},
+				},
+			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
 				},
 			},
 			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.RelieveAndMigrate),
@@ -1454,6 +1680,7 @@ func TestSync(t *testing.T) {
 		name                   string
 		targetConfigReconciler *TargetConfigReconciler
 		descheduler            *deschedulerv1.KubeDescheduler
+		routes                 []runtime.Object
 		err                    error
 		condition              *operatorv1.OperatorCondition
 	}{
@@ -1502,11 +1729,48 @@ func TestSync(t *testing.T) {
 					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{},
 				},
 			},
+			routes: []runtime.Object{
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "openshift-monitoring",
+						Name:      "prometheus-k8s",
+					},
+					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+						{
+							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+						},
+					},
+					},
+				},
+			},
 			condition: &operatorv1.OperatorCondition{
 				Type:   "TargetConfigControllerDegraded",
 				Status: operatorv1.ConditionTrue,
 				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate),
 			},
+		},
+		{
+			name: "Zeroed out descheduling interval",
+			targetConfigReconciler: &TargetConfigReconciler{
+				ctx:           context.TODO(),
+				kubeClient:    fake.NewSimpleClientset(),
+				eventRecorder: fakeRecorder,
+				configSchedulerLister: &fakeSchedConfigLister{
+					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
+				},
+			},
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: utilptr.To[int32](0),
+					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
+				},
+			},
+			err: fmt.Errorf("descheduler should have an interval set and it should be greater than 0"),
 		},
 	}
 
@@ -1530,9 +1794,15 @@ func TestSync(t *testing.T) {
 							},
 						},
 					},
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   operatorclient.OperatorNamespace,
+							Labels: map[string]string{operatorclient.OpenshiftClusterMonitoringLabelKey: operatorclient.OpenshiftClusterMonitoringLabelValue},
+						},
+					},
 				},
 				[]runtime.Object{configLowNodeUtilization},
-				nil,
+				tt.routes,
 				[]runtime.Object{tt.descheduler},
 			)
 
