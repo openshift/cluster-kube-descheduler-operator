@@ -1299,6 +1299,9 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		if descheduler.Spec.EvictionLimits.Total != nil {
 			policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Total))
 		}
+		if descheduler.Spec.EvictionLimits.Node != nil {
+			policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
+		}
 	}
 
 	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {

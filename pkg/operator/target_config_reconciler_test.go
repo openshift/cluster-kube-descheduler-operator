@@ -275,6 +275,23 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
+			name: "LowNodeUtilizationEvictionLimits",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")},
+					EvictionLimits: &deschedulerv1.EvictionLimits{
+						Total: utilptr.To[int32](10),
+						Node:  utilptr.To[int32](3),
+					},
+				},
+			},
+			want: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationEvictionLimits.yaml"))},
+			},
+		},
+		{
 			name: "RelieveAndMigrateWithoutCustomizations",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
