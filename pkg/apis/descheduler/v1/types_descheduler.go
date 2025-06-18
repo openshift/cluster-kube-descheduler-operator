@@ -50,6 +50,9 @@ type KubeDeschedulerSpec struct {
 type EvictionLimits struct {
 	// total restricts the maximum number of overall evictions
 	Total *int32 `json:"total,omitempty"`
+
+	// node restricts the maximum number of evictions per node
+	Node *int32 `json:"node,omitempty"`
 }
 
 // ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles

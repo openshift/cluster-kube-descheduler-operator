@@ -1,5 +1,7 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
+maxNoOfPodsToEvictPerNode: 2
+maxNoOfPodsToEvictTotal: 5
 metricsProviders:
 - prometheus:
     url: https://prometheus-k8s-openshift-monitoring.apps.example.com
