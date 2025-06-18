@@ -294,3 +294,4 @@ The Descheduler operator exposes the following parameters in its CRD:
 |`mode`|`string`|Configures the descheduler to either evict pods or to simulate the eviction|
 |`evictionLimits`|`map`|Restrict the number of evictions during each descheduling run. Available fields are: `total`|
 |`evictionLimits.total`|`int32`|Restricts the maximum number of overall evictions|
+|`evictionLimits.node`|`int32`|Restricts the maximum number of of evictions per node|
