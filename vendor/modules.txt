@@ -1556,7 +1556,7 @@ sigs.k8s.io/controller-tools/pkg/schemapatcher
 sigs.k8s.io/controller-tools/pkg/schemapatcher/internal/yaml
 sigs.k8s.io/controller-tools/pkg/version
 sigs.k8s.io/controller-tools/pkg/webhook
-# sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e => github.com/openshift/descheduler v0.5.1-0.20250402205004-7d5c42b167e9
+# sigs.k8s.io/descheduler v0.33.0 => github.com/openshift/descheduler v0.5.1-0.20250402205004-7d5c42b167e9
 ## explicit; go 1.22.5
 sigs.k8s.io/descheduler/cmd/descheduler/app/options
 sigs.k8s.io/descheduler/metrics
