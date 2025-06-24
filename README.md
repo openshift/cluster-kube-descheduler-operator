@@ -12,6 +12,7 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 | 5.1.0       | 4.17, 4.18  | 1.30        | 1.22   |
 | 5.1.1       | 4.17, 4.18  | 1.31        | 1.22   |
 | 5.1.2       | 4.17, 4.18  | 1.31        | 1.22   |
+| 5.1.3       | 4.17, 4.18  | 1.31        | 1.22   |
 | 5.2.0       | 4.19, 4.20  | 1.32        | 1.23   |
 
 ## Deploy the operator
