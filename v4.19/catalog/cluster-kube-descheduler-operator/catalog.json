@@ -1104,7 +1104,7 @@
     "schema": "olm.bundle",
     "name": "clusterkubedescheduleroperator.v5.2.0",
     "package": "cluster-kube-descheduler-operator",
-    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:bc6a3276d56128615d778a0b864d95ba98c60ebe475d80c93db1582eb14c9e4b",
+    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:020eeb41c7c24c3caf77a3a3f6f598076d5e22bf793b85d3c3e89eb705896c0e",
     "properties": [
         {
             "type": "olm.gvk",
@@ -1130,7 +1130,7 @@
                     "categories": "OpenShift Optional",
                     "certified": "false",
                     "console.openshift.io/operator-monitoring-default": "true",
-                    "containerImage": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:a09f6586d846130faaaf4bb06a352b204cf85778101c052e371b6ec5b0e8b57c",
+                    "containerImage": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:fe39ef6a8427b7d219f82f8d9bc2c92d4401531988f0de9e173c791e9d46bdd5",
                     "createdAt": "2025/05/12",
                     "description": "An operator to run descheduler in Openshift cluster.",
                     "features.operators.openshift.io/cnf": "false",
@@ -1220,11 +1220,11 @@
         },
         {
             "name": "descheduler-operator",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:a09f6586d846130faaaf4bb06a352b204cf85778101c052e371b6ec5b0e8b57c"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:fe39ef6a8427b7d219f82f8d9bc2c92d4401531988f0de9e173c791e9d46bdd5"
         },
         {
             "name": "",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:bc6a3276d56128615d778a0b864d95ba98c60ebe475d80c93db1582eb14c9e4b"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:020eeb41c7c24c3caf77a3a3f6f598076d5e22bf793b85d3c3e89eb705896c0e"
         }
     ]
 }
