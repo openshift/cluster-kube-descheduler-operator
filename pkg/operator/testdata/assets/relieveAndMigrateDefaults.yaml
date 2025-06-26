@@ -30,6 +30,12 @@ profiles:
     name: LowNodeUtilization
   - args:
       evictLocalStoragePods: true
+      labelSelector:
+        matchExpressions:
+        - key: kubevirt.io
+          operator: NotIn
+          values:
+          - virt-launcher
     name: DefaultEvictor
   plugins:
     balance:

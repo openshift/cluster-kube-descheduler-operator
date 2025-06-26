@@ -68,6 +68,8 @@ import (
 
 const DefaultImage = "quay.io/openshift/origin-descheduler:latest"
 const kubeVirtShedulableLabelSelector = "kubevirt.io/schedulable=true"
+const kubeVirtLabelSelectorKey = "kubevirt.io"
+const kubeVirtLabelVirtLauncherPod = "virt-launcher"
 const psiPath = "/proc/pressure/"
 const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
 const defaultKVParallelMigrationsPerCluster = 5
@@ -1065,6 +1067,13 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 					Object: &defaultevictor.DefaultEvictorArgs{
 						IgnorePvcPods:         false, // evict pvc pods by default
 						EvictLocalStoragePods: true,  // evict pods with local storage by default
+						LabelSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{{
+								Key:      kubeVirtLabelSelectorKey,
+								Operator: metav1.LabelSelectorOpNotIn,
+								Values:   []string{kubeVirtLabelVirtLauncherPod},
+							}},
+						},
 					},
 				},
 			},
