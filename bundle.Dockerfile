@@ -5,9 +5,9 @@ COPY . .
 RUN mkdir licenses
 COPY ./LICENSE licenses/.
 
-ARG OPERATOR_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:fe39ef6a8427b7d219f82f8d9bc2c92d4401531988f0de9e173c791e9d46bdd5
+ARG OPERATOR_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:88c08e1e5d5a019637339fe3cf7620d0af9860311abc8fb469a169b30a6314cc
 ARG OPERAND_IMAGE=registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:b29107f415348a692ff7f5cf59235ec41d9b36929b5aa17188c0835ad40c5ba1
-ARG SOFTTAINER_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:fe39ef6a8427b7d219f82f8d9bc2c92d4401531988f0de9e173c791e9d46bdd5
+ARG SOFTTAINER_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:88c08e1e5d5a019637339fe3cf7620d0af9860311abc8fb469a169b30a6314cc
 ARG REPLACED_OPERATOR_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
 ARG REPLACED_OPERAND_IMG=registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
 ARG REPLACED_SOFTTAINER_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
