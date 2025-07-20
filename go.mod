@@ -25,7 +25,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/controller-tools v0.17.3
 	sigs.k8s.io/descheduler v0.0.0-20250328160644-17b90969cf6e
-	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 )
 
 replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
