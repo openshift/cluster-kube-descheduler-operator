@@ -15,6 +15,20 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 | 5.1.3       | 4.17, 4.18  | 1.31        | 1.22   |
 | 5.2.0       | 4.19, 4.20  | 1.32        | 1.23   |
 
+## Rebase instruction
+
+```
+Steps:
+- [ ] bump .ci-operator.yaml if needed (as a separate PR and wait until the changes gets propagated to https://github.com/openshift/release/tree/master/ci-operator/config/openshift/ of the corresponding CI definition)
+- [ ] bump go version in a go.mod file if needed (check go.mod of the corresponding kubernetes release under https://github.com/kubernetes/kubernetes/branches)
+- [ ] bump all k8s.io/*, github.com/openshift/* and other relevant dependencies (you can consults the corresponding go.mod file as mentioned previously)
+- [ ] (recommended) commit all the go.mod and go.sum changes separatelly from `go mod vendor` changes
+- [ ] run "go mod vendor" and commit the changes
+- [ ] build the code (e.g. by running make) and adjust the code if needed to make the building step compile successfully
+- [ ] run unit tests (e.g. by running make unit-tests) successfully
+- [ ] commit the code adjustments if there are any
+```
+
 ## Deploy the operator
 
 ### Quick Development
@@ -193,7 +207,7 @@ The profile exposes the following customization:
 By default, this profile will enable load-aware descheduling based on the `PrometheusCPUCombined` Prometheus query.
 By default, the thresholds will be dynamic (based on the distance from the average utilization) and asymmetric (all the nodes below the average will be considered as underutilized to help rebalancing overutilized outliers) tolerating low deviations (10%).
 
-By default, this profile configures the descheduler to restrict the maximum number of overall parallel evictions to 5 and 
+By default, this profile configures the descheduler to restrict the maximum number of overall parallel evictions to 5 and
 the maximum number of evictions per node to 2 aligning with KubeVirt defaults around concurrent live migrations.
 Those two values can be customized with `evictionLimits.total` and `evictionLimits.node` parameters.
 

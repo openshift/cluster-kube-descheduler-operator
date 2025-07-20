@@ -1939,25 +1939,33 @@ type fakeRecorder struct {
 
 func (f *fakeRecorder) Event(reason, note string) {
 	if f.Events != nil {
-		f.Events <- fmt.Sprintf(reason + " " + note)
+		f.Events <- fmt.Sprintf("%s %s", reason, note)
 	}
 }
 
 func (f *fakeRecorder) Eventf(reason, note string, args ...interface{}) {
 	if f.Events != nil {
-		f.Events <- fmt.Sprintf(reason+" "+note, args...)
+		msg := fmt.Sprintf("%s %s", reason, note)
+		if len(args) > 0 {
+			msg += " " + fmt.Sprint(args...)
+		}
+		f.Events <- msg
 	}
 }
 
 func (f *fakeRecorder) Warning(reason, note string) {
 	if f.Events != nil {
-		f.Events <- fmt.Sprintf(reason + " " + note)
+		f.Events <- fmt.Sprintf("%s %s", reason, note)
 	}
 }
 
 func (f *fakeRecorder) Warningf(reason, note string, args ...interface{}) {
 	if f.Events != nil {
-		f.Events <- fmt.Sprintf(reason+" "+note, args...)
+		msg := fmt.Sprintf("%s %s", reason, note)
+		if len(args) > 0 {
+			msg += " " + fmt.Sprint(args...)
+		}
+		f.Events <- msg
 	}
 }
 
