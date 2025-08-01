@@ -59,7 +59,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient,
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
+		kubeClient,
 		"",
 		operatorclient.OperatorNamespace,
 	)
