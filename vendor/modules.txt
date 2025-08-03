@@ -1606,7 +1606,7 @@ sigs.k8s.io/descheduler/pkg/tracing
 sigs.k8s.io/descheduler/pkg/utils
 sigs.k8s.io/descheduler/pkg/version
 sigs.k8s.io/descheduler/test
-# sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
+# sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
 ## explicit; go 1.23
 sigs.k8s.io/json
 sigs.k8s.io/json/internal/golang/encoding/json
