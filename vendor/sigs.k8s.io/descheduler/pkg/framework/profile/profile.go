@@ -191,7 +191,7 @@ func getPluginConfig(pluginName string, pluginConfigs []api.PluginConfig) (*api.
 	return nil, 0
 }
 
-func buildPlugin(config api.DeschedulerProfile, pluginName string, handle *handleImpl, reg pluginregistry.Registry) (frameworktypes.Plugin, error) {
+func buildPlugin(ctx context.Context, config api.DeschedulerProfile, pluginName string, handle *handleImpl, reg pluginregistry.Registry) (frameworktypes.Plugin, error) {
 	pc, _ := getPluginConfig(pluginName, config.PluginConfigs)
 	if pc == nil {
 		klog.ErrorS(fmt.Errorf("unable to get plugin config"), "skipping plugin", "plugin", pluginName, "profile", config.Name)
@@ -203,7 +203,7 @@ func buildPlugin(config api.DeschedulerProfile, pluginName string, handle *handl
 		klog.ErrorS(fmt.Errorf("unable to find plugin in the pluginsMap"), "skipping plugin", "plugin", pluginName)
 		return nil, fmt.Errorf("unable to find %q plugin in the pluginsMap", pluginName)
 	}
-	pg, err := registryPlugin.PluginBuilder(pc.Args, handle)
+	pg, err := registryPlugin.PluginBuilder(ctx, pc.Args, handle)
 	if err != nil {
 		klog.ErrorS(err, "unable to initialize a plugin", "pluginName", pluginName)
 		return nil, fmt.Errorf("unable to initialize %q plugin: %v", pluginName, err)
@@ -231,7 +231,7 @@ func (p *profileImpl) registryToExtensionPoints(registry pluginregistry.Registry
 	}
 }
 
-func NewProfile(config api.DeschedulerProfile, reg pluginregistry.Registry, opts ...Option) (*profileImpl, error) {
+func NewProfile(ctx context.Context, config api.DeschedulerProfile, reg pluginregistry.Registry, opts ...Option) (*profileImpl, error) {
 	hOpts := &handleImplOpts{}
 	for _, optFnc := range opts {
 		optFnc(hOpts)
@@ -290,7 +290,7 @@ func NewProfile(config api.DeschedulerProfile, reg pluginregistry.Registry, opts
 
 	plugins := make(map[string]frameworktypes.Plugin)
 	for _, plugin := range sets.New(pluginNames...).UnsortedList() {
-		pg, err := buildPlugin(config, plugin, handle, reg)
+		pg, err := buildPlugin(ctx, config, plugin, handle, reg)
 		if err != nil {
 			return nil, fmt.Errorf("unable to build %v plugin: %v", plugin, err)
 		}
@@ -339,6 +339,7 @@ func (d profileImpl) RunDeschedulePlugins(ctx context.Context, nodes []*v1.Node)
 		strategyStart := time.Now()
 		status := pl.Deschedule(ctx, nodes)
 		metrics.DeschedulerStrategyDuration.With(map[string]string{"strategy": pl.Name(), "profile": d.profileName}).Observe(time.Since(strategyStart).Seconds())
+		metrics.StrategyDuration.With(map[string]string{"strategy": pl.Name(), "profile": d.profileName}).Observe(time.Since(strategyStart).Seconds())
 
 		if status != nil && status.Err != nil {
 			span.AddEvent("Plugin Execution Failed", trace.WithAttributes(attribute.String("err", status.Err.Error())))
@@ -368,6 +369,7 @@ func (d profileImpl) RunBalancePlugins(ctx context.Context, nodes []*v1.Node) *f
 		strategyStart := time.Now()
 		status := pl.Balance(ctx, nodes)
 		metrics.DeschedulerStrategyDuration.With(map[string]string{"strategy": pl.Name(), "profile": d.profileName}).Observe(time.Since(strategyStart).Seconds())
+		metrics.StrategyDuration.With(map[string]string{"strategy": pl.Name(), "profile": d.profileName}).Observe(time.Since(strategyStart).Seconds())
 
 		if status != nil && status.Err != nil {
 			span.AddEvent("Plugin Execution Failed", trace.WithAttributes(attribute.String("err", status.Err.Error())))

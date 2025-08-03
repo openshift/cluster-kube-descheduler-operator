@@ -351,6 +351,7 @@ func (d *descheduler) runDeschedulerLoop(ctx context.Context, nodes []*v1.Node) 
 	defer span.End()
 	defer func(loopStartDuration time.Time) {
 		metrics.DeschedulerLoopDuration.With(map[string]string{}).Observe(time.Since(loopStartDuration).Seconds())
+		metrics.LoopDuration.With(map[string]string{}).Observe(time.Since(loopStartDuration).Seconds())
 	}(time.Now())
 
 	// if len is still <= 1 error out
@@ -415,6 +416,7 @@ func (d *descheduler) runProfiles(ctx context.Context, client clientset.Interfac
 	var profileRunners []profileRunner
 	for _, profile := range d.deschedulerPolicy.Profiles {
 		currProfile, err := frameworkprofile.NewProfile(
+			ctx,
 			profile,
 			pluginregistry.PluginRegistry,
 			frameworkprofile.WithClientSet(client),

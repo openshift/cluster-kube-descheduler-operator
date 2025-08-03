@@ -26,7 +26,7 @@ require (
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/controller-tools v0.17.3
-	sigs.k8s.io/descheduler v0.33.1-0.20250504164356-5ce857b3fd0a
+	sigs.k8s.io/descheduler v0.33.1-0.20250731121316-419fe74702df
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
 )
 
