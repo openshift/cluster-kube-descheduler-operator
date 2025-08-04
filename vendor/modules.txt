@@ -1589,7 +1589,7 @@ sigs.k8s.io/controller-tools/pkg/schemapatcher
 sigs.k8s.io/controller-tools/pkg/schemapatcher/internal/yaml
 sigs.k8s.io/controller-tools/pkg/version
 sigs.k8s.io/controller-tools/pkg/webhook
-# sigs.k8s.io/descheduler v0.33.1-0.20250504164356-5ce857b3fd0a
+# sigs.k8s.io/descheduler v0.33.1-0.20250731121316-419fe74702df
 ## explicit; go 1.24.2
 sigs.k8s.io/descheduler/cmd/descheduler/app/options
 sigs.k8s.io/descheduler/metrics
