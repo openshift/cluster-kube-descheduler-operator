@@ -1065,6 +1065,7 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 					Object: &defaultevictor.DefaultEvictorArgs{
 						IgnorePvcPods:         false, // evict pvc pods by default
 						EvictLocalStoragePods: true,  // evict pods with local storage by default
+						NoEvictionPolicy:      defaultevictor.MandatoryNoEvictionPolicy,
 					},
 				},
 			},

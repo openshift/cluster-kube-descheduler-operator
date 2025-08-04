@@ -211,6 +211,8 @@ By default, this profile configures the descheduler to restrict the maximum numb
 the maximum number of evictions per node to 2 aligning with KubeVirt defaults around concurrent live migrations.
 Those two values can be customized with `evictionLimits.total` and `evictionLimits.node` parameters.
 
+This profile configures the `DefaultEvictor` plugin with a `Mandatory noEvictionPolicy`. As a result, the `descheduler.alpha.kubernetes.io/prefer-no-eviction` annotation can be dynamically applied to VM templates and/or VMIs to exclude them from the descheduler's scope.
+
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
 profile in combination with any of the above profiles allows pods with PVCs to be

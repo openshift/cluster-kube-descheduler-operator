@@ -30,6 +30,7 @@ profiles:
     name: LowNodeUtilization
   - args:
       evictLocalStoragePods: true
+      noEvictionPolicy: Mandatory
     name: DefaultEvictor
   plugins:
     balance:
