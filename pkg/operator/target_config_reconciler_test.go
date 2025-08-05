@@ -292,10 +292,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateWithoutCustomizations",
+			name: "DevKubeVirtRelieveAndMigrateWithoutCustomizations",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: nil,
 				},
 			},
@@ -333,10 +333,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateEvictionLimits",
+			name: "DevKubeVirtRelieveAndMigrateEvictionLimits",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: nil,
 					EvictionLimits: &deschedulerv1.EvictionLimits{
 						Total: utilptr.To[int32](10),
@@ -378,10 +378,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateLow",
+			name: "DevKubeVirtRelieveAndMigrateLow",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
 				},
 			},
@@ -419,10 +419,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateMedium",
+			name: "DevKubeVirtRelieveAndMigrateMedium",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold},
 				},
 			},
@@ -460,10 +460,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateDeviationLowWithCombinedMetrics",
+			name: "DevKubeVirtRelieveAndMigrateDeviationLowWithCombinedMetrics",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
@@ -504,10 +504,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateHigh",
+			name: "DevKubeVirtRelieveAndMigrateHigh",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold},
 				},
 			},
@@ -545,10 +545,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateIncludedNamespace",
+			name: "DevKubeVirtRelieveAndMigrateIncludedNamespace",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						Namespaces: deschedulerv1.Namespaces{
 							Included: []string{"includedNamespace"},
@@ -590,10 +590,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateDynamicThresholdsLow",
+			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsLow",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 					},
@@ -633,10 +633,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateDynamicThresholdsMedium",
+			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsMedium",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds: &deschedulerv1.MediumDeviationThreshold,
 					},
@@ -676,10 +676,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateDynamicThresholdsHigh",
+			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsHigh",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds: &deschedulerv1.HighDeviationThreshold,
 					},
@@ -719,10 +719,10 @@ func TestManageConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrateDynamicAndStaticThresholds",
+			name: "DevKubeVirtRelieveAndMigrateDynamicAndStaticThresholds",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
 						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
@@ -760,10 +760,10 @@ func TestManageConfigMap(t *testing.T) {
 			err: fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
 		},
 		{
-			name: "RelieveAndMigrateWithoutKubeVirt",
+			name: "DevKubeVirtRelieveAndMigrateWithoutKubeVirt",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
 						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
@@ -800,10 +800,10 @@ func TestManageConfigMap(t *testing.T) {
 			forceDeployment: true,
 		},
 		{
-			name: "RelieveAndMigrateWithoutPSI",
+			name: "DevKubeVirtRelieveAndMigrateWithoutPSI",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
 				},
 			},
@@ -844,10 +844,10 @@ func TestManageConfigMap(t *testing.T) {
 			forceDeployment: true,
 		},
 		{
-			name: "RelieveAndMigrateWithoutPrometheusRoute",
+			name: "DevKubeVirtRelieveAndMigrateWithoutPrometheusRoute",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"DevKubeVirtRelieveAndMigrate"},
+					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
 				},
 			},
@@ -1119,10 +1119,10 @@ func TestManageConfigMap(t *testing.T) {
 			forceDeployment: true,
 		},
 		{
-			name: "DevPreviewLongLifecycleAndRelieveAndMigrateConflict",
+			name: "DevPreviewLongLifecycleAndDevKubeVirtRelieveAndMigrateConflict",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate},
 				},
 			},
 			routes: []runtime.Object{
@@ -1139,14 +1139,14 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.RelieveAndMigrate),
+			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
 			forceDeployment: true,
 		},
 		{
-			name: "LongLifecycleAndRelieveAndMigrateConflict",
+			name: "LongLifecycleAndDevKubeVirtRelieveAndMigrateConflict",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LongLifecycle, deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate},
 				},
 			},
 			routes: []runtime.Object{
@@ -1163,14 +1163,14 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.RelieveAndMigrate),
+			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
 			forceDeployment: true,
 		},
 		{
-			name: "LifecycleAndUtilizationAndRelieveAndMigrateConflict",
+			name: "LifecycleAndUtilizationAndDevKubeVirtRelieveAndMigrateConflict",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization, deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate},
 				},
 			},
 			routes: []runtime.Object{
@@ -1187,7 +1187,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.RelieveAndMigrate),
+			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate),
 			forceDeployment: true,
 		},
 	}
@@ -1368,7 +1368,7 @@ func TestManageDeployment(t *testing.T) {
 			},
 		},
 		{
-			name: "RelieveAndMigrate enables EvictionsInBackground by default",
+			name: "DevKubeVirtRelieveAndMigrate enables EvictionsInBackground by default",
 			targetConfigReconciler: &TargetConfigReconciler{
 				ctx:           context.TODO(),
 				kubeClient:    fake.NewSimpleClientset(),
@@ -1379,7 +1379,7 @@ func TestManageDeployment(t *testing.T) {
 			},
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
 				},
 			},
@@ -1547,10 +1547,10 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		checkContainerArgsOnly bool
 	}{
 		{
-			name: "RelieveAndMigrate",
+			name: "DevKubeVirtRelieveAndMigrate",
 			descheduler: &deschedulerv1.KubeDescheduler{
 				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
 						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
@@ -1770,7 +1770,7 @@ func TestSync(t *testing.T) {
 			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
 		{
-			name: "TargetConfigControllerDegraded kubevirt not deployed with RelieveAndMigrate profile",
+			name: "TargetConfigControllerDegraded kubevirt not deployed with DevKubeVirtRelieveAndMigrate profile",
 			targetConfigReconciler: &TargetConfigReconciler{
 				ctx:           context.TODO(),
 				kubeClient:    fake.NewSimpleClientset(),
@@ -1787,7 +1787,7 @@ func TestSync(t *testing.T) {
 				},
 				Spec: deschedulerv1.KubeDeschedulerSpec{
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.RelieveAndMigrate},
+					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
 					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{},
 				},
 			},
@@ -1808,7 +1808,7 @@ func TestSync(t *testing.T) {
 			condition: &operatorv1.OperatorCondition{
 				Type:   "TargetConfigControllerDegraded",
 				Status: operatorv1.ConditionTrue,
-				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate),
+				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.DevKubeVirtRelieveAndMigrate),
 			},
 		},
 		{

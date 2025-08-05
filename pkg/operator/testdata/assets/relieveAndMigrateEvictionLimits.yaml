@@ -8,7 +8,7 @@ metricsProviders:
   source: Prometheus
 nodeSelector: kubevirt.io/schedulable=true
 profiles:
-- name: DevKubeVirtRelieveAndMigrate
+- name: KubeVirtRelieveAndMigrate
   pluginConfig:
   - args:
       evictableNamespaces:
