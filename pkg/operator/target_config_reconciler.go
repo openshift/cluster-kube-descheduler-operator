@@ -914,7 +914,7 @@ func getLowNodeUtilizationThresholds(profileCustomizations *deschedulerv1.Profil
 	return lowThreshold, highThreshold, nil
 }
 
-func getRelieveAndMigrateThresholds(profileCustomizations *deschedulerv1.ProfileCustomizations, useDeviationThresholds bool) (deschedulerapi.Percentage, deschedulerapi.Percentage, error) {
+func getKubeVirtRelieveAndMigrateThresholds(profileCustomizations *deschedulerv1.ProfileCustomizations, useDeviationThresholds bool) (deschedulerapi.Percentage, deschedulerapi.Percentage, error) {
 	if profileCustomizations != nil && (profileCustomizations.DevLowNodeUtilizationThresholds != nil || profileCustomizations.DevDeviationThresholds != nil) {
 		return getLowNodeUtilizationThresholds(profileCustomizations, false)
 	}
@@ -1046,9 +1046,9 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 	return profile, nil
 }
 
-func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string) (*v1alpha2.DeschedulerProfile, error) {
+func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
-		Name: string(deschedulerv1.RelieveAndMigrate),
+		Name: string(deschedulerv1.KubeVirtRelieveAndMigrate),
 		PluginConfigs: []v1alpha2.PluginConfig{
 			{
 				Name: nodeutilization.LowNodeUtilizationPluginName,
@@ -1136,7 +1136,7 @@ func relieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustom
 		}
 	}
 
-	lowThreshold, highThreshold, err := getRelieveAndMigrateThresholds(profileCustomizations, args.UseDeviationThresholds)
+	lowThreshold, highThreshold, err := getKubeVirtRelieveAndMigrateThresholds(profileCustomizations, args.UseDeviationThresholds)
 	if err != nil {
 		return nil, err
 	}
@@ -1362,24 +1362,24 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.RelieveAndMigrate:
+		case deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate:
 			kvDeployed, kverr := c.isKubeVirtDeployed()
 			if kverr != nil {
 				return nil, false, kverr
 			}
 			if !kvDeployed {
-				return nil, true, fmt.Errorf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.RelieveAndMigrate)
+				return nil, true, fmt.Errorf("profile %v can only be used when KubeVirt is properly deployed", profileName)
 			}
 			psiEnabled, psierr := c.isPSIenabled()
 			if psierr != nil {
 				return nil, false, psierr
 			}
 			if !psiEnabled {
-				return nil, true, fmt.Errorf("profile %v can only be used when PSI metrics are enabled for the worker nodes", deschedulerv1.RelieveAndMigrate)
+				return nil, true, fmt.Errorf("profile %v can only be used when PSI metrics are enabled for the worker nodes", profileName)
 			}
 			kubeVirtShedulable := kubeVirtShedulableLabelSelector
 			policy.NodeSelector = &kubeVirtShedulable
-			profile, err = relieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
+			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}
@@ -1428,16 +1428,33 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.LifecycleAndUtilization)
 	}
 
-	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.RelieveAndMigrate)
+	// DevKubeVirtRelieveAndMigrate is deprecated in 4.20, remove in 4.22+
+	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate)
 	}
 
-	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.RelieveAndMigrate)
+	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate)
 	}
 
-	if profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.RelieveAndMigrate)
+	if profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.KubeVirtRelieveAndMigrate)
 	}
 
 	if profiles.Has(string(deschedulerv1.SoftTopologyAndDuplicates)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
@@ -1456,8 +1473,12 @@ func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.Desch
 		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.DevPreviewLongLifecycle)
 	}
 
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.RelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.RelieveAndMigrate)
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+	}
+
+	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
+		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.KubeVirtRelieveAndMigrate)
 	}
 
 	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
@@ -1529,12 +1550,7 @@ func (c *TargetConfigReconciler) manageDeschedulerDeployment(descheduler *desche
 
 	featureGates := []string{}
 	evictionsInBackgroundEnabled := descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevEnableEvictionsInBackground
-	for _, profile := range descheduler.Spec.Profiles {
-		if profile == deschedulerv1.RelieveAndMigrate {
-			evictionsInBackgroundEnabled = true
-			break
-		}
-	}
+	evictionsInBackgroundEnabled = evictionsInBackgroundEnabled || hasKubeVirtRelieveAndMigrateProfile(descheduler.Spec.Profiles)
 	if evictionsInBackgroundEnabled {
 		featureGates = append(featureGates, "EvictionsInBackground=true")
 	}
@@ -1682,8 +1698,12 @@ func (c *TargetConfigReconciler) isPSIenabled() (bool, error) {
 	}
 }
 
+func hasKubeVirtRelieveAndMigrateProfile(profiles []deschedulerv1.DeschedulerProfile) bool {
+	return slices.Contains(profiles, deschedulerv1.KubeVirtRelieveAndMigrate) || slices.Contains(profiles, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+}
+
 func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
-	if slices.Contains(descheduler.Spec.Profiles, deschedulerv1.RelieveAndMigrate) {
+	if hasKubeVirtRelieveAndMigrateProfile(descheduler.Spec.Profiles) {
 		return true, nil
 	}
 
@@ -1718,7 +1738,7 @@ func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.
 // or the user is explicitly configuring DevActualUtilizationProfile profile customization
 func (c *TargetConfigReconciler) isPrometheusAsMetricsProviderForProfiles(descheduler *deschedulerv1.KubeDescheduler) bool {
 	if descheduler != nil &&
-		(slices.Contains(descheduler.Spec.Profiles, deschedulerv1.RelieveAndMigrate) ||
+		(hasKubeVirtRelieveAndMigrateProfile(descheduler.Spec.Profiles) ||
 			(descheduler.Spec.ProfileCustomizations != nil && descheduler.Spec.ProfileCustomizations.DevActualUtilizationProfile != "")) {
 		return true
 	}
@@ -1730,7 +1750,7 @@ func (c *TargetConfigReconciler) setEvictionsLimits(descheduler *deschedulerv1.K
 		return
 	}
 
-	if slices.Contains(descheduler.Spec.Profiles, deschedulerv1.RelieveAndMigrate) {
+	if hasKubeVirtRelieveAndMigrateProfile(descheduler.Spec.Profiles) {
 		policy.MaxNoOfPodsToEvictTotal = utilptr.To[uint](uint(defaultKVParallelMigrationsPerCluster))
 		policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(defaultKVParallelOutboundMigrationsPerNode))
 	}

@@ -129,7 +129,7 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 	var lnargs *nodeutilization.LowNodeUtilizationArgs
 
 	for _, p := range policy.Profiles {
-		if p.Name == string(desv1.RelieveAndMigrate) {
+		if p.Name == string(desv1.KubeVirtRelieveAndMigrate) || p.Name == string(desv1.DevKubeVirtRelieveAndMigrate) {
 			for _, pc := range p.PluginConfigs {
 				if pc.Name == nodeutilization.LowNodeUtilizationPluginName {
 					lnargs = pc.Args.(*nodeutilization.LowNodeUtilizationArgs)
