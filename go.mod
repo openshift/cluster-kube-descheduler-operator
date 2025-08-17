@@ -2,7 +2,7 @@ module github.com/openshift/cluster-kube-descheduler-operator
 
 go 1.24.2
 
-toolchain go1.24.5
+toolchain go1.25.0
 
 require (
 	github.com/ghodss/yaml v1.0.0
