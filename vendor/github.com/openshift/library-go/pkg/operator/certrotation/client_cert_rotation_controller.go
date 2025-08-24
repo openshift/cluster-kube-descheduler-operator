@@ -6,6 +6,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -15,14 +16,6 @@ import (
 )
 
 const (
-	// CertificateNotBeforeAnnotation contains the certificate expiration date in RFC3339 format.
-	CertificateNotBeforeAnnotation = "auth.openshift.io/certificate-not-before"
-	// CertificateNotAfterAnnotation contains the certificate expiration date in RFC3339 format.
-	CertificateNotAfterAnnotation = "auth.openshift.io/certificate-not-after"
-	// CertificateIssuer contains the common name of the certificate that signed another certificate.
-	CertificateIssuer = "auth.openshift.io/certificate-issuer"
-	// CertificateHostnames contains the hostnames used by a signer.
-	CertificateHostnames = "auth.openshift.io/certificate-hostnames"
 	// RunOnceContextKey is a context value key that can be used to call the controller Sync() and make it only run the syncWorker once and report error.
 	RunOnceContextKey = "cert-rotation-controller.openshift.io/run-once"
 )
@@ -60,9 +53,9 @@ func (s *StaticPodConditionStatusReporter) Report(ctx context.Context, controlle
 // 3) continuously create a target cert and key signed by the latest signing CA and store it in a secret.
 type CertRotationController struct {
 	// controller name
-	name string
-	// rotatedSigningCASecret rotates a self-signed signing CA stored in a secret.
-	rotatedSigningCASecret RotatedSigningCASecret
+	Name string
+	// RotatedSigningCASecret rotates a self-signed signing CA stored in a secret.
+	RotatedSigningCASecret RotatedSigningCASecret
 	// CABundleConfigMap maintains a CA bundle config map, by adding new CA certs coming from rotatedSigningCASecret, and by removing expired old ones.
 	CABundleConfigMap CABundleConfigMap
 	// RotatedSelfSignedCertKeySecret rotates a key and cert signed by a signing CA and stores it in a secret.
@@ -81,8 +74,8 @@ func NewCertRotationController(
 	reporter StatusReporter,
 ) factory.Controller {
 	c := &CertRotationController{
-		name:                           name,
-		rotatedSigningCASecret:         rotatedSigningCASecret,
+		Name:                           name,
+		RotatedSigningCASecret:         rotatedSigningCASecret,
 		CABundleConfigMap:              caBundleConfigMap,
 		RotatedSelfSignedCertKeySecret: rotatedSelfSignedCertKeySecret,
 		StatusReporter:                 reporter,
@@ -90,7 +83,22 @@ func NewCertRotationController(
 	return factory.New().
 		ResyncEvery(time.Minute).
 		WithSync(c.Sync).
-		WithInformers(
+		WithFilteredEventsInformers(
+			func(obj interface{}) bool {
+				if cm, ok := obj.(*corev1.ConfigMap); ok {
+					return cm.Namespace == caBundleConfigMap.Namespace && cm.Name == caBundleConfigMap.Name
+				}
+				if secret, ok := obj.(*corev1.Secret); ok {
+					if secret.Namespace == rotatedSigningCASecret.Namespace && secret.Name == rotatedSigningCASecret.Name {
+						return true
+					}
+					if secret.Namespace == rotatedSelfSignedCertKeySecret.Namespace && secret.Name == rotatedSelfSignedCertKeySecret.Name {
+						return true
+					}
+					return false
+				}
+				return true
+			},
 			rotatedSigningCASecret.Informer.Informer(),
 			caBundleConfigMap.Informer.Informer(),
 			rotatedSelfSignedCertKeySecret.Informer.Informer(),
@@ -98,11 +106,14 @@ func NewCertRotationController(
 		WithPostStartHooks(
 			c.targetCertRecheckerPostRunHook,
 		).
-		ToController("CertRotationController", recorder.WithComponentSuffix("cert-rotation-controller").WithComponentSuffix(name))
+		ToController(
+			"CertRotationController", // don't change what is passed here unless you also remove the old FooDegraded condition
+			recorder.WithComponentSuffix("cert-rotation-controller").WithComponentSuffix(name),
+		)
 }
 
 func (c CertRotationController) Sync(ctx context.Context, syncCtx factory.SyncContext) error {
-	syncErr := c.syncWorker(ctx)
+	syncErr := c.SyncWorker(ctx)
 
 	// running this function with RunOnceContextKey value context will make this "run-once" without updating status.
 	isRunOnce, ok := ctx.Value(RunOnceContextKey).(bool)
@@ -110,7 +121,7 @@ func (c CertRotationController) Sync(ctx context.Context, syncCtx factory.SyncCo
 		return syncErr
 	}
 
-	updated, updateErr := c.StatusReporter.Report(ctx, c.name, syncErr)
+	updated, updateErr := c.StatusReporter.Report(ctx, c.Name, syncErr)
 	if updateErr != nil {
 		return updateErr
 	}
@@ -121,18 +132,22 @@ func (c CertRotationController) Sync(ctx context.Context, syncCtx factory.SyncCo
 	return syncErr
 }
 
-func (c CertRotationController) syncWorker(ctx context.Context) error {
-	signingCertKeyPair, err := c.rotatedSigningCASecret.ensureSigningCertKeyPair(ctx)
+func (c CertRotationController) getSigningCertKeyPairLocation() string {
+	return fmt.Sprintf("%s/%s", c.RotatedSelfSignedCertKeySecret.Namespace, c.RotatedSelfSignedCertKeySecret.Name)
+}
+
+func (c CertRotationController) SyncWorker(ctx context.Context) error {
+	signingCertKeyPair, _, err := c.RotatedSigningCASecret.EnsureSigningCertKeyPair(ctx)
+	if err != nil || signingCertKeyPair == nil {
+		return err
+	}
+
+	cabundleCerts, err := c.CABundleConfigMap.EnsureConfigMapCABundle(ctx, signingCertKeyPair, c.getSigningCertKeyPairLocation())
 	if err != nil {
 		return err
 	}
 
-	cabundleCerts, err := c.CABundleConfigMap.ensureConfigMapCABundle(ctx, signingCertKeyPair)
-	if err != nil {
-		return err
-	}
-
-	if err := c.RotatedSelfSignedCertKeySecret.ensureTargetCertKeyPair(ctx, signingCertKeyPair, cabundleCerts); err != nil {
+	if _, err := c.RotatedSelfSignedCertKeySecret.EnsureTargetCertKeyPair(ctx, signingCertKeyPair, cabundleCerts); err != nil {
 		return err
 	}
 
