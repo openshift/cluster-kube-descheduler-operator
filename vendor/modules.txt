@@ -343,9 +343,6 @@ github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
 github.com/openshift/library-go/pkg/serviceability
-# github.com/pkg/errors v0.9.1
-## explicit
-github.com/pkg/errors
 # github.com/pkg/profile v1.7.0
 ## explicit; go 1.13
 github.com/pkg/profile
@@ -712,7 +709,7 @@ google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
-# gopkg.in/evanphx/json-patch.v4 v4.12.0
+# gopkg.in/evanphx/json-patch.v4 v4.13.0
 ## explicit
 gopkg.in/evanphx/json-patch.v4
 # gopkg.in/inf.v0 v0.9.1
