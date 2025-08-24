@@ -1,13 +1,15 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.21
+go 1.22.0
+
+toolchain go1.24.6
 
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.6.0
 	github.com/imdario/mergo v0.3.7
 	github.com/openshift/api v0.0.0-20231218131639-7a5aa77cc72d
-	github.com/openshift/build-machinery-go v0.0.0-20230816154005-5a38e1bfd880
+	github.com/openshift/build-machinery-go v0.0.0-20250806130835-622c0378eb0d
 	github.com/openshift/client-go v0.0.0-20231218140158-47f6d749b9d9
 	github.com/openshift/library-go v0.0.0-20231218143352-99cedb2a141c
 	github.com/prometheus/client_golang v1.16.0
