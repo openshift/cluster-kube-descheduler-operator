@@ -8,8 +8,20 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release-4.20"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request"
+      && target_branch == "release-4.20"
+      && (
+      ".tekton/kube-descheduler-operator-4-20-pull-request.yaml".pathChanged()
+      || "bindata/***".pathChanged()
+      || "cmd/***".pathChanged()
+      || "deploy/***".pathChanged()
+      || "pkg/***".pathChanged()
+      || "vendor/***".pathChanged()
+      || "Dockerfile".pathChanged()
+      || "go.mod".pathChanged()
+      || "go.sum".pathChanged()
+      || "Makefile".pathChanged()
+      )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kube-descheduler-operator-4-20
