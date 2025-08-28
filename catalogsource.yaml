@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
   name: kube-descheduler-operator
-  namespace: openshift-kube-descheduler-operator
+  namespace: openshift-marketplace
 spec:
   sourceType: grpc
   image: <IMAGE>
