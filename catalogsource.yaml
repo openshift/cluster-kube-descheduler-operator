@@ -1,0 +1,10 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: kube-descheduler-operator
+  namespace: openshift-kube-descheduler-operator
+spec:
+  sourceType: grpc
+  image: <IMAGE>
+  displayName: KDO
+  publisher: Red Hat
