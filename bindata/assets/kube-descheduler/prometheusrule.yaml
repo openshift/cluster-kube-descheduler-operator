@@ -7,33 +7,108 @@ metadata:
 spec:
   groups:
     - name: recordingRules.rules
+      interval: 30s
       rules:
+        # Base metrics (CPU and Memory utilization)
         - record: descheduler:nodeutilization:cpu:avg1m
           expr: avg by (instance) (1 - rate(node_cpu_seconds_total{mode='idle'}[1m]))
 
         - record: descheduler:averageworkersutilization:cpu:avg1m
           expr: avg(descheduler:nodeutilization:cpu:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
 
+        - record: descheduler:nodeutilization:memory:avg1m
+          expr: |-
+            (
+              1 - avg_over_time(node_memory_MemAvailable_bytes[1m]) /
+              on(instance) label_replace(kube_node_status_allocatable{resource="memory"}, 'instance', "$1", 'node', '(.+)')
+            ) and on(instance)
+            label_replace(kube_node_status_allocatable{resource="memory"}, 'instance', "$1", 'node', '(.+)') > 0
+
+        - record: descheduler:averageworkersutilization:memory:avg1m
+          expr: avg(descheduler:nodeutilization:memory:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
+
+        # Pressure metrics
         - record: descheduler:nodepressure:cpu:avg1m
           # return the cpu pressure if the cpu usage is over 70% otherwise
           # return cpu pressure as zero to (partially) filter out false
           # positives pressure spikes due to CPU limited pods.
           # See: https://github.com/kubernetes/enhancements/issues/5062
           expr: |-
-            avg by (instance) (
-              rate(node_pressure_cpu_waiting_seconds_total[1m])
-            ) and (
-              1 - avg by (instance) (
-                rate(node_cpu_seconds_total{mode='idle'}[1m])
-              )
-            ) > 0.7
+            (
+              avg by (instance) (rate(node_pressure_cpu_waiting_seconds_total[1m]))
+              and
+              (1 - avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[1m]))) > 0.7
+            )
             or
+            (avg by (instance) (rate(node_pressure_cpu_waiting_seconds_total[1m])) * 0)
+
+        - record: descheduler:averageworkerspressure:cpu:avg1m
+          expr: avg(descheduler:nodepressure:cpu:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
+
+        - record: descheduler:nodepressure:memory:avg1m
+          expr: |-
             avg by (instance) (
-              rate(node_pressure_cpu_waiting_seconds_total[1m])
-            ) * 0    
+              rate(node_pressure_memory_waiting_seconds_total[1m])
+            )
+
+        - record: descheduler:averageworkerspressure:memory:avg1m
+          expr: avg(descheduler:nodepressure:memory:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
 
         - record: descheduler:combined_utilization_and_pressure:avg1m
           expr: |-
             (descheduler:nodeutilization:cpu:avg1m and on() descheduler:averageworkersutilization:cpu:avg1m < 0.8)
             or
             (descheduler:nodepressure:cpu:avg1m)
+
+        - record: descheduler:averageworkersutilization:memory:avg1m
+          expr: avg(descheduler:nodeutilization:memory:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
+
+        - record: descheduler:nodeutilization:memory:avg1m:positivedeviation
+          expr: |-
+            descheduler:nodeutilization:memory:avg1m - on() group_left() descheduler:averageworkersutilization:memory:avg1m
+            and
+            descheduler:nodeutilization:memory:avg1m - on() group_left() descheduler:averageworkersutilization:memory:avg1m >= 0
+            or
+            descheduler:nodeutilization:memory:avg1m * 0
+
+        - record: descheduler:nodeutilization:cpu:avg1m:positivedeviation
+          expr: |-
+            descheduler:nodeutilization:cpu:avg1m - on() group_left() descheduler:averageworkersutilization:cpu:avg1m
+            and
+            descheduler:nodeutilization:cpu:avg1m - on() group_left() descheduler:averageworkersutilization:cpu:avg1m >= 0
+            or
+            descheduler:nodeutilization:cpu:avg1m * 0
+
+        - record: descheduler:nodepressure:cpu:avg1m:positivedeviation
+          expr: |-
+            descheduler:nodepressure:cpu:avg1m - on() group_left() descheduler:averageworkerspressure:cpu:avg1m
+            and
+            descheduler:nodepressure:cpu:avg1m - on() group_left() descheduler:averageworkerspressure:cpu:avg1m >= 0
+            or
+            descheduler:nodepressure:cpu:avg1m * 0
+
+        - record: descheduler:nodepressure:memory:avg1m:positivedeviation
+          expr: |-
+            descheduler:nodepressure:memory:avg1m - on() group_left() descheduler:averageworkerspressure:memory:avg1m
+            and
+            descheduler:nodepressure:memory:avg1m - on() group_left() descheduler:averageworkerspressure:memory:avg1m >= 0
+            or
+            descheduler:nodepressure:memory:avg1m * 0
+
+        # Ideal Point Positive Distance (Euclidean distance from ideal using positive deviations)
+        - record: descheduler:node:ideal_point_positive_distance:avg1m
+          expr: |-
+            sqrt(
+              descheduler:nodeutilization:cpu:avg1m:positivedeviation ^ 2 +
+              descheduler:nodepressure:cpu:avg1m:positivedeviation ^ 2 +
+              descheduler:nodeutilization:memory:avg1m:positivedeviation ^ 2 +
+              descheduler:nodepressure:memory:avg1m:positivedeviation ^ 2
+            )
+
+        # Linear Amplified Ideal Point Positive Distance (k=3.0) - Amplified by 3x, clamped to [0,1]
+        - record: descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m
+          expr: |-
+            clamp_max(
+              3 * descheduler:node:ideal_point_positive_distance:avg1m,
+              1.0
+            )
