@@ -1,8 +1,8 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.22.5
+go 1.23
 
-toolchain go1.22.6
+toolchain go1.24.6
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -32,7 +32,7 @@ require (
 
 replace (
 	// because of https://github.com/kubernetes/gengo/pull/265
-	k8s.io/gengo/v2 => k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70
+	k8s.io/gengo/v2 => k8s.io/gengo/v2 v2.0.0-20250922181213-ec3ebc5fd46b
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
 	sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20250402205004-7d5c42b167e9
 )
@@ -134,7 +134,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiserver v0.31.7 // indirect
 	k8s.io/component-helpers v0.31.7 // indirect
-	k8s.io/gengo/v2 v2.0.0-20240911193312-2b36238f13e9 // indirect
+	k8s.io/gengo/v2 v2.0.0-20250922181213-ec3ebc5fd46b // indirect
 	k8s.io/kms v0.31.7 // indirect
 	k8s.io/kube-aggregator v0.31.1 // indirect
 	k8s.io/kube-openapi v0.30.0 // indirect
