@@ -265,7 +265,7 @@ type IngressControllerSpec struct {
 	// (router reload).
 	//
 	// Allowed values for this field are "Immediate" and
-	// "Deferred". The default value is "Deferred".
+	// "Deferred". The default value is "Immediate".
 	//
 	// When set to "Immediate", idle connections are closed
 	// immediately during router reloads. This ensures immediate
@@ -324,8 +324,8 @@ type IngressControllerSpec struct {
 	//     frequent reloads to prevent resource exhaustion.
 	//
 	// +optional
-	// +kubebuilder:default:="Deferred"
-	// +default="Deferred"
+	// +kubebuilder:default:="Immediate"
+	// +default="Immediate"
 	IdleConnectionTerminationPolicy IngressControllerConnectionTerminationPolicy `json:"idleConnectionTerminationPolicy,omitempty"`
 }
 
@@ -466,7 +466,6 @@ type LoadBalancerStrategy struct {
 	// scope indicates the scope at which the load balancer is exposed.
 	// Possible values are "External" and "Internal".
 	//
-	// +kubebuilder:validation:Required
 	// +required
 	Scope LoadBalancerScope `json:"scope"`
 
@@ -503,7 +502,7 @@ type LoadBalancerStrategy struct {
 	// Valid values are: Managed and Unmanaged.
 	//
 	// +kubebuilder:default:="Managed"
-	// +kubebuilder:validation:Required
+	// +required
 	// +default="Managed"
 	DNSManagementPolicy LoadBalancerDNSManagementPolicy `json:"dnsManagementPolicy,omitempty"`
 }
@@ -533,7 +532,6 @@ type ProviderLoadBalancerParameters struct {
 	// "OpenStack", and "VSphere".
 	//
 	// +unionDiscriminator
-	// +kubebuilder:validation:Required
 	// +required
 	Type LoadBalancerProviderType `json:"type"`
 
@@ -613,7 +611,6 @@ type AWSLoadBalancerParameters struct {
 	//     https://docs.aws.amazon.com/AmazonECS/latest/developerguide/load-balancer-types.html#nlb
 	//
 	// +unionDiscriminator
-	// +kubebuilder:validation:Required
 	// +required
 	Type AWSLoadBalancerType `json:"type"`
 
@@ -782,7 +779,6 @@ type AWSClassicLoadBalancerParameters struct {
 	// means no opinion, in which case a default value is used.  The default
 	// value for this field is 60s.  This default is subject to change.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	ConnectionIdleTimeout metav1.Duration `json:"connectionIdleTimeout,omitempty"`
@@ -807,9 +803,9 @@ type AWSClassicLoadBalancerParameters struct {
 
 // AWSNetworkLoadBalancerParameters holds configuration parameters for an
 // AWS Network load balancer. For Example: Setting AWS EIPs https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html
-// +openshift:validation:FeatureGateAwareXValidation:featureGate=SetEIPForNLBIngressController,rule=`has(self.subnets) && has(self.subnets.ids) && has(self.subnets.names) && has(self.eipAllocations) ? size(self.subnets.ids + self.subnets.names) == size(self.eipAllocations) : true`,message="number of subnets must be equal to number of eipAllocations"
-// +openshift:validation:FeatureGateAwareXValidation:featureGate=SetEIPForNLBIngressController,rule=`has(self.subnets) && has(self.subnets.ids) && !has(self.subnets.names) && has(self.eipAllocations) ? size(self.subnets.ids) == size(self.eipAllocations) : true`,message="number of subnets must be equal to number of eipAllocations"
-// +openshift:validation:FeatureGateAwareXValidation:featureGate=SetEIPForNLBIngressController,rule=`has(self.subnets) && has(self.subnets.names) && !has(self.subnets.ids) && has(self.eipAllocations) ? size(self.subnets.names) == size(self.eipAllocations) : true`,message="number of subnets must be equal to number of eipAllocations"
+// +openshift:validation:FeatureGateAwareXValidation:requiredFeatureGate=SetEIPForNLBIngressController;IngressControllerLBSubnetsAWS,rule=`has(self.subnets) && has(self.subnets.ids) && has(self.subnets.names) && has(self.eipAllocations) ? size(self.subnets.ids + self.subnets.names) == size(self.eipAllocations) : true`,message="number of subnets must be equal to number of eipAllocations"
+// +openshift:validation:FeatureGateAwareXValidation:requiredFeatureGate=SetEIPForNLBIngressController;IngressControllerLBSubnetsAWS,rule=`has(self.subnets) && has(self.subnets.ids) && !has(self.subnets.names) && has(self.eipAllocations) ? size(self.subnets.ids) == size(self.eipAllocations) : true`,message="number of subnets must be equal to number of eipAllocations"
+// +openshift:validation:FeatureGateAwareXValidation:requiredFeatureGate=SetEIPForNLBIngressController;IngressControllerLBSubnetsAWS,rule=`has(self.subnets) && has(self.subnets.names) && !has(self.subnets.ids) && has(self.eipAllocations) ? size(self.subnets.names) == size(self.eipAllocations) : true`,message="number of subnets must be equal to number of eipAllocations"
 type AWSNetworkLoadBalancerParameters struct {
 	// subnets specifies the subnets to which the load balancer will
 	// attach. The subnets may be specified by either their
@@ -897,7 +893,6 @@ type HostNetworkStrategy struct {
 	// The empty string specifies the default, which is TCP without PROXY
 	// protocol.  Note that the default is subject to change.
 	//
-	// +kubebuilder:validation:Optional
 	// +optional
 	Protocol IngressControllerProtocol `json:"protocol,omitempty"`
 
@@ -905,7 +900,6 @@ type HostNetworkStrategy struct {
 	// HTTP requests. This field should be set when port 80 is already in use.
 	// The value should not coincide with the NodePort range of the cluster.
 	// When the value is 0 or is not specified it defaults to 80.
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Maximum=65535
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=80
@@ -916,7 +910,6 @@ type HostNetworkStrategy struct {
 	// HTTPS requests. This field should be set when port 443 is already in use.
 	// The value should not coincide with the NodePort range of the cluster.
 	// When the value is 0 or is not specified it defaults to 443.
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Maximum=65535
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=443
@@ -937,7 +930,6 @@ type HostNetworkStrategy struct {
 	// a threshold of two successful or failed requests to become healthy or
 	// unhealthy respectively, are well-tested values. When the value is 0 or
 	// is not specified it defaults to 1936.
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Maximum=65535
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=1936
@@ -973,7 +965,6 @@ type PrivateStrategy struct {
 	// The empty string specifies the default, which is TCP without PROXY
 	// protocol.  Note that the default is subject to change.
 	//
-	// +kubebuilder:validation:Optional
 	// +optional
 	Protocol IngressControllerProtocol `json:"protocol,omitempty"`
 }
@@ -1005,7 +996,6 @@ type NodePortStrategy struct {
 	// The empty string specifies the default, which is TCP without PROXY
 	// protocol.  Note that the default is subject to change.
 	//
-	// +kubebuilder:validation:Optional
 	// +optional
 	Protocol IngressControllerProtocol `json:"protocol,omitempty"`
 }
@@ -1073,7 +1063,6 @@ type EndpointPublishingStrategy struct {
 	// field of the managed NodePort Service will preserved.
 	//
 	// +unionDiscriminator
-	// +kubebuilder:validation:Required
 	// +required
 	Type EndpointPublishingStrategyType `json:"type"`
 
@@ -1123,7 +1112,6 @@ type ClientTLS struct {
 	// edge-terminated and reencrypt TLS routes; it cannot check
 	// certificates for cleartext HTTP or passthrough TLS routes.
 	//
-	// +kubebuilder:validation:Required
 	// +required
 	ClientCertificatePolicy ClientCertificatePolicy `json:"clientCertificatePolicy"`
 
@@ -1132,7 +1120,6 @@ type ClientTLS struct {
 	// certificate.  The administrator must create this configmap in the
 	// openshift-config namespace.
 	//
-	// +kubebuilder:validation:Required
 	// +required
 	ClientCA configv1.ConfigMapNameReference `json:"clientCA"`
 
@@ -1236,14 +1223,12 @@ type SyslogLoggingDestinationParameters struct {
 	// address is the IP address of the syslog endpoint that receives log
 	// messages.
 	//
-	// +kubebuilder:validation:Required
 	// +required
 	Address string `json:"address"`
 
 	// port is the UDP port number of the syslog endpoint that receives log
 	// messages.
 	//
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	// +required
@@ -1253,7 +1238,6 @@ type SyslogLoggingDestinationParameters struct {
 	//
 	// If this field is empty, the facility is "local1".
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Enum=kern;user;mail;daemon;auth;syslog;lpr;news;uucp;cron;auth2;ftp;ntp;audit;alert;cron2;local0;local1;local2;local3;local4;local5;local6;local7
 	// +optional
 	Facility string `json:"facility,omitempty"`
@@ -1313,7 +1297,6 @@ type LoggingDestination struct {
 	// that the administrator has configured a custom syslog instance.
 	//
 	// +unionDiscriminator
-	// +kubebuilder:validation:Required
 	// +required
 	Type LoggingDestinationType `json:"type"`
 
@@ -1336,7 +1319,6 @@ type IngressControllerCaptureHTTPHeader struct {
 	// name specifies a header name.  Its value must be a valid HTTP header
 	// name as defined in RFC 2616 section 4.2.
 	//
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern="^[-!#$%&'*+.0-9A-Z^_`a-z|~]+$"
 	// +required
 	Name string `json:"name"`
@@ -1346,7 +1328,6 @@ type IngressControllerCaptureHTTPHeader struct {
 	// log message.  Note that the ingress controller may impose a separate
 	// bound on the total length of HTTP headers in a request.
 	//
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	// +required
 	MaxLength int `json:"maxLength"`
@@ -1400,7 +1381,6 @@ type IngressControllerCaptureHTTPCookie struct {
 	// controller may impose a separate bound on the total length of HTTP
 	// headers in a request.
 	//
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=1024
 	// +required
@@ -1420,9 +1400,8 @@ type IngressControllerCaptureHTTPCookieUnion struct {
 	// matching cookie is captured.
 	//
 	// +unionDiscriminator
-	// +kubebuilder:validation:Required
 	// +required
-	MatchType CookieMatchType `json:"matchType,omitempty"`
+	MatchType CookieMatchType `json:"matchType"`
 
 	// name specifies a cookie name.  Its value must be a valid HTTP cookie
 	// name as defined in RFC 6265 section 4.1.
@@ -1458,7 +1437,6 @@ const (
 type AccessLogging struct {
 	// destination is where access logs go.
 	//
-	// +kubebuilder:validation:Required
 	// +required
 	Destination LoggingDestination `json:"destination"`
 
@@ -1576,7 +1554,6 @@ type IngressControllerHTTPUniqueIdHeaderPolicy struct {
 // (for example, "X-Forwarded-For") in the desired capitalization.  The value
 // must be a valid HTTP header name as defined in RFC 2616 section 4.2.
 //
-// +optional
 // +kubebuilder:validation:Pattern="^$|^[-!#$%&'*+.0-9A-Z^_`a-z|~]+$"
 // +kubebuilder:validation:MinLength=0
 // +kubebuilder:validation:MaxLength=1024
@@ -1715,7 +1692,7 @@ type IngressControllerHTTPHeader struct {
 	// Strict-Transport-Security, Proxy, Host, Cookie, Set-Cookie.
 	// It must be no more than 255 characters in length.
 	// Header name must be unique.
-	// +kubebuilder:validation:Required
+	// +required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=255
 	// +kubebuilder:validation:Pattern="^[-!#$%&'*+.0-9A-Z^_`a-z|~]+$"
@@ -1726,7 +1703,7 @@ type IngressControllerHTTPHeader struct {
 	// +kubebuilder:validation:XValidation:rule="self.lowerAscii() != 'set-cookie'",message="set-cookie header may not be modified via header actions"
 	Name string `json:"name"`
 	// action specifies actions to perform on headers, such as setting or deleting headers.
-	// +kubebuilder:validation:Required
+	// +required
 	Action IngressControllerHTTPHeaderActionUnion `json:"action"`
 }
 
@@ -1740,7 +1717,7 @@ type IngressControllerHTTPHeaderActionUnion struct {
 	// Delete allows you to delete HTTP request and response headers.
 	// +unionDiscriminator
 	// +kubebuilder:validation:Enum:=Set;Delete
-	// +kubebuilder:validation:Required
+	// +required
 	Type IngressControllerHTTPHeaderActionType `json:"type"`
 
 	// set specifies how the HTTP header should be set.
@@ -1773,7 +1750,7 @@ type IngressControllerSetHTTPHeader struct {
 	// + ---
 	// + Note: This limit was selected as most common web servers have a limit of 16384 characters or some lower limit.
 	// + See <https://www.geekersdigest.com/max-http-request-header-size-server-comparison/>.
-	// +kubebuilder:validation:Required
+	// +required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=16384
 	Value string `json:"value"`
@@ -1794,7 +1771,6 @@ type IngressControllerTuningOptions struct {
 	// headerBufferBytes values that are too large could cause the
 	// IngressController to use significantly more memory than necessary.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum=16384
 	// +optional
 	HeaderBufferBytes int32 `json:"headerBufferBytes,omitempty"`
@@ -1814,7 +1790,6 @@ type IngressControllerTuningOptions struct {
 	// large could cause the IngressController to use significantly more memory
 	// than necessary.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum=4096
 	// +optional
 	HeaderBufferMaxRewriteBytes int32 `json:"headerBufferMaxRewriteBytes,omitempty"`
@@ -1832,7 +1807,6 @@ type IngressControllerTuningOptions struct {
 	// Reducing the number of threads may cause the ingress controller to
 	// perform poorly.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=64
 	// +optional
@@ -1842,7 +1816,6 @@ type IngressControllerTuningOptions struct {
 	// waiting for a client response.
 	//
 	// If unset, the default timeout is 30s
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	ClientTimeout *metav1.Duration `json:"clientTimeout,omitempty"`
@@ -1852,7 +1825,6 @@ type IngressControllerTuningOptions struct {
 	// connection.
 	//
 	// If unset, the default timeout is 1s
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	ClientFinTimeout *metav1.Duration `json:"clientFinTimeout,omitempty"`
@@ -1861,7 +1833,6 @@ type IngressControllerTuningOptions struct {
 	// waiting for a server/backend response.
 	//
 	// If unset, the default timeout is 30s
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	ServerTimeout *metav1.Duration `json:"serverTimeout,omitempty"`
@@ -1871,7 +1842,6 @@ type IngressControllerTuningOptions struct {
 	// connection.
 	//
 	// If unset, the default timeout is 1s
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	ServerFinTimeout *metav1.Duration `json:"serverFinTimeout,omitempty"`
@@ -1880,12 +1850,11 @@ type IngressControllerTuningOptions struct {
 	// websockets) will be held open while the tunnel is idle.
 	//
 	// If unset, the default timeout is 1h
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	TunnelTimeout *metav1.Duration `json:"tunnelTimeout,omitempty"`
 
-	// ConnectTimeout defines the maximum time to wait for
+	// connectTimeout defines the maximum time to wait for
 	// a connection attempt to a server/backend to succeed.
 	//
 	// This field expects an unsigned duration string of decimal numbers, each with optional
@@ -1896,7 +1865,6 @@ type IngressControllerTuningOptions struct {
 	// to choose a reasonable default. This default is subject to change over time.
 	// The current default is 5s.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=^(0|([0-9]+(\.[0-9]+)?(ns|us|µs|μs|ms|s|m|h))+)$
 	// +kubebuilder:validation:Type:=string
 	// +optional
@@ -1910,7 +1878,6 @@ type IngressControllerTuningOptions struct {
 	// matching certificate could be used.
 	//
 	// If unset, the default inspect delay is 5s
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=duration
 	// +optional
 	TLSInspectDelay *metav1.Duration `json:"tlsInspectDelay,omitempty"`
@@ -1936,7 +1903,6 @@ type IngressControllerTuningOptions struct {
 	// Currently the minimum allowed value is 1s and the maximum allowed value is
 	// 2147483647ms (24.85 days).  Both are subject to change over time.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=^(0|([0-9]+(\.[0-9]+)?(ns|us|µs|μs|ms|s|m|h))+)$
 	// +kubebuilder:validation:Type:=string
 	// +optional
@@ -1983,7 +1949,6 @@ type IngressControllerTuningOptions struct {
 	// processes in router containers with the following metric:
 	// 'container_memory_working_set_bytes{container="router",namespace="openshift-ingress"}/container_processes{container="router",namespace="openshift-ingress"}'.
 	//
-	// +kubebuilder:validation:Optional
 	// +optional
 	MaxConnections int32 `json:"maxConnections,omitempty"`
 
@@ -2014,7 +1979,6 @@ type IngressControllerTuningOptions struct {
 	// be reloaded less frequently, and newly created routes will not be served until the
 	// subsequent reload.
 	//
-	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=^(0|([0-9]+(\.[0-9]+)?(ns|us|µs|μs|ms|s|m|h))+)$
 	// +kubebuilder:validation:Type:=string
 	// +optional
@@ -2056,17 +2020,21 @@ var (
 type IngressControllerStatus struct {
 	// availableReplicas is number of observed available replicas according to the
 	// ingress controller deployment.
+	// +optional
 	AvailableReplicas int32 `json:"availableReplicas"`
 
 	// selector is a label selector, in string format, for ingress controller pods
 	// corresponding to the IngressController. The number of matching pods should
 	// equal the value of availableReplicas.
+	// +optional
 	Selector string `json:"selector"`
 
 	// domain is the actual domain in use.
+	// +optional
 	Domain string `json:"domain"`
 
 	// endpointPublishingStrategy is the actual strategy in use.
+	// +optional
 	EndpointPublishingStrategy *EndpointPublishingStrategy `json:"endpointPublishingStrategy,omitempty"`
 
 	// conditions is a list of conditions and their status.
@@ -2103,6 +2071,7 @@ type IngressControllerStatus struct {
 	//   - False if any of those conditions are unsatisfied.
 	// +listType=map
 	// +listMapKey=type
+	// +optional
 	Conditions []OperatorCondition `json:"conditions,omitempty"`
 
 	// tlsProfile is the TLS connection configuration that is in effect.
