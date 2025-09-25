@@ -1,6 +1,8 @@
 module github.com/openshift/cluster-kube-descheduler-operator
 
-go 1.21
+go 1.23
+
+toolchain go1.24.6
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -34,7 +36,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
