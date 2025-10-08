@@ -18,8 +18,7 @@
     "packageRules": [
       {
         "matchFileNames": [
-          "Dockerfile*",
-          "*.Dockerfile"
+          "bundle.Dockerfile"
         ],
         "automerge": true,
         "addLabels": ["jira/valid-reference", "lgtm", "approved"]
