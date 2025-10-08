@@ -1,4 +1,0 @@
-packageName: cluster-kube-descheduler-operator
-channels:
-- name: "4.13"
-  currentCSV: cluster-kube-descheduler-operator.v4.13.0
