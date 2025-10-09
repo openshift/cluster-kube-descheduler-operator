@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   # The version value is substituted by the ART pipeline
-  name: clusterkubedescheduleroperator.v4.12.0
+  name: clusterkubedescheduleroperator.v4.12.1
   namespace: openshift-kube-descheduler-operator
   labels:
     operatorframework.io/arch.amd64: supported
@@ -29,7 +29,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: 2021/10/13
+    createdAt: 2025/10/09
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
