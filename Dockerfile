@@ -12,6 +12,7 @@ LABEL io.k8s.display-name="Kube Descheduler Operator based on RHEL 9" \
       io.k8s.description="This is a component of OpenShift and manages the Descheduler based on RHEL 9" \
       com.redhat.component="kube-descheduler-operator-container" \
       name="kube-descheduler-operator-rhel-9" \
+      cpe="cpe:/a:redhat:kube_descheduler_operator:5.0::el9" \
       version="${CI_CONTAINER_VERSION}" \
       summary="kube-descheduler-operator" \
       io.openshift.expose-services="" \
