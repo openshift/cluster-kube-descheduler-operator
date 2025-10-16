@@ -1,7 +1,6 @@
 # The base image is expected to contain
 # /bin/opm (with a serve subcommand) and /bin/grpc_health_probe
-# Bump to v4.20 tag once available
-FROM registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.20
+FROM registry.redhat.io/openshift4/ose-operator-registry:v4.12
 
 # Configure the entrypoint and command
 ENTRYPOINT ["/bin/opm"]
