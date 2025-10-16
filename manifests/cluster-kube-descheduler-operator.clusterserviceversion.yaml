@@ -119,6 +119,7 @@ spec:
   - clusterkubedescheduleroperator.4.12.0-202502111300
   - clusterkubedescheduleroperator.4.12.0-202502191728
   - clusterkubedescheduleroperator.4.12.0-202503101712
+  - clusterkubedescheduleroperator.4.12.0-202503181728
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
