@@ -10,7 +10,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	targets/openshift/crd-schema-gen.mk \
 )
 
-# Exclude e2e tests from unit testing
+# Exclude e2e tests from unit testing 
 GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 
 IMAGE_REGISTRY :=registry.svc.ci.openshift.org
