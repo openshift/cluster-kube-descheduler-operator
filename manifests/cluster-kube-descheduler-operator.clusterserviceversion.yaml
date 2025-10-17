@@ -60,6 +60,69 @@ spec:
   - clusterkubedescheduleroperator.v4.10.0
   - clusterkubedescheduleroperator.v4.11.0
   - clusterkubedescheduleroperator.v4.12.0
+  - clusterkubedescheduleroperator.v4.12.1
+  - clusterkubedescheduleroperator.v4.12.2
+  - clusterkubedescheduleroperator.v4.12.3
+  - clusterkubedescheduleroperator.v4.12.4
+  - clusterkubedescheduleroperator.v4.12.5
+  - clusterkubedescheduleroperator.v4.12.6
+  - clusterkubedescheduleroperator.v4.13.0
+  - clusterkubedescheduleroperator.v4.13.1
+  - clusterkubedescheduleroperator.v4.13.2
+  - clusterkubedescheduleroperator.v4.13.3
+  - clusterkubedescheduleroperator.v4.13.4
+  - clusterkubedescheduleroperator.v4.13.5
+  - clusterkubedescheduleroperator.v4.13.6
+  - clusterkubedescheduleroperator.4.14.0-202304241531
+  - clusterkubedescheduleroperator.4.14.0-202305180141
+  - clusterkubedescheduleroperator.4.14.0-202306070816
+  - clusterkubedescheduleroperator.4.14.0-202307041530
+  - clusterkubedescheduleroperator.4.14.0-202307241701
+  - clusterkubedescheduleroperator.4.14.0-202308281544
+  - clusterkubedescheduleroperator.4.14.0-202309181402
+  - clusterkubedescheduleroperator.4.14.0-202309280149
+  - clusterkubedescheduleroperator.4.14.0-202310091027
+  - clusterkubedescheduleroperator.4.14.0-202310101627
+  - clusterkubedescheduleroperator.4.14.0-202310201027
+  - clusterkubedescheduleroperator.4.14.0-202311021650
+  - clusterkubedescheduleroperator.4.14.0-202311211133
+  - clusterkubedescheduleroperator.4.14.0-202401161152
+  - clusterkubedescheduleroperator.4.14.0-202401261353
+  - clusterkubedescheduleroperator.4.14.0-202401292111
+  - clusterkubedescheduleroperator.4.14.0-202402081809
+  - clusterkubedescheduleroperator.4.14.0-202403051609
+  - clusterkubedescheduleroperator.4.14.0-202403080940
+  - clusterkubedescheduleroperator.4.14.0-202403222237
+  - clusterkubedescheduleroperator.4.14.0-202404030309
+  - clusterkubedescheduleroperator.4.14.0-202404161544
+  - clusterkubedescheduleroperator.4.14.0-202404251737
+  - clusterkubedescheduleroperator.4.14.0-202405070741
+  - clusterkubedescheduleroperator.4.14.0-202405141639
+  - clusterkubedescheduleroperator.4.14.0-202405222237
+  - clusterkubedescheduleroperator.4.14.0-202406180708
+  - clusterkubedescheduleroperator.4.14.0-202406290609
+  - clusterkubedescheduleroperator.4.14.0-202407021509
+  - clusterkubedescheduleroperator.4.14.0-202408070332
+  - clusterkubedescheduleroperator.4.14.0-202408260910
+  - clusterkubedescheduleroperator.4.14.0-202409240108
+  - clusterkubedescheduleroperator.4.14.0-202410091239
+  - clusterkubedescheduleroperator.4.14.0-202410182001
+  - clusterkubedescheduleroperator.4.14.0-202411060037
+  - clusterkubedescheduleroperator.4.14.0-202411130434
+  - clusterkubedescheduleroperator.4.14.0-202411261536
+  - clusterkubedescheduleroperator.4.14.0-202412040905
+  - clusterkubedescheduleroperator.4.14.0-202412170209
+  - clusterkubedescheduleroperator.4.14.0-202501150635
+  - clusterkubedescheduleroperator.4.14.0-202501280211
+  - clusterkubedescheduleroperator.4.14.0-202502111935
+  - clusterkubedescheduleroperator.4.14.0-202502170207
+  - clusterkubedescheduleroperator.4.14.0-202502171705
+  - clusterkubedescheduleroperator.4.14.0-202502191335
+  - clusterkubedescheduleroperator.4.14.0-202503110235
+  - clusterkubedescheduleroperator.4.14.0-202503121535
+  - clusterkubedescheduleroperator.4.14.0-202503131537
+  - clusterkubedescheduleroperator.4.14.0-202503171209
+  - clusterkubedescheduleroperator.4.14.0-202503310335
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
