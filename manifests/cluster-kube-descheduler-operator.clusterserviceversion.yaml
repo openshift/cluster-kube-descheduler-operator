@@ -29,7 +29,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: 2025/10/09
+    createdAt: 2025/10/17
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
@@ -60,6 +60,62 @@ spec:
   - clusterkubedescheduleroperator.v4.9.0
   - clusterkubedescheduleroperator.v4.10.0
   - clusterkubedescheduleroperator.v4.11.0
+  - clusterkubedescheduleroperator.v4.12.0
+  - clusterkubedescheduleroperator.v4.12.1
+  - clusterkubedescheduleroperator.v4.12.2
+  - clusterkubedescheduleroperator.v4.12.3
+  - clusterkubedescheduleroperator.v4.12.4
+  - clusterkubedescheduleroperator.v4.12.5
+  - clusterkubedescheduleroperator.v4.12.6
+  - clusterkubedescheduleroperator.4.13.0-202302061816
+  - clusterkubedescheduleroperator.4.13.0-202302091829
+  - clusterkubedescheduleroperator.4.13.0-202303180002
+  - clusterkubedescheduleroperator.4.13.0-202303231342
+  - clusterkubedescheduleroperator.4.13.0-202303281554
+  - clusterkubedescheduleroperator.4.13.0-202303301516
+  - clusterkubedescheduleroperator.4.13.0-202304190216
+  - clusterkubedescheduleroperator.4.13.0-202305220955
+  - clusterkubedescheduleroperator.4.13.0-202305262054
+  - clusterkubedescheduleroperator.4.13.0-202306070816
+  - clusterkubedescheduleroperator.4.13.0-202306261929
+  - clusterkubedescheduleroperator.4.13.0-202307131743
+  - clusterkubedescheduleroperator.4.13.0-202307170916
+  - clusterkubedescheduleroperator.4.13.0-202307242035
+  - clusterkubedescheduleroperator.4.13.0-202308221627
+  - clusterkubedescheduleroperator.4.13.0-202308281305
+  - clusterkubedescheduleroperator.4.13.0-202309181427
+  - clusterkubedescheduleroperator.4.13.0-202310101544
+  - clusterkubedescheduleroperator.4.13.0-202310162157
+  - clusterkubedescheduleroperator.4.13.0-202310210425
+  - clusterkubedescheduleroperator.4.13.0-202311021930
+  - clusterkubedescheduleroperator.4.13.0-202311130830
+  - clusterkubedescheduleroperator.4.13.0-202311211131
+  - clusterkubedescheduleroperator.4.13.0-202401161111
+  - clusterkubedescheduleroperator.4.13.0-202401231733
+  - clusterkubedescheduleroperator.4.13.0-202401292134
+  - clusterkubedescheduleroperator.4.13.0-202402011837
+  - clusterkubedescheduleroperator.4.13.0-202402081808
+  - clusterkubedescheduleroperator.4.13.0-202403051607
+  - clusterkubedescheduleroperator.4.13.0-202403080939
+  - clusterkubedescheduleroperator.4.13.0-202404030309
+  - clusterkubedescheduleroperator.4.13.0-202404200313
+  - clusterkubedescheduleroperator.4.13.0-202405141537
+  - clusterkubedescheduleroperator.4.13.0-202405222206
+  - clusterkubedescheduleroperator.4.13.0-202407081338
+  - clusterkubedescheduleroperator.4.13.0-202408131940
+  - clusterkubedescheduleroperator.4.13.0-202408211739
+  - clusterkubedescheduleroperator.4.13.0-202408260940
+  - clusterkubedescheduleroperator.4.13.0-202409240037
+  - clusterkubedescheduleroperator.4.13.0-202410190100
+  - clusterkubedescheduleroperator.4.13.0-202411300029
+  - clusterkubedescheduleroperator.4.13.0-202501180028
+  - clusterkubedescheduleroperator.4.13.0-202502010028
+  - clusterkubedescheduleroperator.4.13.0-202502150028
+  - clusterkubedescheduleroperator.4.13.0-202502220031
+  - clusterkubedescheduleroperator.4.13.0-202503111300
+  - clusterkubedescheduleroperator.4.13.0-202503121529
+  - clusterkubedescheduleroperator.4.13.0-202503170804
+  - clusterkubedescheduleroperator.4.13.0-202503310300
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
