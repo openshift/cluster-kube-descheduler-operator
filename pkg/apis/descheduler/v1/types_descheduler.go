@@ -12,6 +12,7 @@ import (
 // +genclient
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="kubedescheduler is a singleton, .metadata.name must be 'cluster'",fieldPath=".metadata"
 type KubeDescheduler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
