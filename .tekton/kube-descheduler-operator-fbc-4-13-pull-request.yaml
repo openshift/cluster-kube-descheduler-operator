@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "fbc-4.13" && ( "v4.13/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-13-pull-request.yaml".pathChanged()
+      == "fbc-4.13" && ( "v4.13/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-13-pull-request.yaml".pathChanged() || ".tekton/images-mirror-set.yaml".pathChanged()
       )
   creationTimestamp: null
   labels:
