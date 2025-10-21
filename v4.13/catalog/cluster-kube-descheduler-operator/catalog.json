@@ -134,6 +134,10 @@
         },
         {
             "name": "clusterkubedescheduleroperator.4.13.0-202503310300",
+            "skipRange": ">=4.10.0 <4.13.0-202503310300"
+        },
+        {
+            "name": "clusterkubedescheduleroperator.v4.13.1",
             "skips": [
                 "clusterkubedescheduleroperator.4.13.0-202405141537",
                 "clusterkubedescheduleroperator.4.13.0-202502010028",
@@ -182,9 +186,10 @@
                 "clusterkubedescheduleroperator.4.13.0-202307242035",
                 "clusterkubedescheduleroperator.4.13.0-202311211131",
                 "clusterkubedescheduleroperator.4.13.0-202503111300",
-                "clusterkubedescheduleroperator.4.13.0-202407081338"
+                "clusterkubedescheduleroperator.4.13.0-202407081338",
+                "clusterkubedescheduleroperator.4.13.0-202503310300"
             ],
-            "skipRange": ">=4.10.0 <4.13.0-202503310300"
+            "skipRange": ">=4.10.0 <4.13.1"
         }
     ]
 }
@@ -315,6 +320,10 @@
         },
         {
             "name": "clusterkubedescheduleroperator.4.13.0-202503310300",
+            "skipRange": ">=4.10.0 <4.13.0-202503310300"
+        },
+        {
+            "name": "clusterkubedescheduleroperator.v4.13.1",
             "skips": [
                 "clusterkubedescheduleroperator.4.13.0-202405141537",
                 "clusterkubedescheduleroperator.4.13.0-202502010028",
@@ -363,9 +372,10 @@
                 "clusterkubedescheduleroperator.4.13.0-202307242035",
                 "clusterkubedescheduleroperator.4.13.0-202311211131",
                 "clusterkubedescheduleroperator.4.13.0-202503111300",
-                "clusterkubedescheduleroperator.4.13.0-202407081338"
+                "clusterkubedescheduleroperator.4.13.0-202407081338",
+                "clusterkubedescheduleroperator.4.13.0-202503310300"
             ],
-            "skipRange": ">=4.10.0 <4.13.0-202503310300"
+            "skipRange": ">=4.10.0 <4.13.1"
         }
     ]
 }
