@@ -7,19 +7,25 @@ spec:
   imageDigestMirrors:
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-14
       source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-14
       source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-14
       source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-14
       source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-14
       source: registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-14
       source: registry.redhat.io/kube-descheduler-operator/descheduler-rhel9
