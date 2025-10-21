@@ -49,29 +49,168 @@
                     "skipRange": "\u003e=4.11.0 \u003c4.14.0-202310201027"
                 },
                 {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202311211133",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202311211133"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202401161152",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202401161152"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202401292111",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202401292111"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202402081809",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202402081809"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202403222237",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202403222237"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202404030309",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202404030309"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202404161544",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202404161544"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202405070741",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202405070741"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202405141639",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202405141639"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202405222237",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202405222237"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202407021509",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202407021509"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202408070332",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202408070332"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202408260910",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202408260910"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202409240108",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202409240108"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202410091239",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202410091239"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202410182001",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202410182001"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202411130434",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202411130434"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202411261536",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202411261536"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202412040905",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202412040905"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202412170209",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202412170209"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202501150635",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202501150635"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202501280211",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202501280211"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202502111935",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202502111935"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202502191335",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202502191335"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202503310335",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202503310335"
+                },
+                {
                     "name": "clusterkubedescheduleroperator.4.14.0-202311021650",
                     "skipRange": "\u003e=4.11.0 \u003c4.14.0-202311021650",
                     "skips": [
-                        "clusterkubedescheduleroperator.4.14.0-202310201027",
-                        "clusterkubedescheduleroperator.4.14.0-202310271927",
-                        "clusterkubedescheduleroperator.4.14.0-202305180141",
-                        "clusterkubedescheduleroperator.4.14.0-202309181402",
-                        "clusterkubedescheduleroperator.4.14.0-202308221627",
-                        "clusterkubedescheduleroperator.4.14.0-202307041530",
-                        "clusterkubedescheduleroperator.4.14.0-202310091027",
-                        "clusterkubedescheduleroperator.4.14.0-202304241531",
-                        "clusterkubedescheduleroperator.4.14.0-202308310706",
-                        "clusterkubedescheduleroperator.4.14.0-202310061344",
-                        "clusterkubedescheduleroperator.4.14.0-202309280149",
-                        "clusterkubedescheduleroperator.4.14.0-202307241701",
-                        "clusterkubedescheduleroperator.4.14.0-202309161326",
-                        "clusterkubedescheduleroperator.4.14.0-202310180027",
-                        "clusterkubedescheduleroperator.4.14.0-202310170859",
-                        "clusterkubedescheduleroperator.4.14.0-202310170045",
-                        "clusterkubedescheduleroperator.4.14.0-202308230726",
-                        "clusterkubedescheduleroperator.4.14.0-202310101627",
-                        "clusterkubedescheduleroperator.4.14.0-202306070816",
-                        "clusterkubedescheduleroperator.4.14.0-202308281544"
+                      "clusterkubedescheduleroperator.4.14.0-202304241531",
+                      "clusterkubedescheduleroperator.4.14.0-202305180141",
+                      "clusterkubedescheduleroperator.4.14.0-202306070816",
+                      "clusterkubedescheduleroperator.4.14.0-202307041530",
+                      "clusterkubedescheduleroperator.4.14.0-202307241701",
+                      "clusterkubedescheduleroperator.4.14.0-202308221627",
+                      "clusterkubedescheduleroperator.4.14.0-202308230726",
+                      "clusterkubedescheduleroperator.4.14.0-202308281544",
+                      "clusterkubedescheduleroperator.4.14.0-202308310706",
+                      "clusterkubedescheduleroperator.4.14.0-202309161326",
+                      "clusterkubedescheduleroperator.4.14.0-202309181402",
+                      "clusterkubedescheduleroperator.4.14.0-202309280149",
+                      "clusterkubedescheduleroperator.4.14.0-202310061344",
+                      "clusterkubedescheduleroperator.4.14.0-202310091027",
+                      "clusterkubedescheduleroperator.4.14.0-202310101627",
+                      "clusterkubedescheduleroperator.4.14.0-202310170045",
+                      "clusterkubedescheduleroperator.4.14.0-202310170859",
+                      "clusterkubedescheduleroperator.4.14.0-202310180027",
+                      "clusterkubedescheduleroperator.4.14.0-202310201027",
+                      "clusterkubedescheduleroperator.4.14.0-202310271927",
+                      "clusterkubedescheduleroperator.4.14.0-202311021650",
+                      "clusterkubedescheduleroperator.4.14.0-202311211133",
+                      "clusterkubedescheduleroperator.4.14.0-202401161152",
+                      "clusterkubedescheduleroperator.4.14.0-202401261353",
+                      "clusterkubedescheduleroperator.4.14.0-202401292111",
+                      "clusterkubedescheduleroperator.4.14.0-202402081809",
+                      "clusterkubedescheduleroperator.4.14.0-202403051609",
+                      "clusterkubedescheduleroperator.4.14.0-202403080940",
+                      "clusterkubedescheduleroperator.4.14.0-202403222237",
+                      "clusterkubedescheduleroperator.4.14.0-202404030309",
+                      "clusterkubedescheduleroperator.4.14.0-202404161544",
+                      "clusterkubedescheduleroperator.4.14.0-202404251737",
+                      "clusterkubedescheduleroperator.4.14.0-202405070741",
+                      "clusterkubedescheduleroperator.4.14.0-202405141639",
+                      "clusterkubedescheduleroperator.4.14.0-202405222237",
+                      "clusterkubedescheduleroperator.4.14.0-202406180708",
+                      "clusterkubedescheduleroperator.4.14.0-202406290609",
+                      "clusterkubedescheduleroperator.4.14.0-202407021509",
+                      "clusterkubedescheduleroperator.4.14.0-202408070332",
+                      "clusterkubedescheduleroperator.4.14.0-202408260910",
+                      "clusterkubedescheduleroperator.4.14.0-202409240108",
+                      "clusterkubedescheduleroperator.4.14.0-202410091239",
+                      "clusterkubedescheduleroperator.4.14.0-202410182001",
+                      "clusterkubedescheduleroperator.4.14.0-202411060037",
+                      "clusterkubedescheduleroperator.4.14.0-202411130434",
+                      "clusterkubedescheduleroperator.4.14.0-202411261536",
+                      "clusterkubedescheduleroperator.4.14.0-202412040905",
+                      "clusterkubedescheduleroperator.4.14.0-202412170209",
+                      "clusterkubedescheduleroperator.4.14.0-202501150635",
+                      "clusterkubedescheduleroperator.4.14.0-202501280211",
+                      "clusterkubedescheduleroperator.4.14.0-202502111935",
+                      "clusterkubedescheduleroperator.4.14.0-202502170207",
+                      "clusterkubedescheduleroperator.4.14.0-202502171705",
+                      "clusterkubedescheduleroperator.4.14.0-202502191335",
+                      "clusterkubedescheduleroperator.4.14.0-202503110235",
+                      "clusterkubedescheduleroperator.4.14.0-202503121535",
+                      "clusterkubedescheduleroperator.4.14.0-202503131537",
+                      "clusterkubedescheduleroperator.4.14.0-202503171209",
+                      "clusterkubedescheduleroperator.4.14.0-202503310335"
                     ]
                 },
                 {
@@ -99,6 +238,106 @@
         {
             "schema": "olm.bundle",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:9ea096dfeb75dfc5eaee60c4227418a735c2014f8106751655a81e90d42f40ef"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:0cebb1bb28378397971085d649bb08c3585b4292f0a50ba4400f8da4a0b6f239"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:aaf5e05fb6662a2f899d70554c1837b216a4183ae72d2acd019108dd7b026900"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:b148d5cf4943d0341781a0f7c6f2a7116d315c617f8beb65c9e7a24ac99304ff"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:25ae7e9dbbbaeb31e39658a7558f26381d6c059f4603d2160c9c6b883b0df6b7"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:497eaa339af59598fcf2d71a2d4983d934dcb98ebe46b4e66fd3b41e2141f2e4"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:1338abbe31df1952bff95a8d98223b2aaa791532f0ab201ff3971c400e61b590"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:bb115f61e28909102b25a8361f517c38a2516fa95d4445bde8972086ed44ca17"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:5cb8a460128e9f0386c5758a6ce4f4f998f508c68b215f60c0a88c17300102bd"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:5c2ee01594af02d2968c20bd18ef0cc98ad5715e2b429ef7cd91e19e766dc923"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:0db1a3b0d3e1fb309a74afc230537f77a1a586a05f1a2640a44096959b0122fe"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:348f0b218fb37ed2071f367be6d7bdb4e0027c6c6e1e9cdc34c9cc757dc70886"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:434fbde89b2c72f67db218fb82ec3be938316feee937639f94ff50e8fecf2087"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:067529e1cd5bf4f0a71c07e59d0e7a79fc6722f682af9dc960aab59e306bedee"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:a55aaae65c9f0f37e360bb9d13d26155ec6d3003880d65081938284aed5baf84"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:c4653355c26cd4690cf9f75616bb1796f7cdc73b5e61dcabea38874a9621aec5"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:0a8751418b051e22d3b17292367e0cffe1479b83e387d4d4d1770e155a4a8e9d"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:53cd6778c8fda0e011a9e9e1e9da7f9b6b29c0bee1be24090b5764a364555a04"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:808f54e5ebfb6e9dee0ae2fef31a70750e5b4be4479eb8c7ea522675196dbe67"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:e90cb07d715e3cd614a9651626b55319275747ac5caef6e242c340c8b3388885"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:6f1602fc08f75abf19eae450c0c3d1fd8fac2f346cbc88908dbf0bfcc52c6e4d"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:def5aa7bc82a819ed103d627b66408f43f2cfa56c78c6ff858059204b47d7825"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:199de0c72e0609cda34af6e4995ae16f93a57eaf1d0aa38e8ae216ca25ce5ae2"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:e6d05ec961cb59f4ee63cd8f67809e1b67108f9873220b03c953d91928aa6c3b"
+        },
+        {
+          "schema": "olm.bundle",
+          "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:24b525acbde09168094c475d9eb129031b31355c7d1653c3dc531bc6520fd892"
         }
     ]
 }
