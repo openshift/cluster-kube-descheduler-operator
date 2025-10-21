@@ -153,7 +153,7 @@
                     "skipRange": "\u003e=4.11.0 \u003c4.14.0-202503310335"
                 },
                 {
-                    "name": "clusterkubedescheduleroperator.4.14.1",
+                    "name": "clusterkubedescheduleroperator.v4.14.1",
                     "skipRange": "\u003e=4.11.0 \u003c4.14.1",
                     "skips": [
                         "clusterkubedescheduleroperator.4.14.0-202405222237",
