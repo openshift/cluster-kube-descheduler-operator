@@ -8,8 +8,10 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "fbc-4.16" && ( "v4.16/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-16-pull-request.yaml".pathChanged() )
-  creationTimestamp:
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
+      == "fbc-4.16" && ( "v4.16/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-16-pull-request.yaml".pathChanged() || ".tekton/images-mirror-set.yaml".pathChanged()
+      )
+  creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-16
     appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-16
@@ -38,24 +40,10 @@ spec:
     value: v4.16
   pipelineSpec:
     description: |
-      This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/advanced-how-tos/building-olm.adoc#building-the-file-based-catalog).
+      This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
 
       _Uses `buildah` to create a container image. Its build-time tests are limited to verifying the included catalog and do not scan the image.
       This pipeline is pushed as a Tekton bundle to [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-fbc-builder?tab=tags)_
-    finally:
-    - name: show-sbom
-      params:
-      - name: IMAGE_URL
-        value: $(tasks.build-image-index.results.IMAGE_URL)
-      taskRef:
-        params:
-        - name: name
-          value: show-sbom
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-show-sbom:0.1@sha256:beb0616db051952b4b861dd8c3e00fa1c0eccbd926feddf71194d3bb3ace9ce7
-        - name: kind
-          value: task
-        resolver: bundles
     params:
     - description: Source Repository URL
       name: git-url
@@ -68,11 +56,13 @@ spec:
       name: output-image
       type: string
     - default: .
-      description: Path to the source code of an application's component from where to build image.
+      description: Path to the source code of an application's component from where
+        to build image.
       name: path-context
       type: string
     - default: Dockerfile
-      description: Path to the Dockerfile inside the context specified by parameter path-context
+      description: Path to the Dockerfile inside the context specified by parameter
+        path-context
       name: dockerfile
       type: string
     - default: "false"
@@ -88,12 +78,14 @@ spec:
       name: hermetic
       type: string
     - default: ""
-      description: Build dependencies to be prefetched by Cachi2
+      description: Build dependencies to be prefetched
       name: prefetch-input
       type: string
     - default: ""
-      description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+      description: Image tag expiration time, time values could be something like
+        1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
+      type: string
     - default: "true"
       description: Build a source image.
       name: build-source-image
@@ -115,13 +107,10 @@ spec:
       - linux/arm64
       - linux/ppc64le
       - linux/s390x
-      description: List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
+      description: List of platforms to build the container images on. The available
+        set of values is determined by the configuration of the multi-platform-controller.
       name: build-platforms
       type: array
-    - name: buildah-format
-      default: oci
-      type: string
-      description: The format for the resulting image's mediaType. Valid values are oci or docker.
     results:
     - description: ""
       name: IMAGE_URL
@@ -182,18 +171,43 @@ spec:
       workspaces:
       - name: basic-auth
         workspace: git-auth
+    - name: run-opm-command
+      params:
+      - name: SOURCE_ARTIFACT
+        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
+      - name: ociStorage
+        value: $(params.output-image).opm
+      - name: ociArtifactExpiresAfter
+        value: $(params.image-expires-after)
+      - name: OPM_ARGS
+        value: []
+      - name: OPM_OUTPUT_PATH
+        value: ""
+      - name: IDMS_PATH
+        value: ""
+      runAfter:
+      - clone-repository
+      taskRef:
+        params:
+        - name: name
+          value: run-opm-command-oci-ta
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-run-opm-command-oci-ta:0.1@sha256:6202ce43ff90e3d0ece6544bbe972c3284c9c5c6675da4e34176b929285c4081
+        - name: kind
+          value: task
+        resolver: bundles
     - name: prefetch-dependencies
       params:
       - name: input
         value: $(params.prefetch-input)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
+        value: $(tasks.run-opm-command.results.SOURCE_ARTIFACT)
       - name: ociStorage
         value: $(params.output-image).prefetch
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       runAfter:
-      - clone-repository
+      - run-opm-command
       taskRef:
         params:
         - name: name
@@ -240,8 +254,6 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: IMAGE_APPEND_PLATFORM
         value: "true"
-      - name: BUILDAH_FORMAT
-        value: $(params.buildah-format)
       runAfter:
       - clone-repository
       taskRef:
@@ -271,8 +283,6 @@ spec:
       - name: IMAGES
         value:
         - $(tasks.build-images.results.IMAGE_REF[*])
-      - name: BUILDAH_FORMAT
-        value: $(params.buildah-format)
       runAfter:
       - build-images
       taskRef:
