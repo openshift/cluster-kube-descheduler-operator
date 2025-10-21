@@ -87,28 +87,28 @@
                     "name": "clusterkubedescheduleroperator.v5.1.1",
                     "replaces": "clusterkubedescheduleroperator.v5.0.1",
                     "skipRange": "\u003e=5.0.0 \u003c5.1.1"
-                  },
-                  {
-                      "name": "clusterkubedescheduleroperator.v5.1.2",
-                      "replaces": "clusterkubedescheduleroperator.v5.0.1",
-                      "skipRange": "\u003e=5.0.0 \u003c5.1.1"
-                    },
-                    {
-                        "name": "clusterkubedescheduleroperator.v5.1.3",
-                        "replaces": "clusterkubedescheduleroperator.v5.0.1",
-                        "skipRange": "\u003e=5.0.0 \u003c5.1.2",
-                        "skips": [
-                            "clusterkubedescheduleroperator.v5.0.1",
-                            "clusterkubedescheduleroperator.v5.0.2",
-                            "clusterkubedescheduleroperator.v5.0.3",
-                            "clusterkubedescheduleroperator.v5.0.4",
-                            "clusterkubedescheduleroperator.v5.0.5",
-                            "clusterkubedescheduleroperator.v5.0.6",
-                            "clusterkubedescheduleroperator.v5.1.0",
-                            "clusterkubedescheduleroperator.v5.1.1",
-                            "clusterkubedescheduleroperator.v5.1.2"
-                        ]
-                    }
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.v5.1.2",
+                    "replaces": "clusterkubedescheduleroperator.v5.0.1",
+                    "skipRange": "\u003e=5.0.0 \u003c5.1.1"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.v5.1.3",
+                    "replaces": "clusterkubedescheduleroperator.v5.0.1",
+                    "skipRange": "\u003e=5.0.0 \u003c5.1.2",
+                    "skips": [
+                        "clusterkubedescheduleroperator.v5.0.1",
+                        "clusterkubedescheduleroperator.v5.0.2",
+                        "clusterkubedescheduleroperator.v5.0.3",
+                        "clusterkubedescheduleroperator.v5.0.4",
+                        "clusterkubedescheduleroperator.v5.0.5",
+                        "clusterkubedescheduleroperator.v5.0.6",
+                        "clusterkubedescheduleroperator.v5.1.0",
+                        "clusterkubedescheduleroperator.v5.1.1",
+                        "clusterkubedescheduleroperator.v5.1.2"
+                    ]
+                }
             ],
             "name": "stable",
             "package": "cluster-kube-descheduler-operator",
