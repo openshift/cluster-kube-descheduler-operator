@@ -352,11 +352,11 @@
         },
         {
             "schema": "olm.bundle",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9"
         },
         {
             "schema": "olm.bundle",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca"
         }
     ]
 }

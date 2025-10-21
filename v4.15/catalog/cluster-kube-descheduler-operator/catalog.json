@@ -1607,7 +1607,7 @@
     "schema": "olm.bundle",
     "name": "clusterkubedescheduleroperator.v4.14.1",
     "package": "cluster-kube-descheduler-operator",
-    "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9",
+    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9",
     "properties": [
         {
             "type": "olm.gvk",
@@ -1648,7 +1648,7 @@
         },
         {
             "name": "",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9"
         }
     ]
 }
@@ -1709,7 +1709,7 @@
     "schema": "olm.bundle",
     "name": "clusterkubedescheduleroperator.v5.0.3",
     "package": "cluster-kube-descheduler-operator",
-    "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca",
+    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca",
     "properties": [
         {
             "type": "olm.gvk",
@@ -1742,15 +1742,15 @@
     "relatedImages": [
         {
             "name": "descheduler-operand",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:4a764098d910349888845f16946b4215f1b38dc91e46781e10aad92d99c9967f"
+            "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:4a764098d910349888845f16946b4215f1b38dc91e46781e10aad92d99c9967f"
         },
         {
             "name": "",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca"
         },
         {
             "name": "descheduler-operator",
-            "image": "registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:f83fdab16925b488359191d64eb991c30ede82be395f89b18198559d8b5b6f76"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:f83fdab16925b488359191d64eb991c30ede82be395f89b18198559d8b5b6f76"
         }
     ]
 }
