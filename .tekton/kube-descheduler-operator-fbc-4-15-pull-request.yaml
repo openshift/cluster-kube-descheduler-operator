@@ -9,14 +9,14 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "fbc-4.14" && ( "v4.14/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-14-pull-request.yaml".pathChanged() || ".tekton/images-mirror-set.yaml".pathChanged()
+      == "fbc-4.15" && ( "v4.15/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-15-pull-request.yaml".pathChanged() || ".tekton/images-mirror-set.yaml".pathChanged()
       )
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-14
-    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-14
+    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-15
+    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-15
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-fbc-4-14-on-pull-request
+  name: kube-descheduler-operator-fbc-4-15-on-pull-request
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -25,7 +25,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-14:on-pr-{{revision}}
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-15:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: build-platforms
@@ -34,7 +34,7 @@ spec:
   - name: dockerfile
     value: catalog.Dockerfile
   - name: path-context
-    value: v4.14
+    value: v4.15
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
@@ -410,7 +410,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-14
+    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-15
   workspaces:
   - name: git-auth
     secret:

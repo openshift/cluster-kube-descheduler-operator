@@ -1,0 +1,104 @@
+{
+    "schema": "olm.template.basic",
+    "entries": [
+        {
+            "defaultChannel": "stable",
+            "icon": {
+                "base64data": "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",
+                "mediatype": "image/png"
+            },
+            "name": "cluster-kube-descheduler-operator",
+            "schema": "olm.package"
+        },
+        {
+            "entries": [
+                {
+                    "name": "clusterkubedescheduleroperator.4.13.0-202309181427",
+                    "skipRange": "\u003e=4.10.0 \u003c4.13.0-202309181427",
+                    "skips": [
+                        "clusterkubedescheduleroperator.4.13.0-202303231342",
+                        "clusterkubedescheduleroperator.4.13.0-202309161326",
+                        "clusterkubedescheduleroperator.4.13.0-202307242035",
+                        "clusterkubedescheduleroperator.4.13.0-202308281305",
+                        "clusterkubedescheduleroperator.4.13.0-202307131743",
+                        "clusterkubedescheduleroperator.4.13.0-202307100954",
+                        "clusterkubedescheduleroperator.4.13.0-202305220955",
+                        "clusterkubedescheduleroperator.4.13.0-202302061816",
+                        "clusterkubedescheduleroperator.4.13.0-202303301516",
+                        "clusterkubedescheduleroperator.4.13.0-202302091829",
+                        "clusterkubedescheduleroperator.4.13.0-202308221627",
+                        "clusterkubedescheduleroperator.4.13.0-202303180002",
+                        "clusterkubedescheduleroperator.4.13.0-202304190216",
+                        "clusterkubedescheduleroperator.4.13.0-202305262054",
+                        "clusterkubedescheduleroperator.4.13.0-202303281554",
+                        "clusterkubedescheduleroperator.4.13.0-202307072116",
+                        "clusterkubedescheduleroperator.4.13.0-202307170916",
+                        "clusterkubedescheduleroperator.4.13.0-202306261929",
+                        "clusterkubedescheduleroperator.4.13.0-202306070816"
+                    ]
+                }
+            ],
+            "name": "4.13",
+            "package": "cluster-kube-descheduler-operator",
+            "schema": "olm.channel"
+        },
+        {
+            "entries": [
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202310201027",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202310201027"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.4.14.0-202311021650",
+                    "skipRange": "\u003e=4.11.0 \u003c4.14.0-202311021650",
+                    "skips": [
+                        "clusterkubedescheduleroperator.4.14.0-202310201027",
+                        "clusterkubedescheduleroperator.4.14.0-202310271927",
+                        "clusterkubedescheduleroperator.4.14.0-202305180141",
+                        "clusterkubedescheduleroperator.4.14.0-202309181402",
+                        "clusterkubedescheduleroperator.4.14.0-202308221627",
+                        "clusterkubedescheduleroperator.4.14.0-202307041530",
+                        "clusterkubedescheduleroperator.4.14.0-202310091027",
+                        "clusterkubedescheduleroperator.4.14.0-202304241531",
+                        "clusterkubedescheduleroperator.4.14.0-202308310706",
+                        "clusterkubedescheduleroperator.4.14.0-202310061344",
+                        "clusterkubedescheduleroperator.4.14.0-202309280149",
+                        "clusterkubedescheduleroperator.4.14.0-202307241701",
+                        "clusterkubedescheduleroperator.4.14.0-202309161326",
+                        "clusterkubedescheduleroperator.4.14.0-202310180027",
+                        "clusterkubedescheduleroperator.4.14.0-202310170859",
+                        "clusterkubedescheduleroperator.4.14.0-202310170045",
+                        "clusterkubedescheduleroperator.4.14.0-202308230726",
+                        "clusterkubedescheduleroperator.4.14.0-202310101627",
+                        "clusterkubedescheduleroperator.4.14.0-202306070816",
+                        "clusterkubedescheduleroperator.4.14.0-202308281544"
+                    ]
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.v5.0.2",
+                    "replaces": "clusterkubedescheduleroperator.4.14.0-202311021650",
+                    "skipRange": "\u003e=4.12.0 \u003c5.0.2"
+                }
+            ],
+            "name": "stable",
+            "package": "cluster-kube-descheduler-operator",
+            "schema": "olm.channel"
+        },
+        {
+            "schema": "olm.bundle",
+            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:b473fba287414d3ccb09aaabc64f463af2c912c322ca2c41723020b216d98d14"
+        },
+        {
+            "schema": "olm.bundle",
+            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:3c58df18403c681b637ecb7032c9c925298edf0e8e015dfac4ce10446f54b769"
+        },
+        {
+            "schema": "olm.bundle",
+            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:ea86b2d5414480f9907a7536e01f3a0f21445a43f93ec47e3378457b94e4b8ca"
+        },
+        {
+            "schema": "olm.bundle",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7"
+        }
+    ]
+}
