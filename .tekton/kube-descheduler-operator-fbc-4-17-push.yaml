@@ -8,14 +8,14 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "fbc-4.16" && ( "v4.16/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-16-push.yaml".pathChanged() || ".tekton/images-mirror-set.yaml".pathChanged()
+      == "fbc-4.17" && ( "v4.17/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-17-push.yaml".pathChanged() || ".tekton/images-mirror-set.yaml".pathChanged()
       )
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-16
-    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-16
+    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-17
+    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-17
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-fbc-4-16-on-push
+  name: kube-descheduler-operator-fbc-4-17-on-push
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -24,7 +24,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-16:{{revision}}
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-17:{{revision}}
   - name: build-platforms
     value:
     - linux/x86_64
@@ -34,7 +34,7 @@ spec:
   - name: dockerfile
     value: catalog.Dockerfile
   - name: path-context
-    value: v4.16
+    value: v4.17
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
@@ -413,7 +413,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-16
+    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-17
   workspaces:
   - name: git-auth
     secret:
