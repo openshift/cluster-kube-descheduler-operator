@@ -504,6 +504,10 @@
         },
         {
             "schema": "olm.bundle",
+            "image": "registry.redhat.io/openshift4/ose-cluster-kube-descheduler-operator-bundle@sha256:332c1a43503ad3ad9b3ee269df6a4b60d202cf1f7e5e83580ba86adbe4a2a5b4"
+        },
+        {
+            "schema": "olm.bundle",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:7673ba7d14a9e5e391032a480cb573c3d0d8dccc50d7e54d928cb616ac5d54b2"
         }
     ]
