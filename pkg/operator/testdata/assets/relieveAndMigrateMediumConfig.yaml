@@ -30,6 +30,7 @@ profiles:
   - args:
       evictLocalStoragePods: true
       noEvictionPolicy: Mandatory
+      podProtections: {}
     name: DefaultEvictor
   plugins:
     balance:

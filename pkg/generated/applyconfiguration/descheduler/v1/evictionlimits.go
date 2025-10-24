@@ -6,6 +6,7 @@ package v1
 // with apply.
 type EvictionLimitsApplyConfiguration struct {
 	Total *int32 `json:"total,omitempty"`
+	Node  *int32 `json:"node,omitempty"`
 }
 
 // EvictionLimitsApplyConfiguration constructs a declarative configuration of the EvictionLimits type for use with
@@ -19,5 +20,13 @@ func EvictionLimits() *EvictionLimitsApplyConfiguration {
 // If called multiple times, the Total field is set to the value of the last call.
 func (b *EvictionLimitsApplyConfiguration) WithTotal(value int32) *EvictionLimitsApplyConfiguration {
 	b.Total = &value
+	return b
+}
+
+// WithNode sets the Node field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Node field is set to the value of the last call.
+func (b *EvictionLimitsApplyConfiguration) WithNode(value int32) *EvictionLimitsApplyConfiguration {
+	b.Node = &value
 	return b
 }

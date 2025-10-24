@@ -18,6 +18,7 @@ profiles:
     name: HighNodeUtilization
   - args:
       ignorePvcPods: true
+      podProtections: {}
     name: DefaultEvictor
   plugins:
     balance:

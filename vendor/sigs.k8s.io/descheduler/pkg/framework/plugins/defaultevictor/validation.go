@@ -15,17 +15,18 @@ package defaultevictor
 
 import (
 	"fmt"
-
-	"k8s.io/klog/v2"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 )
 
 func ValidateDefaultEvictorArgs(obj runtime.Object) error {
 	args := obj.(*DefaultEvictorArgs)
-
+	var allErrs []error
 	if args.PriorityThreshold != nil && args.PriorityThreshold.Value != nil && len(args.PriorityThreshold.Name) > 0 {
-		return fmt.Errorf("priority threshold misconfigured, only one of priorityThreshold fields can be set")
+		allErrs = append(allErrs, fmt.Errorf("priority threshold misconfigured, only one of priorityThreshold fields can be set"))
 	}
 
 	if args.MinReplicas == 1 {
@@ -34,9 +35,55 @@ func ValidateDefaultEvictorArgs(obj runtime.Object) error {
 
 	if args.NoEvictionPolicy != "" {
 		if args.NoEvictionPolicy != PreferredNoEvictionPolicy && args.NoEvictionPolicy != MandatoryNoEvictionPolicy {
-			return fmt.Errorf("noEvictionPolicy accepts only %q values", []NoEvictionPolicy{PreferredNoEvictionPolicy, MandatoryNoEvictionPolicy})
+			allErrs = append(allErrs, fmt.Errorf("noEvictionPolicy accepts only %q values", []NoEvictionPolicy{PreferredNoEvictionPolicy, MandatoryNoEvictionPolicy}))
 		}
 	}
 
-	return nil
+	// check if any deprecated fields are set to true
+	hasDeprecatedFields := args.EvictLocalStoragePods || args.EvictDaemonSetPods ||
+		args.EvictSystemCriticalPods || args.IgnorePvcPods ||
+		args.EvictFailedBarePods || args.IgnorePodsWithoutPDB
+
+	// disallow mixing deprecated fields with PodProtections.ExtraEnabled and PodProtections.DefaultDisabled
+	if hasDeprecatedFields && (len(args.PodProtections.ExtraEnabled) > 0 || len(args.PodProtections.DefaultDisabled) > 0) {
+		allErrs = append(allErrs, fmt.Errorf("cannot use Deprecated fields alongside PodProtections.ExtraEnabled or PodProtections.DefaultDisabled"))
+	}
+
+	if len(args.PodProtections.ExtraEnabled) > 0 || len(args.PodProtections.DefaultDisabled) > 0 {
+
+		for _, policy := range args.PodProtections.ExtraEnabled {
+			if !slices.Contains(extraPodProtections, policy) {
+				allErrs = append(allErrs, fmt.Errorf("invalid pod protection policy in ExtraEnabled: %q. Valid options are: %v",
+					string(policy), extraPodProtections))
+			}
+		}
+
+		for _, policy := range args.PodProtections.DefaultDisabled {
+			if !slices.Contains(defaultPodProtections, policy) {
+				allErrs = append(allErrs, fmt.Errorf("invalid pod protection policy in DefaultDisabled: %q. Valid options are: %v",
+					string(policy), defaultPodProtections))
+			}
+		}
+
+		if hasDuplicates(args.PodProtections.DefaultDisabled) {
+			allErrs = append(allErrs, fmt.Errorf("PodProtections.DefaultDisabled contains duplicate entries"))
+		}
+
+		if hasDuplicates(args.PodProtections.ExtraEnabled) {
+			allErrs = append(allErrs, fmt.Errorf("PodProtections.ExtraEnabled contains duplicate entries"))
+		}
+	}
+
+	return utilerrors.NewAggregate(allErrs)
+}
+
+func hasDuplicates(slice []PodProtection) bool {
+	seen := make(map[PodProtection]struct{}, len(slice))
+	for _, item := range slice {
+		if _, exists := seen[item]; exists {
+			return true
+		}
+		seen[item] = struct{}{}
+	}
+	return false
 }

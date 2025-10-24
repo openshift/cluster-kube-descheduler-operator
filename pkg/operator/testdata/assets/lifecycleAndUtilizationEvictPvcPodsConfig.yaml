@@ -41,7 +41,8 @@ profiles:
         memory: 20
         pods: 20
     name: LowNodeUtilization
-  - args: {}
+  - args:
+      podProtections: {}
     name: DefaultEvictor
   plugins:
     balance:

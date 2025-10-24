@@ -1454,7 +1454,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "8876109bce3c5c9336bcde77e391abd07b117797b8646bd5d61322509f3df970"},
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "3410714199b93034a43b3103b92abcd75fc527463744386b7eff0809471bf81f"},
 			Labels:          map[string]string{"app": "softtainer"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler"}},
 		},

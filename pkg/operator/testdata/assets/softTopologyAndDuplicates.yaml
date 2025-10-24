@@ -26,6 +26,7 @@ profiles:
     name: RemoveDuplicates
   - args:
       ignorePvcPods: true
+      podProtections: {}
     name: DefaultEvictor
   plugins:
     balance:
