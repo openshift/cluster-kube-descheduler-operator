@@ -22,6 +22,7 @@ profiles:
     name: RemovePodsViolatingNodeAffinity
   - args:
       ignorePvcPods: true
+      podProtections: {}
     name: DefaultEvictor
   plugins:
     balance:
