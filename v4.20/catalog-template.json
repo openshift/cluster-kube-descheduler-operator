@@ -202,9 +202,10 @@
         {
             "schema": "olm.bundle",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:020eeb41c7c24c3caf77a3a3f6f598076d5e22bf793b85d3c3e89eb705896c0e"
-        },{
+        },
+        {
             "schema": "olm.bundle",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:1070447ed16b93557ba713a1af03f365df418a8e117c26585468bec81cd70946"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:d6566b37989b6c5d45ce948e6f0165aecf37e3bd324c1c3623c98c4d757a749c"
         }
     ]
 }
