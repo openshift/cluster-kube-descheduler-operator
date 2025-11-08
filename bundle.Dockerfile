@@ -14,7 +14,7 @@ ARG OPERATOR_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/kube-desch
 #
 #
 #
-ARG OPERAND_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:e48b2f8d8d3765e0058558d72bd20a1c9760b2824b2608e17d6c56d7ab8837a7
+ARG OPERAND_IMAGE=registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:7822ba06c53cb107d9ff81667cfa855f2a944834f70241080b0b3820bcee15ac
 ARG REPLACED_OPERATOR_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
 ARG REPLACED_OPERAND_IMG=registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
 
