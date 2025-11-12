@@ -186,6 +186,8 @@ const (
 	PrometheusIOPSIPressureProfile ActualUtilizationProfile = "PrometheusIOPSIPressure"
 	// PrometheusCPUCombinedProfile uses a combination of CPU utilization and CPU pressure based on a recording rule
 	PrometheusCPUCombinedProfile ActualUtilizationProfile = "PrometheusCPUCombined"
+	// PrometheusCPUMemoryCombinedProfile uses a multidimensional combination of CPU (utilization and pressure) and memory (utilization and pressure) based on a recording rule
+	PrometheusCPUMemoryCombinedProfile ActualUtilizationProfile = "PrometheusCPUMemoryCombinedProfile"
 )
 
 // Namespaces overrides included and excluded namespaces while keeping

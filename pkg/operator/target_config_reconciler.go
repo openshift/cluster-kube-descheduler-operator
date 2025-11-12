@@ -837,6 +837,8 @@ func utilizationProfileToPrometheusQuery(profile deschedulerv1.ActualUtilization
 		return "rate(node_pressure_io_waiting_seconds_total[1m])", nil
 	case deschedulerv1.PrometheusCPUCombinedProfile:
 		return "descheduler:combined_utilization_and_pressure:avg1m", nil
+	case deschedulerv1.PrometheusCPUMemoryCombinedProfile:
+		return "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m", nil
 	default:
 		if !strings.HasPrefix(string(profile), "query:") {
 			return "", fmt.Errorf("unknown prometheus profile: %v", profile)
@@ -1092,7 +1094,7 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 	args := profile.PluginConfigs[0].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
 
 	// profile defaults
-	const defaultActualUtilizationProfile = deschedulerv1.PrometheusCPUCombinedProfile
+	const defaultActualUtilizationProfile = deschedulerv1.PrometheusCPUMemoryCombinedProfile
 	args.UseDeviationThresholds = true
 	query, err := utilizationProfileToPrometheusQuery(defaultActualUtilizationProfile)
 	if err != nil {

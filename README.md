@@ -210,7 +210,7 @@ The profile exposes the following customization:
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
 - `devDeviationThresholds`: Have the thresholds be based on the average utilization.
 
-By default, this profile will enable load-aware descheduling based on the `PrometheusCPUCombined` Prometheus query.
+By default, this profile will enable load-aware descheduling based on the `PrometheusCPUMemoryCombinedProfile` Prometheus query. That query is based on a recording rule combining the impact of CPU and memory utilization and PSI pressure.
 By default, the thresholds will be dynamic (based on the distance from the average utilization) and asymmetric (all the nodes below the average will be considered as underutilized to help rebalancing overutilized outliers) tolerating low deviations (10%).
 
 By default, this profile configures the descheduler to restrict the maximum number of overall parallel evictions to 5 and
@@ -255,6 +255,7 @@ The operator provides the following profiles:
 - `PrometheusMemoryPSIPressure`: `rate(node_pressure_memory_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 - `PrometheusIOPSIPressure`: `rate(node_pressure_io_waiting_seconds_total[1m])` (`node_pressure_memory_waiting_seconds_total` is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 - `PrometheusCPUCombined`: `descheduler:combined_utilization_and_pressure:avg1m` (`descheduler:combined_utilization_and_pressure:avg1m` uses a combination of CPU utilization and CPU PSI pressure based on a recording rule; CPU PSI pressure is reported in OpenShift only for nodes configured with psi=1 kernel argument)
+- `PrometheusCPUMemoryCombinedProfile`: `descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m` (`descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m` uses a multidimensional combination of CPU (utilization and pressure) and memory (utilization and pressure) based on a recording rule; PSI pressure is reported in OpenShift only for nodes configured with psi=1 kernel argument)
 
 ```yaml
 apiVersion: operator.openshift.io/v1
@@ -266,9 +267,9 @@ spec:
   managementState: Managed
   deschedulingIntervalSeconds: 3600
   profiles:
-  - LongLifecycle
+  - KubeVirtRelieveAndMigrate
   profileCustomizations:
-    devActualUtilizationProfile: PrometheusCPUUsage
+    devActualUtilizationProfile: PrometheusCPUMemoryCombinedProfile
 ```
 
 ## Descheduling modes
