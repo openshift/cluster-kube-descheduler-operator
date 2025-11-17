@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/util/taints"
 
@@ -189,8 +190,13 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 	st.resourceNames = getResourceNames(st.args.thresholds)
 
 	err = st.syncSoftTaints(ctx, nodeList)
+	// In case of errors, the exponential backoff mechanism of controller-runtime can easily
+	// exceed the configured tick time.
+	// Never return an error here to honor the fixed tick cadence:
+	// the next execution will still try to process all the nodes
+	// according to fresh data.
 	if err != nil {
-		return reconcile.Result{}, err
+		logger.Error(err, "reconciliation failed")
 	}
 	return reconcile.Result{RequeueAfter: st.resyncPeriod}, nil
 }
@@ -328,18 +334,20 @@ func (st *softTainter) syncSoftTaints(ctx context.Context, nodes []*corev1.Node)
 }
 
 func (st *softTainter) cleanAllSoftTaints(ctx context.Context, nodes []*corev1.Node) error {
+	var errs []error
+
 	for _, node := range nodes {
 		for k, v := range map[string]string{
 			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
 			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
 		} {
-			err := st.dropTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+			if err := st.dropTaint(ctx, node, k, v); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
-	return nil
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func (st *softTainter) reconcileInClusterSAToken() error {
@@ -404,15 +412,16 @@ func (st *softTainter) reconcileSecretToken(ctx context.Context, authToken *api.
 
 func (st *softTainter) taintNodes(ctx context.Context, lowNodes, apprNodes, highNodes []*corev1.Node) error {
 	log.Info("reconciling soft taints on nodes")
+	var errs []error
+
 	for _, node := range lowNodes {
 		log.Info("reconciling soft taints on nodes - low", "node", node.Name)
 		for k, v := range map[string]string{
 			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
 			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
 		} {
-			err := st.dropTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+			if err := st.dropTaint(ctx, node, k, v); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
@@ -421,17 +430,15 @@ func (st *softTainter) taintNodes(ctx context.Context, lowNodes, apprNodes, high
 		for k, v := range map[string]string{
 			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
 		} {
-			err := st.addTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+			if err := st.addTaint(ctx, node, k, v); err != nil {
+				errs = append(errs, err)
 			}
 		}
 		for k, v := range map[string]string{
 			OverUtilizedSoftTaintKey: OverUtilizedSoftTaintValue,
 		} {
-			err := st.dropTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+			if err := st.dropTaint(ctx, node, k, v); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
@@ -441,13 +448,13 @@ func (st *softTainter) taintNodes(ctx context.Context, lowNodes, apprNodes, high
 			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
 			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
 		} {
-			err := st.addTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+			if err := st.addTaint(ctx, node, k, v); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
-	return nil
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func (st *softTainter) addTaint(ctx context.Context, node *corev1.Node, k, v string) error {
