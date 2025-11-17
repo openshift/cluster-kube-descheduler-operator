@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
@@ -334,18 +336,39 @@ func (st *softTainter) syncSoftTaints(ctx context.Context, nodes []*corev1.Node)
 }
 
 func (st *softTainter) cleanAllSoftTaints(ctx context.Context, nodes []*corev1.Node) error {
+	log.Info("cleaning all soft taints on nodes")
+
+	// Limit concurrent API calls to avoid overwhelming the API server
+	// 20 is a reasonable default for most clusters
+	var g errgroup.Group
+	g.SetLimit(20)
+
+	var mu sync.Mutex
 	var errs []error
 
-	for _, node := range nodes {
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
-		} {
-			if err := st.dropTaint(ctx, node, k, v); err != nil {
-				errs = append(errs, err)
-			}
+	collectErr := func(err error) {
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
 		}
 	}
+
+	for _, node := range nodes {
+		node := node
+		g.Go(func() error {
+			log.Info("cleaning soft taints on node", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+				OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.dropTaint(ctx, node, k, v))
+			}
+			return nil // to avoid cancelling the execution on errors
+		})
+	}
+
+	_ = g.Wait() // Ignore error since we're aggregating errors in errs
 
 	return utilerrors.NewAggregate(errs)
 }
@@ -412,47 +435,70 @@ func (st *softTainter) reconcileSecretToken(ctx context.Context, authToken *api.
 
 func (st *softTainter) taintNodes(ctx context.Context, lowNodes, apprNodes, highNodes []*corev1.Node) error {
 	log.Info("reconciling soft taints on nodes")
+
+	// Limit concurrent API calls to avoid overwhelming the API server
+	// 20 is a reasonable default for most clusters
+	var g errgroup.Group
+	g.SetLimit(20)
+
+	var mu sync.Mutex
 	var errs []error
 
+	collectErr := func(err error) {
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
+		}
+	}
+
 	for _, node := range lowNodes {
-		log.Info("reconciling soft taints on nodes - low", "node", node.Name)
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
-		} {
-			if err := st.dropTaint(ctx, node, k, v); err != nil {
-				errs = append(errs, err)
+		node := node
+		g.Go(func() error {
+			log.Info("reconciling soft taints on nodes - low", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+				OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.dropTaint(ctx, node, k, v))
 			}
-		}
+			return nil // to avoid cancelling the execution on errors
+		})
 	}
+
 	for _, node := range apprNodes {
-		log.Info("reconciling soft taints on nodes - appr", "node", node.Name)
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-		} {
-			if err := st.addTaint(ctx, node, k, v); err != nil {
-				errs = append(errs, err)
+		node := node
+		g.Go(func() error {
+			log.Info("reconciling soft taints on nodes - appr", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+			} {
+				collectErr(st.addTaint(ctx, node, k, v))
 			}
-		}
-		for k, v := range map[string]string{
-			OverUtilizedSoftTaintKey: OverUtilizedSoftTaintValue,
-		} {
-			if err := st.dropTaint(ctx, node, k, v); err != nil {
-				errs = append(errs, err)
+			for k, v := range map[string]string{
+				OverUtilizedSoftTaintKey: OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.dropTaint(ctx, node, k, v))
 			}
-		}
+			return nil // to avoid cancelling the execution on errors
+		})
 	}
+
 	for _, node := range highNodes {
-		log.Info("reconciling soft taints on nodes - high", "node", node.Name)
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
-		} {
-			if err := st.addTaint(ctx, node, k, v); err != nil {
-				errs = append(errs, err)
+		node := node // capture loop variable
+		g.Go(func() error {
+			log.Info("reconciling soft taints on nodes - high", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+				OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.addTaint(ctx, node, k, v))
 			}
-		}
+			return nil // to avoid cancelling the execution on errors
+		})
 	}
+
+	_ = g.Wait() // Ignore error since we're aggregating errors in errs
 
 	return utilerrors.NewAggregate(errs)
 }
