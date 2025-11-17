@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -490,14 +491,21 @@ func buildTestNodeWithTaints(nodeName string, kubevirtShedulable, appropriatelyU
 
 type mockClientWithPatchConflicts struct {
 	client.Client
+	mu            sync.Mutex
 	conflictNodes map[string]bool
 	patchAttempts map[string]int
 }
 
 func (m *mockClientWithPatchConflicts) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	if node, ok := obj.(*corev1.Node); ok {
-		if m.conflictNodes[node.Name] {
+		m.mu.Lock()
+		shouldConflict := m.conflictNodes[node.Name]
+		if shouldConflict {
 			m.patchAttempts[node.Name]++
+		}
+		m.mu.Unlock()
+
+		if shouldConflict {
 			return apierrors.NewConflict(
 				schema.GroupResource{Group: "", Resource: "nodes"},
 				node.Name,
