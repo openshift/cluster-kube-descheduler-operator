@@ -2,9 +2,11 @@ package softtainter
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,10 +14,12 @@ import (
 	promapi "github.com/prometheus/client_golang/api"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/pointer"
 
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
@@ -483,4 +487,174 @@ func buildTestNodeWithTaints(nodeName string, kubevirtShedulable, appropriatelyU
 		node.SetLabels(map[string]string{"kubevirt.io/schedulable": "true"})
 	}
 	return node
+}
+
+type mockClientWithPatchConflicts struct {
+	client.Client
+	mu            sync.Mutex
+	conflictNodes map[string]bool
+	patchAttempts map[string]int
+}
+
+func (m *mockClientWithPatchConflicts) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	if node, ok := obj.(*corev1.Node); ok {
+		m.mu.Lock()
+		shouldConflict := m.conflictNodes[node.Name]
+		if shouldConflict {
+			m.patchAttempts[node.Name]++
+		}
+		m.mu.Unlock()
+
+		if shouldConflict {
+			return apierrors.NewConflict(
+				schema.GroupResource{Group: "", Resource: "nodes"},
+				node.Name,
+				fmt.Errorf("the object has been modified; please apply your changes to the latest version and try again"),
+			)
+		}
+	}
+	return m.Client.Patch(ctx, obj, patch, opts...)
+}
+
+func TestTaintNodesErrorAggregation(t *testing.T) {
+	ctx := context.Background()
+
+	resourcesSchemeFuncs := []func(*apiruntime.Scheme) error{
+		corev1.AddToScheme,
+	}
+
+	scheme := runtime.NewScheme()
+	for _, f := range resourcesSchemeFuncs {
+		err := f(scheme)
+		if err != nil {
+			t.Fatalf("Failed building scheme for the fake client: %v", err)
+		}
+	}
+
+	tests := []struct {
+		name          string
+		lowNodes      []*corev1.Node
+		apprNodes     []*corev1.Node
+		highNodes     []*corev1.Node
+		conflictNodes map[string]bool
+		expectError   bool
+	}{
+		{
+			name: "all nodes succeed - no errors",
+			lowNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, true, true, false),
+			},
+			apprNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node2", true, false, false, false),
+			},
+			highNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node3", true, false, false, false),
+			},
+			conflictNodes: map[string]bool{},
+			expectError:   false,
+		},
+		{
+			name: "one node patch conflict - continues processing other nodes",
+			lowNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, true, true, false),
+			},
+			apprNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node2", true, false, false, false),
+			},
+			highNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node3", true, false, false, false),
+			},
+			conflictNodes: map[string]bool{"node2": true},
+			expectError:   true,
+		},
+		{
+			name: "multiple nodes patch conflicts - aggregates all errors",
+			lowNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, true, true, false),
+				buildTestNodeWithTaints("node2", true, false, true, false),
+			},
+			apprNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node3", true, false, false, false),
+			},
+			highNodes: []*corev1.Node{
+				buildTestNodeWithTaints("node4", true, false, false, false),
+				buildTestNodeWithTaints("node5", true, false, false, false),
+			},
+			conflictNodes: map[string]bool{"node1": true, "node4": true},
+			expectError:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			objects := []client.Object{}
+			for _, node := range tc.lowNodes {
+				objects = append(objects, node)
+			}
+			for _, node := range tc.apprNodes {
+				objects = append(objects, node)
+			}
+			for _, node := range tc.highNodes {
+				objects = append(objects, node)
+			}
+
+			baseClient := fake.NewClientBuilder().WithObjects(objects...).WithScheme(scheme).Build()
+			cl := &mockClientWithPatchConflicts{
+				Client:        baseClient,
+				conflictNodes: tc.conflictNodes,
+				patchAttempts: make(map[string]int),
+			}
+
+			st := softTainter{
+				client: cl,
+			}
+
+			err := st.taintNodes(ctx, tc.lowNodes, tc.apprNodes, tc.highNodes)
+
+			if tc.expectError && err == nil {
+				t.Errorf("Expected error but got none")
+			}
+			if !tc.expectError && err != nil {
+				t.Errorf("Expected no error but got: %v", err)
+			}
+
+			// Verify that taintNodes continued processing despite conflicts
+			for nodeName := range tc.conflictNodes {
+				if cl.patchAttempts[nodeName] == 0 {
+					t.Errorf("Expected patch attempt for conflicting node %s", nodeName)
+				}
+			}
+
+			// Verify successful nodes were processed
+			for _, node := range tc.lowNodes {
+				if !tc.conflictNodes[node.Name] {
+					n := &corev1.Node{}
+					err := baseClient.Get(ctx, client.ObjectKey{Name: node.Name}, n)
+					if err != nil {
+						t.Errorf("Failed to get node %s: %v", node.Name, err)
+					}
+				}
+			}
+
+			for _, node := range tc.apprNodes {
+				if !tc.conflictNodes[node.Name] {
+					n := &corev1.Node{}
+					err := baseClient.Get(ctx, client.ObjectKey{Name: node.Name}, n)
+					if err != nil {
+						t.Errorf("Failed to get node %s: %v", node.Name, err)
+					}
+				}
+			}
+
+			for _, node := range tc.highNodes {
+				if !tc.conflictNodes[node.Name] {
+					n := &corev1.Node{}
+					err := baseClient.Get(ctx, client.ObjectKey{Name: node.Name}, n)
+					if err != nil {
+						t.Errorf("Failed to get node %s: %v", node.Name, err)
+					}
+				}
+			}
+		})
+	}
 }
