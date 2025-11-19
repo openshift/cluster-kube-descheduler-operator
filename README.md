@@ -17,3 +17,9 @@ $ cd v4.13
 $ export REGISTRY_AUTH_FILE=...
 $ opm alpha render-template basic catalog-template.json > catalog/cluster-kube-descheduler-operator/catalog.json
 ```
+
+## Releases
+
+| kdo version | bundle image                                                     |
+| ----------- | ---------------------------------------------------------------- |
+| 4.13.1      | 7673ba7d14a9e5e391032a480cb573c3d0d8dccc50d7e54d928cb616ac5d54b2 |
