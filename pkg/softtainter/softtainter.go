@@ -5,13 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/util/taints"
 
 	desv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
@@ -328,18 +333,41 @@ func (st *softTainter) syncSoftTaints(ctx context.Context, nodes []*corev1.Node)
 }
 
 func (st *softTainter) cleanAllSoftTaints(ctx context.Context, nodes []*corev1.Node) error {
-	for _, node := range nodes {
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
-		} {
-			err := st.dropTaint(ctx, node, k, v)
-			if err != nil {
-				return err
-			}
+	log.Info("cleaning all soft taints on nodes")
+
+	// Limit concurrent API calls to avoid overwhelming the API server
+	// 20 is a reasonable default for most clusters
+	var g errgroup.Group
+	g.SetLimit(20)
+
+	var mu sync.Mutex
+	var errs []error
+
+	collectErr := func(err error) {
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
 		}
 	}
-	return nil
+
+	for _, node := range nodes {
+		node := node
+		g.Go(func() error {
+			log.Info("cleaning soft taints on node", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+				OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.dropTaint(ctx, node, k, v))
+			}
+			return nil // to avoid cancelling the execution on errors
+		})
+	}
+
+	_ = g.Wait() // Ignore error since we're aggregating errors in errs
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func (st *softTainter) reconcileInClusterSAToken() error {
@@ -404,50 +432,72 @@ func (st *softTainter) reconcileSecretToken(ctx context.Context, authToken *api.
 
 func (st *softTainter) taintNodes(ctx context.Context, lowNodes, apprNodes, highNodes []*corev1.Node) error {
 	log.Info("reconciling soft taints on nodes")
+
+	// Limit concurrent API calls to avoid overwhelming the API server
+	// 20 is a reasonable default for most clusters
+	var g errgroup.Group
+	g.SetLimit(20)
+
+	var mu sync.Mutex
+	var errs []error
+
+	collectErr := func(err error) {
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
+		}
+	}
+
 	for _, node := range lowNodes {
-		log.Info("reconciling soft taints on nodes - low", "node", node.Name)
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
-		} {
-			err := st.dropTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+		node := node
+		g.Go(func() error {
+			log.Info("reconciling soft taints on nodes - low", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+				OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.dropTaint(ctx, node, k, v))
 			}
-		}
+			return nil // to avoid cancelling the execution on errors
+		})
 	}
+
 	for _, node := range apprNodes {
-		log.Info("reconciling soft taints on nodes - appr", "node", node.Name)
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-		} {
-			err := st.addTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+		node := node
+		g.Go(func() error {
+			log.Info("reconciling soft taints on nodes - appr", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+			} {
+				collectErr(st.addTaint(ctx, node, k, v))
 			}
-		}
-		for k, v := range map[string]string{
-			OverUtilizedSoftTaintKey: OverUtilizedSoftTaintValue,
-		} {
-			err := st.dropTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+			for k, v := range map[string]string{
+				OverUtilizedSoftTaintKey: OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.dropTaint(ctx, node, k, v))
 			}
-		}
+			return nil // to avoid cancelling the execution on errors
+		})
 	}
+
 	for _, node := range highNodes {
-		log.Info("reconciling soft taints on nodes - high", "node", node.Name)
-		for k, v := range map[string]string{
-			AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
-			OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
-		} {
-			err := st.addTaint(ctx, node, k, v)
-			if err != nil {
-				return err
+		node := node // capture loop variable
+		g.Go(func() error {
+			log.Info("reconciling soft taints on nodes - high", "node", node.Name)
+			for k, v := range map[string]string{
+				AppropriatelyUtilizedSoftTaintKey: AppropriatelyUtilizedSoftTaintValue,
+				OverUtilizedSoftTaintKey:          OverUtilizedSoftTaintValue,
+			} {
+				collectErr(st.addTaint(ctx, node, k, v))
 			}
-		}
+			return nil // to avoid cancelling the execution on errors
+		})
 	}
-	return nil
+
+	_ = g.Wait() // Ignore error since we're aggregating errors in errs
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func (st *softTainter) addTaint(ctx context.Context, node *corev1.Node, k, v string) error {
@@ -496,17 +546,43 @@ func newNodeUtilizationFactory(promClient promapi.Client, promQuery string) Node
 	return &actualNodeUtilization{promClient: promClient, promQuery: promQuery}
 }
 
+// TickLimitedControllerRateLimiter is a no-arg constructor for a rate limiter for a workqueue.  It has
+// both overall and per-item rate limiting.  The overall is a token bucket and the per-item is exponential
+// up to tickLimit instead of the default value of 1000 seconds
+func TickLimitedControllerRateLimiter[T comparable](tickLimit time.Duration) workqueue.TypedRateLimiter[T] {
+	return workqueue.NewTypedMaxOfRateLimiter(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[T](5*time.Millisecond, tickLimit),
+		// 10 qps, 100 bucket size.  This is only for retry speed, and it's only the overall factor (not per item)
+		&workqueue.TypedBucketRateLimiter[T]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
+}
+
 // RegisterReconciler creates a new Reconciler and registers it into manager.
 func RegisterReconciler(mgr manager.Manager, policyConfigFile string) error {
+	des := desv1.KubeDescheduler{}
+	err := mgr.GetAPIReader().Get(context.Background(), client.ObjectKey{
+		Namespace: operatorclient.OperatorNamespace,
+		Name:      operatorclient.OperatorConfigName,
+	}, &des)
+	if err != nil {
+		log.Error(err, "failed reading descheduler operator CR")
+		return err
+	}
+
+	if des.Spec.DeschedulingIntervalSeconds == nil || *des.Spec.DeschedulingIntervalSeconds <= 0 {
+		return fmt.Errorf("descheduler should have an interval set and it should be greater than 0")
+	}
+	resyncPeriod := time.Duration(*des.Spec.DeschedulingIntervalSeconds) * time.Second
 
 	// Create a new controller
 	c, err := controller.New(
 		"nodeclassification-controller",
 		mgr,
 		controller.Options{
+			RateLimiter: TickLimitedControllerRateLimiter[reconcile.Request](resyncPeriod),
 			Reconciler: &softTainter{
 				client:                 mgr.GetClient(),
-				resyncPeriod:           60 * time.Second,
+				resyncPeriod:           resyncPeriod,
 				policyConfigFile:       policyConfigFile,
 				nodeUtilizationFactory: newNodeUtilizationFactory,
 			},

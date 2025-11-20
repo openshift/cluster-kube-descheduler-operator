@@ -14,7 +14,10 @@ import (
 // AddOrUpdateSoftTaint add a soft taint to the node. If taint was added/updated into node, it'll trigger a patch operation
 // to update the node; otherwise, no API calls. Return error if any.
 func AddOrUpdateSoftTaint(ctx context.Context, c client.Client, node *v1.Node, taintKey, taintValue string) (bool, error) {
-	newNode := node.DeepCopy()
+	newNode := &v1.Node{}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(node), newNode); err != nil {
+		return false, err
+	}
 	nodeTaints := newNode.Spec.Taints
 
 	var newTaints []v1.Taint
@@ -52,7 +55,10 @@ func AddOrUpdateSoftTaint(ctx context.Context, c client.Client, node *v1.Node, t
 // RemoveSoftTaint delete a soft taint from the node. If taint was found on the node, it'll trigger a patch operation
 // to update the node; otherwise, no API calls. Return error if any.
 func RemoveSoftTaint(ctx context.Context, c client.Client, node *v1.Node, taintKey string) (bool, error) {
-	newNode := node.DeepCopy()
+	newNode := &v1.Node{}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(node), newNode); err != nil {
+		return false, err
+	}
 	nodeTaints := newNode.Spec.Taints
 	var newTaints []v1.Taint
 	found := false
