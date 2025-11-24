@@ -27,7 +27,7 @@ spec:
             name: "descheduler"
         - name: certs-dir
           secret:
-            secretName: kube-descheduler-serving-cert
+            secretName: softtainter-serving-cert
       priorityClassName: "system-cluster-critical"
       restartPolicy: "Always"
       containers:
@@ -38,6 +38,10 @@ spec:
             capabilities:
               drop: ["ALL"]
           image: ${SOFTTAINTER_IMAGE}
+          ports:
+            - name: metrics
+              containerPort: 8443
+              protocol: TCP
           livenessProbe:
             failureThreshold: 1
             httpGet:

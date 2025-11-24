@@ -201,6 +201,12 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 }
 
 func (st *softTainter) syncSoftTaints(ctx context.Context, nodes []*corev1.Node) error {
+	// Reset metrics at the start of each reconciliation
+	resetMetrics()
+
+	// Record threshold mode
+	recordThresholdMode(st.args.useDeviationThresholds)
+
 	nodesMap := make(map[string]*corev1.Node, len(nodes))
 
 	nu := st.nodeUtilizationFactory(st.promClient, st.promQuery)
@@ -321,6 +327,33 @@ func (st *softTainter) syncSoftTaints(ctx context.Context, nodes []*corev1.Node)
 	log.Info("Number of under utilized nodes", "totalNumber", len(lowNodes))
 	log.Info("Number of appropriately utilized nodes", "totalNumber", len(apprNodes))
 	log.Info("Number of over utilized nodes", "totalNumber", len(highNodes))
+
+	// Record metrics for all nodes
+	for nodeName, nodeUsage := range usage {
+		// Determine classification
+		classification := ClassificationAppropriatelyUtilized
+		for _, node := range lowNodes {
+			if node.Name == nodeName {
+				classification = ClassificationUnderUtilized
+				break
+			}
+		}
+		for _, node := range highNodes {
+			if node.Name == nodeName {
+				classification = ClassificationOverUtilized
+				break
+			}
+		}
+
+		// Get thresholds for this node
+		var lowThreshold, highThreshold api.ResourceThresholds
+		if nodeThresholdsPair, ok := thresholds[nodeName]; ok && len(nodeThresholdsPair) >= 2 {
+			lowThreshold = nodeThresholdsPair[0]
+			highThreshold = nodeThresholdsPair[1]
+		}
+
+		recordNodeMetrics(nodeName, classification, nodeUsage, lowThreshold, highThreshold)
+	}
 
 	if st.args.mode == desv1.Automatic {
 		err := st.taintNodes(ctx, lowNodes, apprNodes, highNodes)

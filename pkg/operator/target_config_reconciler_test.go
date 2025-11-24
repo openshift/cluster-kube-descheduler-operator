@@ -1454,7 +1454,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "3410714199b93034a43b3103b92abcd75fc527463744386b7eff0809471bf81f"},
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "4b1e0da2bfcae39b8ee9ca0c8bd4dc89f06cfb743633b7be8b18f98cc985ac7a"},
 			Labels:          map[string]string{"app": "softtainer"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler"}},
 		},
@@ -1480,6 +1480,13 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 								"-v=2",
 							},
 							Image: "RELATED_IMAGE_SOFTTAINTER_IMAGE",
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "metrics",
+									ContainerPort: 8443,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(6060), Scheme: corev1.URISchemeHTTP}},
 								InitialDelaySeconds: 30,
@@ -1531,7 +1538,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 						},
 						{
 							Name:         "certs-dir",
-							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "kube-descheduler-serving-cert"}},
+							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "softtainter-serving-cert"}},
 						},
 					},
 				},
@@ -1991,5 +1998,133 @@ func (f *fakeRecorder) Shutdown() {
 func NewFakeRecorder(bufferSize int) *fakeRecorder {
 	return &fakeRecorder{
 		Events: make(chan string, bufferSize),
+	}
+}
+
+func TestManageSoftTainterService(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	defer cancelFunc()
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		TypeMeta: metav1.TypeMeta{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+		Spec: deschedulerv1.KubeDeschedulerSpec{
+			Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		enabled     bool
+		wantService bool
+		wantDeleted bool
+	}{
+		{
+			name:        "Service created when softtainter enabled",
+			enabled:     true,
+			wantService: true,
+			wantDeleted: false,
+		},
+		{
+			name:        "Service deleted when softtainter disabled",
+			enabled:     false,
+			wantService: false,
+			wantDeleted: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, nil, nil, nil, nil)
+
+			service, _, err := targetConfigReconciler.manageSoftTainterService(descheduler, tt.enabled)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if tt.wantService {
+				if service == nil {
+					t.Fatal("Expected service to be created, got nil")
+				}
+				if service.Name != "softtainter-metrics" {
+					t.Errorf("Expected service name 'softtainter-metrics', got %q", service.Name)
+				}
+				if service.Namespace != operatorclient.OperatorNamespace {
+					t.Errorf("Expected namespace %q, got %q", operatorclient.OperatorNamespace, service.Namespace)
+				}
+				if len(service.Spec.Ports) != 1 {
+					t.Errorf("Expected 1 port, got %d", len(service.Spec.Ports))
+				} else {
+					port := service.Spec.Ports[0]
+					if port.Name != "https" {
+						t.Errorf("Expected port name 'https', got %q", port.Name)
+					}
+					if port.Port != 8443 {
+						t.Errorf("Expected port 8443, got %d", port.Port)
+					}
+				}
+				if service.Annotations["service.beta.openshift.io/serving-cert-secret-name"] != "softtainter-serving-cert" {
+					t.Errorf("Expected serving cert annotation, got %q", service.Annotations["service.beta.openshift.io/serving-cert-secret-name"])
+				}
+				if len(service.OwnerReferences) != 1 {
+					t.Fatalf("Expected 1 owner reference, got %d", len(service.OwnerReferences))
+				}
+				ownerRef := service.OwnerReferences[0]
+				if ownerRef.Kind != "KubeDescheduler" || ownerRef.Name != descheduler.Name {
+					t.Errorf("Expected owner reference to KubeDescheduler/%s, got %s/%s", descheduler.Name, ownerRef.Kind, ownerRef.Name)
+				}
+			} else if tt.wantDeleted {
+				if service != nil {
+					t.Errorf("Expected service to be nil when deleted, got %v", service)
+				}
+			}
+		})
+	}
+}
+
+func TestManageSoftTainterServiceMonitor(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	defer cancelFunc()
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		TypeMeta: metav1.TypeMeta{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+		Spec: deschedulerv1.KubeDeschedulerSpec{
+			Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{
+			name:    "ServiceMonitor created when softtainter enabled",
+			enabled: true,
+		},
+		{
+			name:    "ServiceMonitor deleted when softtainter disabled",
+			enabled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, nil, nil, nil, nil)
+
+			_, err := targetConfigReconciler.manageSoftTainterServiceMonitor(descheduler, tt.enabled)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+		})
 	}
 }

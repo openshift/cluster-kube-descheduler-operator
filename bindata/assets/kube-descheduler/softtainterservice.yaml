@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    service.beta.openshift.io/serving-cert-secret-name: softtainter-serving-cert
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+  labels:
+    app: softtainer
+  name: softtainter-metrics
+  namespace: openshift-kube-descheduler-operator
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: softtainer
+  sessionAffinity: None
+  type: ClusterIP

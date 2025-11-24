@@ -339,6 +339,20 @@ func (c TargetConfigReconciler) sync() error {
 		specAnnotations["prometheusrule/descheduler-psi-alert"] = resourceVersion
 	}
 
+	if stService, _, err := c.manageSoftTainterService(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stService != nil {
+			resourceVersion = stService.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["services/softtainter-metrics"] = resourceVersion
+	}
+
+	if _, err := c.manageSoftTainterServiceMonitor(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	}
+
 	if role, _, err := c.manageRole(descheduler); err != nil {
 		return err
 	} else {
@@ -651,6 +665,33 @@ func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDe
 func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
 	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/servicemonitor.yaml"))
 	_, changed, err := resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+	return changed, err
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterService(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*v1.Service, bool, error) {
+	required := resourceread.ReadServiceV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterservice.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	if stEnabled {
+		return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterServiceMonitor(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (bool, error) {
+	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/softtainterservicemonitor.yaml"))
+	if stEnabled {
+		_, changed, err := resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+		return changed, err
+	}
+	_, changed, err := resourceapply.DeleteKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
 	return changed, err
 }
 

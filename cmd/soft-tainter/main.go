@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	goflag "flag"
 	flag "github.com/spf13/pflag"
@@ -44,6 +45,9 @@ var (
 const (
 	HealthProbeHost             = "0.0.0.0"
 	HealthProbePort       int32 = 6060
+	MetricsHost                 = "0.0.0.0"
+	MetricsPort           int32 = 8443
+	CertsDir                    = "/certs-dir"
 	readinessEndpointName       = "/readyz"
 	livenessEndpointName        = "/livez"
 )
@@ -77,6 +81,13 @@ func getManagerOptions(operatorNamespace string, needLeaderElection bool, scheme
 		LeaderElectionNamespace:    operatorNamespace,
 		Cache:                      getCacheOption(operatorNamespace),
 		Scheme:                     scheme,
+		Metrics: metricsserver.Options{
+			BindAddress:   fmt.Sprintf("%s:%d", MetricsHost, MetricsPort),
+			SecureServing: true,
+			CertDir:       CertsDir,
+			CertName:      "tls.crt",
+			KeyName:       "tls.key",
+		},
 	}
 }
 
