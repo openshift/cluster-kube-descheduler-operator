@@ -54,6 +54,7 @@ LABEL io.openshift.tags="openshift,kube-descheduler-operator"
 LABEL com.redhat.delivery.operator.bundle=true
 LABEL com.redhat.openshift.versions="v4.12"
 LABEL com.redhat.delivery.appregistry=true
+LABEL distribution-scope=public
 LABEL maintainer="AOS workloads team, <aos-workloads-staff@redhat.com>"
 
 USER 1001
