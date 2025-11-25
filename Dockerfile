@@ -18,6 +18,7 @@ LABEL io.k8s.display-name="Kube Descheduler Operator based on RHEL 9" \
       io.openshift.expose-services="" \
       io.openshift.tags="openshift,kube-descheduler-operator" \
       description="kube-descheduler-operator-container" \
+      distribution-scope=public \
       maintainer="AOS workloads team, <aos-workloads@redhat.com>"
 
 USER nobody
