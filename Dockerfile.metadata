@@ -11,4 +11,5 @@ LABEL io.k8s.display-name="OpenShift Kube Descheduler Operator metadata" \
       io.k8s.description="This is a component of OpenShift and manages the kube descheduler metadata" \
       io.openshift.tags="openshift,cluster-kube-descheduler-operator,metadata" \
       com.redhat.delivery.appregistry=true \
+      distribution-scope=public \
       maintainer="AOS workloads team, <aos-workloads@redhat.com>"
