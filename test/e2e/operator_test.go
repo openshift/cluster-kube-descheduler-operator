@@ -143,7 +143,7 @@ func TestMain(m *testing.M) {
 				// OPERAND_IMAGE env
 				for i, env := range required.Spec.Template.Spec.Containers[0].Env {
 					if env.Name == "RELATED_IMAGE_OPERAND_IMAGE" {
-						required.Spec.Template.Spec.Containers[0].Env[i].Value = "quay.io/jchaloup/descheduler:v5.3.0-0"
+						required.Spec.Template.Spec.Containers[0].Env[i].Value = "quay.io/jchaloup/descheduler:v5.3.2-0"
 					} else if env.Name == "RELATED_IMAGE_SOFTTAINTER_IMAGE" {
 						required.Spec.Template.Spec.Containers[0].Env[i].Value = registry + "/" + os.Getenv("NAMESPACE") + "/" + operator_image
 					}
