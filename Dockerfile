@@ -10,6 +10,7 @@ COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operat
 
 LABEL io.k8s.display-name="Kube Descheduler Operator based on RHEL 9" \
       io.k8s.description="This is a component of OpenShift and manages the Descheduler based on RHEL 9" \
+      distribution-scope="public" \
       com.redhat.component="kube-descheduler-operator-container" \
       name="kube-descheduler-operator-rhel-9" \
       cpe="cpe:/a:redhat:kube_descheduler_operator:5.0::el9" \
