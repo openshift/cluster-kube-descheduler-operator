@@ -27,3 +27,4 @@ $ opm alpha render-template basic catalog-template.json --migrate-level bundle-o
 | 5.1.2       | f9a77a6732f74a55644c33dcec4d413baabf9280f60b5a68841359d6a1bae956 |
 | 5.1.3       | 37afe091e3b9656c107196d7120ce171d8b0bf895264a9791c4559e97c81a00a |
 | 5.2.0       | 020eeb41c7c24c3caf77a3a3f6f598076d5e22bf793b85d3c3e89eb705896c0e |
+| 5.2.1       | 203768b3fd5783d8572c1e626327ead0838cb4613ca30aea86beeb2f78935051 |
