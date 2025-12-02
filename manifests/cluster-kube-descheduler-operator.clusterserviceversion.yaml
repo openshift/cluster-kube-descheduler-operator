@@ -118,7 +118,7 @@ spec:
   provider:
     name: Red Hat, Inc.
   maturity: beta
-  version: 5.2.0
+  version: 5.2.1
   relatedImages:
   - name: descheduler-operand
     image: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
