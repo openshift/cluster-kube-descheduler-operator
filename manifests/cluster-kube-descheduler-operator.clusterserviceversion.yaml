@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   # The version value is substituted by the ART pipeline
-  name: clusterkubedescheduleroperator.v5.2.0
+  name: clusterkubedescheduleroperator.v5.2.1
   namespace: openshift-kube-descheduler-operator
   labels:
     operatorframework.io/arch.amd64: supported
@@ -29,7 +29,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: 2025/05/12
+    createdAt: 2025/12/04
     features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
@@ -40,7 +40,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=5.1.0 <5.2.0"
+    olm.skipRange: ">=5.1.0 <5.2.1"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -69,6 +69,7 @@ spec:
   - clusterkubedescheduleroperator.v5.1.4
   - clusterkubedescheduleroperator.v5.1.5
   - clusterkubedescheduleroperator.v5.1.6
+  - clusterkubedescheduleroperator.v5.2.0
   customresourcedefinitions:
     owned:
     - displayName: Kube Descheduler
@@ -135,7 +136,7 @@ spec:
   minKubeVersion: 1.32.0
   labels:
     olm-owner-enterprise-app: cluster-kube-descheduler-operator
-    olm-status-descriptors: cluster-kube-descheduler-operator.v5.2.0
+    olm-status-descriptors: cluster-kube-descheduler-operator.v5.2.1
   installModes:
   - supported: true
     type: OwnNamespace
@@ -405,7 +406,7 @@ spec:
                     - name: RELATED_IMAGE_SOFTTAINTER_IMAGE
                       value: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
                     - name: OPERAND_VERSION
-                      value: 5.2.0
+                      value: 5.2.1
                   volumeMounts:
                   - name: tmp
                     mountPath: "/tmp"
