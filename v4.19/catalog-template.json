@@ -69,12 +69,17 @@
                 {
                       "name": "clusterkubedescheduleroperator.v5.1.2",
                       "replaces": "clusterkubedescheduleroperator.v5.0.1",
-                      "skipRange": "\u003e=5.0.0 \u003c5.1.1"
+                      "skipRange": "\u003e=5.0.0 \u003c5.1.2"
                 },
                 {
                       "name": "clusterkubedescheduleroperator.v5.1.3",
                       "replaces": "clusterkubedescheduleroperator.v5.0.1",
-                      "skipRange": "\u003e=5.0.0 \u003c5.1.2"
+                      "skipRange": "\u003e=5.0.0 \u003c5.1.3"
+                },
+                {
+                      "name": "clusterkubedescheduleroperator.v5.1.4",
+                      "replaces": "clusterkubedescheduleroperator.v5.0.1",
+                      "skipRange": "\u003e=5.0.0 \u003c5.1.4"
                 },
                 {
                       "name": "clusterkubedescheduleroperator.v5.2.0",
