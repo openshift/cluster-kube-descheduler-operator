@@ -162,6 +162,10 @@
         },
         {
             "schema": "olm.bundle",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:a8b80a453bb67cba00d970a8a2e7e4191668af5edb429af5cea3e8b5d6483c2e"
+        },
+        {
+            "schema": "olm.bundle",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:020eeb41c7c24c3caf77a3a3f6f598076d5e22bf793b85d3c3e89eb705896c0e"
         },
         {
