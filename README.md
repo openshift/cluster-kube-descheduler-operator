@@ -14,7 +14,7 @@ To update the catalog
 
 ```
 $ cd v4.17
-$ opm alpha render-template basic catalog-template.json > catalog/cluster-kube-descheduler-operator/catalog.json
+$ opm alpha render-template basic catalog-template.json --migrate-level bundle-object-to-csv-metadata > catalog/cluster-kube-descheduler-operator/catalog.json
 ```
 
 ## Releases
@@ -23,7 +23,7 @@ $ opm alpha render-template basic catalog-template.json > catalog/cluster-kube-d
 | ----------- | ---------------------------------------------------------------- |
 | 5.0.1       | b26e5ebec8ffcfaf18c8c4acb8c25a71318ea7d3b372c9e3e170b6026a681a89 |
 | 5.0.2       | 72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7 |
-| 5.0.3       | 8ff24b9075c528a97f230ae78bb14b050e5264294d065aa12c941c90af8d69ca |
+| 5.0.3       | d601b1ab843f10dfcb984e4e3853ee8dad64a96c5be0e4f17cc0c32882926f71 |
 | 5.1.0       | d8ccfec899fbd543a076c28bce386e9ec764bada413350ae53132863ebddaa71 |
 | 5.1.1       | 618345991268504019c4fac34d09f3ea7225ffcee2aec48479f9f7e9189b16fc |
 | 5.1.2       | f9a77a6732f74a55644c33dcec4d413baabf9280f60b5a68841359d6a1bae956 |
