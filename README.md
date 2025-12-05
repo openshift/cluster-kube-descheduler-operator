@@ -326,3 +326,36 @@ The Descheduler operator exposes the following parameters in its CRD:
 |`evictionLimits`|`map`|Restrict the number of evictions during each descheduling run. Available fields are: `total`|
 |`evictionLimits.total`|`int32`|Restricts the maximum number of overall evictions|
 |`evictionLimits.node`|`int32`|Restricts the maximum number of of evictions per node|
+
+## Tests
+
+This repository is compatible with the [OpenShift Tests Extension (OTE)](https://github.com/openshift-eng/openshift-tests-extension) framework.
+
+### Building the test binary
+
+```bash
+make build
+```
+
+### Running test suites and tests
+
+```bash
+# Run a specific test suite or test
+./cluster-kube-descheduler-operator-tests-ext run-suite openshift/cluster-kube-descheduler-operator/all
+./cluster-kube-descheduler-operator-tests-ext run-test "test-name"
+
+# Run with JUnit output
+./cluster-kube-descheduler-operator-tests-ext run-suite openshift/cluster-kube-descheduler-operator/all --junit-path /tmp/junit.xml
+```
+
+### Listing available tests and suites
+
+```bash
+# List all test suites
+./cluster-kube-descheduler-operator-tests-ext list suites
+
+# List tests in a suite
+./cluster-kube-descheduler-operator-tests-ext list tests --suite=openshift/cluster-kube-descheduler-operator/all
+```
+
+For more information about the OTE framework, see the [openshift-tests-extension documentation](https://github.com/openshift-eng/openshift-tests-extension).
