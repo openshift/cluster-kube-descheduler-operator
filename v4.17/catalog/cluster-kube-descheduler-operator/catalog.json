@@ -111,6 +111,7 @@
             "name": "clusterkubedescheduleroperator.v5.1.4",
             "replaces": "clusterkubedescheduleroperator.v5.0.1",
             "skips": [
+                "clusterkubedescheduleroperator.4.14.0-202311021650",
                 "clusterkubedescheduleroperator.v5.0.1",
                 "clusterkubedescheduleroperator.v5.0.2",
                 "clusterkubedescheduleroperator.v5.0.3",
@@ -844,12 +845,12 @@
     ],
     "relatedImages": [
         {
-            "name": "",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:d601b1ab843f10dfcb984e4e3853ee8dad64a96c5be0e4f17cc0c32882926f71"
-        },
-        {
             "name": "descheduler-operand",
             "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:7ef2d1c6731d1879aa670edf0b37aef122f63d9510c4b54fc355a24f77b4e8b2"
+        },
+        {
+            "name": "",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:d601b1ab843f10dfcb984e4e3853ee8dad64a96c5be0e4f17cc0c32882926f71"
         },
         {
             "name": "descheduler-operator",
