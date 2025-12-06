@@ -112,6 +112,7 @@
                     "replaces": "clusterkubedescheduleroperator.v5.0.1",
                     "skipRange": "\u003e=5.0.0 \u003c5.1.4",
                     "skips": [
+                        "clusterkubedescheduleroperator.4.14.0-202311021650",
                         "clusterkubedescheduleroperator.v5.0.1",
                         "clusterkubedescheduleroperator.v5.0.2",
                         "clusterkubedescheduleroperator.v5.0.3",
