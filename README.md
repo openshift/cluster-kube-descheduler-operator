@@ -7,15 +7,14 @@ To initiliaze catalog-template.json
 ```sh
 $ opm migrate registry.redhat.io/redhat/redhat-operator-index:v4.21 ./catalog-migrate
 $ mkdir -p v4.21/catalog/cluster-kube-descheduler-operator
-$ opm alpha convert-template basic ./catalog-migrate/cluster-kube-descheduler-operator/catalog.json > v4.21/catalog-template.json
+$ opm alpha convert-template basic -o yaml ./catalog-migrate/cluster-kube-descheduler-operator/catalog.json > v4.21/catalog-template.yaml
 ```
 
 To update the catalog
 
 ```
-$ cd v4.21
 $ export REGISTRY_AUTH_FILE=...
-$ opm alpha render-template basic catalog-template.json --migrate-level bundle-object-to-csv-metadata > catalog/cluster-kube-descheduler-operator/catalog.json
+$ opm alpha render-template basic v4.21/catalog-template.json --migrate-level bundle-object-to-csv-metadata > v4.21/catalog/cluster-kube-descheduler-operator/catalog.json
 ```
 
 ## Releases
