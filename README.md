@@ -14,7 +14,7 @@ To update the catalog
 
 ```
 $ export REGISTRY_AUTH_FILE=...
-$ opm alpha render-template basic v4.21/catalog-template.json --migrate-level bundle-object-to-csv-metadata > v4.21/catalog/cluster-kube-descheduler-operator/catalog.json
+$ opm alpha render-template basic v4.21/catalog-template.yaml --migrate-level bundle-object-to-csv-metadata > v4.21/catalog/cluster-kube-descheduler-operator/catalog.json
 ```
 
 ## Releases
