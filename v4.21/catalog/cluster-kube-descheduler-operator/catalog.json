@@ -1502,12 +1502,12 @@
     ],
     "relatedImages": [
         {
-            "name": "",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:12f78c7d13537b104f7641dcbb394a8e151252d28f87d7a72332bfea8d8f2f6e"
-        },
-        {
             "name": "descheduler-operand",
             "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:3d7b9dd7220637ea1b8ff3a5e413a5749ca6bcd3847d387b66ed12065837dd42"
+        },
+        {
+            "name": "",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:12f78c7d13537b104f7641dcbb394a8e151252d28f87d7a72332bfea8d8f2f6e"
         },
         {
             "name": "descheduler-operator",
@@ -1758,12 +1758,12 @@
     ],
     "relatedImages": [
         {
-            "name": "",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c0ebb8c7fbaa325fef3d530da8bee7ea8773aa082c9b16f174c41ca4465ced24"
-        },
-        {
             "name": "descheduler-operand",
             "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:e9019ca15608d3d48a68b97283ca07db1260bb92bd81a500f7d987a485cd7a1e"
+        },
+        {
+            "name": "",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c0ebb8c7fbaa325fef3d530da8bee7ea8773aa082c9b16f174c41ca4465ced24"
         },
         {
             "name": "descheduler-operator",
