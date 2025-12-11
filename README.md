@@ -144,7 +144,7 @@ taints.
 
 This profile enables the [`RemovePodsViolatingInterPodAntiAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatinginterpodantiaffinity),
 [`RemovePodsViolatingNodeAffinity`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity), and
-[`RemovePodsViolatingNodeTaints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodeaffinity) strategies.
+[`RemovePodsViolatingNodeTaints`](https://github.com/kubernetes-sigs/descheduler/#removepodsviolatingnodetaints) strategies.
 
 ### TopologyAndDuplicates
 This profile attempts to balance pod distribution based on topology constraint definitions and evicting duplicate copies
