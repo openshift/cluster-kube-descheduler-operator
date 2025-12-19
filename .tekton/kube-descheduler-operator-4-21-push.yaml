@@ -4,17 +4,16 @@ metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/cluster-kube-descheduler-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    pipelinesascode.tekton.dev/cancel-in-progress: "true"
+    pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" && ( ".tekton/kube-descheduler-operator-bundle-main-pull-request.yaml".pathChanged() || "metadata/***".pathChanged() || "manifests/***".pathChanged() || "bundle.Dockerfile".pathChanged() )
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "release-4.21" && ( ".tekton/kube-descheduler-operator-4-21-push.yaml".pathChanged() || "bindata/***".pathChanged() || "cmd/***".pathChanged() || "deploy/***".pathChanged() || "pkg/***".pathChanged() || "vendor/***".pathChanged() || "Dockerfile".pathChanged() || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged() )
   creationTimestamp:
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-main
-    appstudio.openshift.io/component: kube-descheduler-operator-bundle-main
+    appstudio.openshift.io/application: kube-descheduler-operator-4-21
+    appstudio.openshift.io/component: kube-descheduler-operator-4-21
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-bundle-main-on-pull-request
+  name: kube-descheduler-operator-4-21-on-push
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -23,17 +22,15 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-main:on-pr-{{revision}}
-  - name: image-expires-after
-    value: 5d
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-21:{{revision}}
   - name: dockerfile
-    value: bundle.Dockerfile
+    value: Dockerfile
   pipelineSpec:
     description: |
-      This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
+      This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
 
-      _Uses `buildah` to create a container image leveraging [trusted artifacts](https://konflux-ci.dev/architecture/ADR/0036-trusted-artifacts.html). It also optionally creates a source image and runs some build-time tests. Information is shared between tasks using OCI artifacts instead of PVCs. EC will pass the [`trusted_task.trusted`](https://conforma.dev/docs/policy/packages/release_trusted_task.html#trusted_task__trusted) policy as long as all data used to build the artifact is generated from trusted tasks.
-      This pipeline is pushed as a Tekton bundle to [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-docker-build-oci-ta?tab=tags)_
+      _Uses `buildah` to create a multi-platform container image leveraging [trusted artifacts](https://konflux-ci.dev/architecture/ADR/0036-trusted-artifacts.html). It also optionally creates a source image and runs some build-time tests. This pipeline requires that the [multi platform controller](https://github.com/konflux-ci/multi-platform-controller) is deployed and configured on your Konflux instance. Information is shared between tasks using OCI artifacts instead of PVCs. EC will pass the [`trusted_task.trusted`](https://conforma.dev/docs/policy/packages/release_trusted_task.html#trusted_task__trusted) policy as long as all data used to build the artifact is generated from trusted tasks.
+      This pipeline is pushed as a Tekton bundle to [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta?tab=tags)_
     finally:
     - name: show-sbom
       params:
@@ -86,12 +83,11 @@ spec:
     - default: ""
       description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
-      type: string
     - default: "true"
       description: Build a source image.
       name: build-source-image
       type: string
-    - default: "false"
+    - default: "true"
       description: Add built image into an OCI image index
       name: build-image-index
       type: string
@@ -107,14 +103,18 @@ spec:
       description: Whether to enable privileged mode, should be used only with remote VMs
       name: privileged-nested
       type: string
+    - default:
+      - linux/x86_64
+      - linux/arm64
+      - linux/ppc64le
+      - linux/s390x
+      description: List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
+      name: build-platforms
+      type: array
     - name: buildah-format
       default: docker
       type: string
       description: The format for the resulting image's mediaType. Valid values are oci or docker.
-    - name: enable-cache-proxy
-      default: 'false'
-      description: Enable cache proxy configuration
-      type: string
     results:
     - description: ""
       name: IMAGE_URL
@@ -137,8 +137,6 @@ spec:
         value: $(params.rebuild)
       - name: skip-checks
         value: $(params.skip-checks)
-      - name: enable-cache-proxy
-        value: $(params.enable-cache-proxy)
       taskRef:
         params:
         - name: name
@@ -203,7 +201,12 @@ spec:
         workspace: git-auth
       - name: netrc
         workspace: netrc
-    - name: build-container
+    - matrix:
+        params:
+        - name: PLATFORM
+          value:
+          - $(params.build-platforms)
+      name: build-images
       params:
       - name: IMAGE
         value: $(params.output-image)
@@ -230,20 +233,18 @@ spec:
         value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+      - name: IMAGE_APPEND_PLATFORM
+        value: "true"
       - name: BUILDAH_FORMAT
         value: $(params.buildah-format)
-      - name: HTTP_PROXY
-        value: $(tasks.init.results.http-proxy)
-      - name: NO_PROXY
-        value: $(tasks.init.results.no-proxy)
       runAfter:
       - prefetch-dependencies
       taskRef:
         params:
         - name: name
-          value: buildah-oci-ta
+          value: buildah-remote-oci-ta
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.7@sha256:916781b75e5f42a2e0b578b3ab3418e8bcc305168b2cd26ff41c8057e5c9ec28
+          value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ee5e01eb59a3f70bb1012950fbc4081bac96d3f3517e6d204314484cd2e0059b
         - name: kind
           value: task
         resolver: bundles
@@ -264,11 +265,11 @@ spec:
         value: $(params.build-image-index)
       - name: IMAGES
         value:
-        - $(tasks.build-container.results.IMAGE_URL)@$(tasks.build-container.results.IMAGE_DIGEST)
+        - $(tasks.build-images.results.IMAGE_REF[*])
       - name: BUILDAH_FORMAT
         value: $(params.buildah-format)
       runAfter:
-      - build-container
+      - build-images
       taskRef:
         params:
         - name: name
@@ -335,7 +336,12 @@ spec:
         operator: in
         values:
         - "false"
-    - name: clair-scan
+    - matrix:
+        params:
+        - name: image-platform
+          value:
+          - $(params.build-platforms)
+      name: clair-scan
       params:
       - name: image-digest
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
@@ -377,6 +383,11 @@ spec:
         operator: in
         values:
         - "false"
+      matrix:
+        params:
+        - name: platform
+          value:
+          - $(params.build-platforms)
     - name: sast-snyk-check
       params:
       - name: image-digest
@@ -403,7 +414,12 @@ spec:
         operator: in
         values:
         - "false"
-    - name: clamav-scan
+    - matrix:
+        params:
+        - name: image-arch
+          value:
+          - $(params.build-platforms)
+      name: clamav-scan
       params:
       - name: image-digest
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
@@ -611,7 +627,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-bundle-main
+    serviceAccountName: build-pipeline-kube-descheduler-operator-4-21
   workspaces:
   - name: git-auth
     secret:

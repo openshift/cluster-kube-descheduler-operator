@@ -7,13 +7,13 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main" && ( ".tekton/kube-descheduler-operator-bundle-main-push.yaml".pathChanged() || "metadata/***".pathChanged() || "manifests/***".pathChanged() || "bundle.Dockerfile".pathChanged() )
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "release-4.21" && ( ".tekton/kube-descheduler-operator-bundle-4-21-push.yaml".pathChanged() || "metadata/***".pathChanged() || "manifests/***".pathChanged() || "bundle.Dockerfile".pathChanged() )
   creationTimestamp:
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-main
-    appstudio.openshift.io/component: kube-descheduler-operator-bundle-main
+    appstudio.openshift.io/application: kube-descheduler-operator-4-21
+    appstudio.openshift.io/component: kube-descheduler-operator-bundle-4-21
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-bundle-main-on-push
+  name: kube-descheduler-operator-bundle-4-21-on-push
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -22,7 +22,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-main:{{revision}}
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-21:{{revision}}
   - name: dockerfile
     value: bundle.Dockerfile
   pipelineSpec:
@@ -598,7 +598,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-bundle-main
+    serviceAccountName: build-pipeline-kube-descheduler-operator-bundle-4-21
   workspaces:
   - name: git-auth
     secret:
