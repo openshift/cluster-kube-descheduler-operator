@@ -2,14 +2,11 @@ package operator
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
 	"k8s.io/klog/v2"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	coreinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -93,12 +90,6 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		resourceSyncController,
 		cc.EventRecorder,
 	)
-
-	// make sure to remove previous "cluster" descheduler deployment before starting a new one with a proper name
-	// TODO: this can be removed in 4.12+
-	if err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Delete(ctx, operatorclient.OperatorConfigName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed removing old operand deployment: %w", err)
-	}
 
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
