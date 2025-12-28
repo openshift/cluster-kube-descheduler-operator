@@ -204,7 +204,43 @@ spec:
                       - DevKubeVirtRelieveAndMigrate
                       - KubeVirtRelieveAndMigrate
                     type: string
+                  maxItems: 11
                   type: array
+                  x-kubernetes-validations:
+                    - message: duplicate profiles are not allowed
+                      rule: self.all(p, self.filter(x, x == p).size() == 1)
+                    - message: cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously
+                      rule: '!(self.exists(p, p == ''DevPreviewLongLifecycle'') && self.exists(p, p == ''LifecycleAndUtilization''))'
+                    - message: cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously
+                      rule: '!(self.exists(p, p == ''LongLifecycle'') && self.exists(p, p == ''LifecycleAndUtilization''))'
+                    - message: cannot declare DevPreviewLongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''DevPreviewLongLifecycle'') && self.exists(p, p == ''DevKubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare LongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''LongLifecycle'') && self.exists(p, p == ''DevKubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare LifecycleAndUtilization and DevKubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''LifecycleAndUtilization'') && self.exists(p, p == ''DevKubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare KubeVirtRelieveAndMigrate and DevKubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''KubeVirtRelieveAndMigrate'') && self.exists(p, p == ''DevKubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare DevPreviewLongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''DevPreviewLongLifecycle'') && self.exists(p, p == ''KubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare LongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''LongLifecycle'') && self.exists(p, p == ''KubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare LifecycleAndUtilization and KubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''LifecycleAndUtilization'') && self.exists(p, p == ''KubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously
+                      rule: '!(self.exists(p, p == ''SoftTopologyAndDuplicates'') && self.exists(p, p == ''TopologyAndDuplicates''))'
+                    - message: cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously
+                      rule: '!(self.exists(p, p == ''CompactAndScale'') && self.exists(p, p == ''LifecycleAndUtilization''))'
+                    - message: cannot declare CompactAndScale and LongLifecycle profiles simultaneously
+                      rule: '!(self.exists(p, p == ''CompactAndScale'') && self.exists(p, p == ''LongLifecycle''))'
+                    - message: cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously
+                      rule: '!(self.exists(p, p == ''CompactAndScale'') && self.exists(p, p == ''DevPreviewLongLifecycle''))'
+                    - message: cannot declare CompactAndScale and DevKubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''CompactAndScale'') && self.exists(p, p == ''DevKubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare CompactAndScale and KubeVirtRelieveAndMigrate profiles simultaneously
+                      rule: '!(self.exists(p, p == ''CompactAndScale'') && self.exists(p, p == ''KubeVirtRelieveAndMigrate''))'
+                    - message: cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously
+                      rule: '!(self.exists(p, p == ''CompactAndScale'') && self.exists(p, p == ''TopologyAndDuplicates''))'
                 unsupportedConfigOverrides:
                   description: |-
                     unsupportedConfigOverrides overrides the final configuration that was computed by the operator.
