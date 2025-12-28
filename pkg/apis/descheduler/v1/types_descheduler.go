@@ -29,7 +29,28 @@ type KubeDescheduler struct {
 type KubeDeschedulerSpec struct {
 	operatorv1.OperatorSpec `json:",inline"`
 
+	// DevPreviewLongLifecycle is deprecated in 4.17, remove in 4.19+
+	// DevKubeVirtRelieveAndMigrate is deprecated in 4.20, remove in 4.22+
+
 	// Profiles sets which descheduler strategy profiles are enabled
+	// +kubebuilder:validation:MaxItems=11
+	// +kubebuilder:validation:XValidation:rule="self.all(p, self.filter(x, x == p).size() == 1)",message="duplicate profiles are not allowed"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'DevPreviewLongLifecycle') && self.exists(p, p == 'LifecycleAndUtilization'))",message="cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'LongLifecycle') && self.exists(p, p == 'LifecycleAndUtilization'))",message="cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'DevPreviewLongLifecycle') && self.exists(p, p == 'DevKubeVirtRelieveAndMigrate'))",message="cannot declare DevPreviewLongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'LongLifecycle') && self.exists(p, p == 'DevKubeVirtRelieveAndMigrate'))",message="cannot declare LongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'LifecycleAndUtilization') && self.exists(p, p == 'DevKubeVirtRelieveAndMigrate'))",message="cannot declare LifecycleAndUtilization and DevKubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'KubeVirtRelieveAndMigrate') && self.exists(p, p == 'DevKubeVirtRelieveAndMigrate'))",message="cannot declare KubeVirtRelieveAndMigrate and DevKubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'DevPreviewLongLifecycle') && self.exists(p, p == 'KubeVirtRelieveAndMigrate'))",message="cannot declare DevPreviewLongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'LongLifecycle') && self.exists(p, p == 'KubeVirtRelieveAndMigrate'))",message="cannot declare LongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'LifecycleAndUtilization') && self.exists(p, p == 'KubeVirtRelieveAndMigrate'))",message="cannot declare LifecycleAndUtilization and KubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'SoftTopologyAndDuplicates') && self.exists(p, p == 'TopologyAndDuplicates'))",message="cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'CompactAndScale') && self.exists(p, p == 'LifecycleAndUtilization'))",message="cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'CompactAndScale') && self.exists(p, p == 'LongLifecycle'))",message="cannot declare CompactAndScale and LongLifecycle profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'CompactAndScale') && self.exists(p, p == 'DevPreviewLongLifecycle'))",message="cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'CompactAndScale') && self.exists(p, p == 'DevKubeVirtRelieveAndMigrate'))",message="cannot declare CompactAndScale and DevKubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'CompactAndScale') && self.exists(p, p == 'KubeVirtRelieveAndMigrate'))",message="cannot declare CompactAndScale and KubeVirtRelieveAndMigrate profiles simultaneously"
+	// +kubebuilder:validation:XValidation:rule="!(self.exists(p, p == 'CompactAndScale') && self.exists(p, p == 'TopologyAndDuplicates'))",message="cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously"
 	Profiles []DeschedulerProfile `json:"profiles"`
 
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs

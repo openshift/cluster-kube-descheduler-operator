@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -997,128 +998,6 @@ func TestManageConfigMap(t *testing.T) {
 				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationModerate.yaml"))},
 			},
 		},
-		{
-			name: "DevPreviewLongLifecycleAndLifecycleAndUtilizationProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"DevPreviewLongLifecycle", "LifecycleAndUtilization"}
-			}),
-			err:             fmt.Errorf("cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "LongLifecycleAndLifecycleAndUtilizationProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle", "LifecycleAndUtilization"}
-			}),
-			err:             fmt.Errorf("cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "SoftTopologyAndDuplicatesAndTopologyAndDuplicatesProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates", "TopologyAndDuplicates"}
-			}),
-			err:             fmt.Errorf("cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndLifecycleAndUtilizationProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale", "LifecycleAndUtilization"}
-			}),
-			err:             fmt.Errorf("cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndLongLifecycleProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale", "LongLifecycle"}
-			}),
-			err:             fmt.Errorf("cannot declare CompactAndScale and LongLifecycle profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndDevPreviewLongLifecycleProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale", "DevPreviewLongLifecycle"}
-			}),
-			err:             fmt.Errorf("cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndTopologyAndDuplicatesProfileConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale", "TopologyAndDuplicates"}
-			}),
-			err:             fmt.Errorf("cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "DevPreviewLongLifecycleAndDevKubeVirtRelieveAndMigrateConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate}
-			}),
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
-			forceDeployment: true,
-		},
-		{
-			name: "LongLifecycleAndDevKubeVirtRelieveAndMigrateConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate}
-			}),
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
-			forceDeployment: true,
-		},
-		{
-			name: "LifecycleAndUtilizationAndDevKubeVirtRelieveAndMigrateConflict",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate}
-			}),
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate),
-			forceDeployment: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -1959,6 +1838,209 @@ func TestValidateDescheduler(t *testing.T) {
 			t.Log(err)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateDeschedulerCR() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCheckProfileConflicts(t *testing.T) {
+	// Helper function to create a KubeDescheduler with specified profiles
+	makeKubeDeschedulerWithProfiles := func(profiles ...deschedulerv1.DeschedulerProfile) *deschedulerv1.KubeDescheduler {
+		return buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+			spec.Profiles = profiles
+			spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+		})
+	}
+
+	tests := []struct {
+		name           string
+		descheduler    *deschedulerv1.KubeDescheduler
+		wantErr        bool
+		expectedErrMsg string
+	}{
+		// Valid single profiles
+		{
+			name:        "Valid single profile: AffinityAndTaints",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: TopologyAndDuplicates",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.TopologyAndDuplicates),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: LifecycleAndUtilization",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: LongLifecycle",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: CompactAndScale",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: DevKubeVirtRelieveAndMigrate",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: KubeVirtRelieveAndMigrate",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:     false,
+		},
+
+		// Valid multiple profiles
+		{
+			name:        "Valid combination: AffinityAndTaints + TopologyAndDuplicates",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.TopologyAndDuplicates),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: AffinityAndTaints + LifecycleAndUtilization",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.LifecycleAndUtilization),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: AffinityAndTaints + EvictPodsWithPVC",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.EvictPodsWithPVC),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: LifecycleAndUtilization + EvictPodsWithLocalStorage",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization, deschedulerv1.EvictPodsWithLocalStorage),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: LongLifecycle + TopologyAndDuplicates",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.TopologyAndDuplicates),
+			wantErr:     false,
+		},
+
+		// Duplicate profile detection
+		{
+			name:           "Duplicate profile: AffinityAndTaints twice",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.AffinityAndTaints),
+			wantErr:        true,
+			expectedErrMsg: "duplicate profiles are not allowed",
+		},
+
+		// Invalid profile combinations - 16 conflict pairs
+		{
+			name:           "Conflict: DevPreviewLongLifecycle and LifecycleAndUtilization",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LifecycleAndUtilization),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LongLifecycle and LifecycleAndUtilization",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.LifecycleAndUtilization),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously",
+		},
+		{
+			name:           "Conflict: DevPreviewLongLifecycle and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare DevPreviewLongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LongLifecycle and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LifecycleAndUtilization and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LifecycleAndUtilization and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: KubeVirtRelieveAndMigrate and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare KubeVirtRelieveAndMigrate and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: DevPreviewLongLifecycle and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare DevPreviewLongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LongLifecycle and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LifecycleAndUtilization and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LifecycleAndUtilization and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: SoftTopologyAndDuplicates and TopologyAndDuplicates",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.SoftTopologyAndDuplicates, deschedulerv1.TopologyAndDuplicates),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and LifecycleAndUtilization",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.LifecycleAndUtilization),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and LongLifecycle",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.LongLifecycle),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and LongLifecycle profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and DevPreviewLongLifecycle",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.DevPreviewLongLifecycle),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and TopologyAndDuplicates",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.TopologyAndDuplicates),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDeschedulerCR(tt.descheduler)
+			t.Log(err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateDeschedulerCR() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.expectedErrMsg != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectedErrMsg) {
+					t.Errorf("validateDeschedulerCR() error message = %v, expectedErrMsg to contain %v", err, tt.expectedErrMsg)
+				}
 			}
 		})
 	}
