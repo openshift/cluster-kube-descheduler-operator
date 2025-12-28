@@ -50,6 +50,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/kube-openapi/pkg/validation/spec"
+	"k8s.io/kube-openapi/pkg/validation/strfmt"
+	"k8s.io/kube-openapi/pkg/validation/validate"
 	"k8s.io/kubernetes/pkg/util/taints"
 	utilptr "k8s.io/utils/ptr"
 
@@ -155,6 +158,11 @@ func (c TargetConfigReconciler) sync() error {
 	if err != nil {
 		klog.ErrorS(err, "unable to get operator configuration", "namespace", operatorclient.OperatorNamespace, "kubedescheduler", operatorclient.OperatorConfigName)
 		return err
+	}
+
+	if err := validateDeschedulerCR(descheduler); err != nil {
+		klog.ErrorS(err, "descheduler validation failed")
+		return fmt.Errorf("descheduler validation failed: %w", err)
 	}
 
 	if descheduler.Spec.DeschedulingIntervalSeconds == nil || *descheduler.Spec.DeschedulingIntervalSeconds <= 0 {
@@ -1410,6 +1418,30 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	}
 	required.Data = map[string]string{"policy.yaml": string(policyBytes)}
 	return resourceapply.ApplyConfigMap(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+// validateDeschedulerCR validates the descheduler object against the CRD schema
+func validateDeschedulerCR(descheduler *deschedulerv1.KubeDescheduler) error {
+	var schema spec.Schema
+	if err := yaml.Unmarshal(bindata.MustAsset("assets/kube-descheduler/crdschema.yaml"), &schema); err != nil {
+		return fmt.Errorf("failed to unmarshal CRD schema: %w", err)
+	}
+
+	deschedulerUnstructured, err := runtime.DefaultUnstructuredConverter.ToUnstructured(descheduler)
+	if err != nil {
+		return fmt.Errorf("failed to convert descheduler to unstructured: %w", err)
+	}
+
+	result := validate.NewSchemaValidator(&schema, nil, "", strfmt.Default).Validate(deschedulerUnstructured)
+	if result != nil && result.HasErrors() {
+		var errMsgs []string
+		for _, err := range result.Errors {
+			errMsgs = append(errMsgs, err.Error())
+		}
+		return fmt.Errorf("validation errors: %s", strings.Join(errMsgs, "; "))
+	}
+
+	return nil
 }
 
 // checkProfileConflicts ensures that multiple profiles aren't redeclared
