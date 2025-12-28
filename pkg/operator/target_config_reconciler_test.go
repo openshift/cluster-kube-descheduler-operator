@@ -1927,6 +1927,30 @@ func TestValidateDescheduler(t *testing.T) {
 			}),
 			wantErr: true,
 		},
+		{
+			name: "Descheduler with zero interval - rejected by schema validation",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](0)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with negative interval - rejected by schema validation",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](-10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with positive interval",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](100)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
