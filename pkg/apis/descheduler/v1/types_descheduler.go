@@ -73,11 +73,11 @@ type ProfileCustomizations struct {
 
 	// Namespaces overrides included and excluded namespaces while keeping
 	// the default exclusion of all openshift-*, kube-system and hypershift namespaces
-	Namespaces Namespaces `json:"namespaces"`
+	Namespaces Namespaces `json:"namespaces,omitempty"`
 
 	// DevLowNodeUtilizationThresholds enumerates predefined experimental thresholds
 	// +kubebuilder:validation:Enum=Low;Medium;High;""
-	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds"`
+	DevLowNodeUtilizationThresholds *LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds,omitempty"`
 
 	// DevEnableSoftTainter enables SoftTainter alpha feature.
 	// The EnableSoftTainter alpha feature is a subject to change.
@@ -95,7 +95,7 @@ type ProfileCustomizations struct {
 	// The threshold values are subject to change.
 	// Currently provided as an experimental feature.
 	// +kubebuilder:validation:Enum=Minimal;Modest;Moderate;""
-	DevHighNodeUtilizationThresholds *HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds"`
+	DevHighNodeUtilizationThresholds *HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds,omitempty"`
 
 	// devActualUtilizationProfile enables integration with metrics.
 	// LowNodeUtilization plugin can consume the metrics for now.
@@ -193,8 +193,8 @@ const (
 // Namespaces overrides included and excluded namespaces while keeping
 // the default exclusion of all openshift-*, kube-system and hypershift namespaces
 type Namespaces struct {
-	Included []string `json:"included"`
-	Excluded []string `json:"excluded"`
+	Included []string `json:"included,omitempty"`
+	Excluded []string `json:"excluded,omitempty"`
 }
 
 // DeschedulerProfile allows configuring the enabled strategy profiles for the descheduler

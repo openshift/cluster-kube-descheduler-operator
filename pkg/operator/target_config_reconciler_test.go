@@ -1762,9 +1762,16 @@ func TestSync(t *testing.T) {
 					Namespace: "openshift-kube-descheduler-operator",
 				},
 				Spec: deschedulerv1.KubeDeschedulerSpec{
+					OperatorSpec: operatorv1.OperatorSpec{
+						ManagementState: operatorv1.Managed,
+					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+					Mode:                        deschedulerv1.Predictive,
 					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						ThresholdPriority:          utilptr.To[int32](1000),
+						ThresholdPriorityClassName: "className",
+					},
 				},
 			},
 			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
@@ -1786,9 +1793,12 @@ func TestSync(t *testing.T) {
 					Namespace: operatorclient.OperatorNamespace,
 				},
 				Spec: deschedulerv1.KubeDeschedulerSpec{
+					OperatorSpec: operatorv1.OperatorSpec{
+						ManagementState: operatorv1.Managed,
+					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](10),
+					Mode:                        deschedulerv1.Predictive,
 					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{},
 				},
 			},
 			routes: []runtime.Object{
@@ -1827,9 +1837,12 @@ func TestSync(t *testing.T) {
 					Namespace: "openshift-kube-descheduler-operator",
 				},
 				Spec: deschedulerv1.KubeDeschedulerSpec{
+					OperatorSpec: operatorv1.OperatorSpec{
+						ManagementState: operatorv1.Managed,
+					},
 					DeschedulingIntervalSeconds: utilptr.To[int32](0),
+					Mode:                        deschedulerv1.Predictive,
 					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
 				},
 			},
 			err: fmt.Errorf("descheduler should have an interval set and it should be greater than 0"),
@@ -1991,5 +2004,81 @@ func (f *fakeRecorder) Shutdown() {
 func NewFakeRecorder(bufferSize int) *fakeRecorder {
 	return &fakeRecorder{
 		Events: make(chan string, bufferSize),
+	}
+}
+
+func TestValidateDescheduler(t *testing.T) {
+	tests := []struct {
+		name        string
+		descheduler *deschedulerv1.KubeDescheduler
+		wantErr     bool
+	}{
+		{
+			name: "Valid descheduler configuration",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					OperatorSpec: operatorv1.OperatorSpec{
+						ManagementState: operatorv1.Managed,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](300),
+					Mode:                        deschedulerv1.Predictive,
+					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid descheduler with multiple profiles",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					OperatorSpec: operatorv1.OperatorSpec{
+						ManagementState: operatorv1.Managed,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](600),
+					Mode:                        deschedulerv1.Automatic,
+					Profiles: []deschedulerv1.DeschedulerProfile{
+						deschedulerv1.AffinityAndTaints,
+						deschedulerv1.TopologyAndDuplicates,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Invalid descheduler with non-existing profile",
+			descheduler: &deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "openshift-kube-descheduler-operator",
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					OperatorSpec: operatorv1.OperatorSpec{
+						ManagementState: operatorv1.Managed,
+					},
+					DeschedulingIntervalSeconds: utilptr.To[int32](300),
+					Mode:                        deschedulerv1.Predictive,
+					Profiles:                    []deschedulerv1.DeschedulerProfile{"NonExistingProfile"},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDeschedulerCR(tt.descheduler)
+			t.Log(err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateDeschedulerCR() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
