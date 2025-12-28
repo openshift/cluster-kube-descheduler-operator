@@ -30,6 +30,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	"github.com/openshift/library-go/pkg/controller"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -1351,10 +1353,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 
 	profiles := sets.NewString()
 	for _, profileName := range descheduler.Spec.Profiles {
-		if err := checkProfileConflicts(profiles, profileName, scheduler); err != nil {
-			klog.ErrorS(err, "Profile conflict")
-			return nil, true, err
-		}
+		profiles.Insert(string(profileName))
 		var profile *v1alpha2.DeschedulerProfile
 		var err error
 		switch profileName {
@@ -1432,6 +1431,7 @@ func validateDeschedulerCR(descheduler *deschedulerv1.KubeDescheduler) error {
 		return fmt.Errorf("failed to convert descheduler to unstructured: %w", err)
 	}
 
+	// Standard OpenAPI schema validation
 	result := validate.NewSchemaValidator(&schema, nil, "", strfmt.Default).Validate(deschedulerUnstructured)
 	if result != nil && result.HasErrors() {
 		var errMsgs []string
@@ -1441,82 +1441,94 @@ func validateDeschedulerCR(descheduler *deschedulerv1.KubeDescheduler) error {
 		return fmt.Errorf("validation errors: %s", strings.Join(errMsgs, "; "))
 	}
 
+	// CEL validation for x-kubernetes-validations rules
+	if err := validateCELRules(descheduler, &schema); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// checkProfileConflicts ensures that multiple profiles aren't redeclared
-// it also checks for various inter-profile conflicts (profiles which should not be enabled simultaneously)
-func checkProfileConflicts(profiles sets.String, profileName deschedulerv1.DeschedulerProfile, scheduler *configv1.Scheduler) error {
-	if profiles.Has(string(profileName)) {
-		return fmt.Errorf("profile %s already declared, ignoring", profileName)
-	} else {
-		profiles.Insert(string(profileName))
+// validateCELRules evaluates CEL validation rules from the schema
+func validateCELRules(descheduler *deschedulerv1.KubeDescheduler, schema *spec.Schema) error {
+	// Extract profiles field schema which contains x-kubernetes-validations
+	profilesSchema, ok := schema.Properties["spec"]
+	if !ok {
+		return nil
 	}
 
-	// DevPreviewLongLifecycle is deprecated in 4.17, remove in 4.19+
-	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LifecycleAndUtilization)
+	profilesField, ok := profilesSchema.Properties["profiles"]
+	if !ok {
+		return nil
 	}
 
-	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.LifecycleAndUtilization)
+	// Get x-kubernetes-validations from the schema
+	celValidations, ok := profilesField.VendorExtensible.Extensions["x-kubernetes-validations"]
+	if !ok {
+		return nil
 	}
 
-	// DevKubeVirtRelieveAndMigrate is deprecated in 4.20, remove in 4.22+
-	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+	// Parse the validations
+	var validations []map[string]interface{}
+	validationsBytes, err := yaml.Marshal(celValidations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal CEL validations: %w", err)
+	}
+	if err := yaml.Unmarshal(validationsBytes, &validations); err != nil {
+		return fmt.Errorf("failed to unmarshal CEL validations: %w", err)
 	}
 
-	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+	// Create CEL environment with 'self' variable (array of strings)
+	env, err := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("self", decls.NewListType(decls.String)),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create CEL environment: %w", err)
 	}
 
-	if profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate)
+	// Convert profiles to slice of strings for CEL
+	profileStrings := make([]string, len(descheduler.Spec.Profiles))
+	for i, p := range descheduler.Spec.Profiles {
+		profileStrings[i] = string(p)
 	}
 
-	if profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate)
-	}
+	// Evaluate each validation rule
+	for _, validation := range validations {
+		rule, ok := validation["rule"].(string)
+		if !ok {
+			continue
+		}
+		message, _ := validation["message"].(string)
 
-	if profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate)
-	}
+		// Compile the CEL expression
+		ast, issues := env.Compile(rule)
+		if issues != nil && issues.Err() != nil {
+			return fmt.Errorf("failed to compile CEL rule %q: %w", rule, issues.Err())
+		}
 
-	if profiles.Has(string(deschedulerv1.LongLifecycle)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate)
-	}
+		// Create program
+		program, err := env.Program(ast)
+		if err != nil {
+			return fmt.Errorf("failed to create CEL program for rule %q: %w", rule, err)
+		}
 
-	if profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.KubeVirtRelieveAndMigrate)
-	}
+		// Evaluate the expression with 'self' set to the profiles array
+		evalResult, _, err := program.Eval(map[string]interface{}{
+			"self": profileStrings,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to evaluate CEL rule %q: %w", rule, err)
+		}
 
-	if profiles.Has(string(deschedulerv1.SoftTopologyAndDuplicates)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.SoftTopologyAndDuplicates, deschedulerv1.TopologyAndDuplicates)
-	}
-
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.LifecycleAndUtilization)
-	}
-
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.LongLifecycle)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.LongLifecycle)
-	}
-
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.DevPreviewLongLifecycle)
-	}
-
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.DevKubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.DevKubeVirtRelieveAndMigrate)
-	}
-
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.KubeVirtRelieveAndMigrate)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.KubeVirtRelieveAndMigrate)
-	}
-
-	if profiles.Has(string(deschedulerv1.CompactAndScale)) && profiles.Has(string(deschedulerv1.TopologyAndDuplicates)) {
-		return fmt.Errorf("cannot declare %s and %s profiles simultaneously, ignoring", deschedulerv1.CompactAndScale, deschedulerv1.TopologyAndDuplicates)
+		// Check if the rule evaluated to false (validation failed)
+		if result, ok := evalResult.Value().(bool); ok && !result {
+			if message != "" {
+				return fmt.Errorf("%s", message)
+			}
+			return fmt.Errorf("CEL validation failed for rule: %s", rule)
+		}
 	}
 
 	return nil
