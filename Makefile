@@ -41,8 +41,22 @@ test-e2e: test-unit
 regen-crd:
 	go build -o _output/tools/bin/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 	cp manifests/kube-descheduler-operator.crd.yaml manifests/operator.openshift.io_kubedeschedulers.yaml
-	./_output/tools/bin/controller-gen crd paths=./pkg/apis/descheduler/v1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	for i in $$(seq 1 50); do \
+		echo "Attempt $$i..."; \
+		if ./_output/tools/bin/controller-gen crd paths=./pkg/apis/descheduler/v1/... schemapatch:manifests=./manifests output:crd:dir=./manifests; then \
+			break; \
+		fi; \
+		if [ $$i -eq 50 ]; then \
+			echo "Failed after 50 attempts"; \
+			exit 1; \
+		fi; \
+	done
 	mv manifests/operator.openshift.io_kubedeschedulers.yaml manifests/kube-descheduler-operator.crd.yaml
+	# Remove leading --- from CRD file
+	sed -i '1{/^---$$/d;}' manifests/kube-descheduler-operator.crd.yaml
+	# Remove .annotations to drop controller-gen.kubebuilder.io/version as the only key set
+	yq eval 'del(.metadata.annotations)' -i manifests/kube-descheduler-operator.crd.yaml
+	cp manifests/kube-descheduler-operator.crd.yaml test/e2e/bindata/assets/00_kube-descheduler-operator-crd.yaml
 
 generate: update-codegen-crds generate-clients
 .PHONY: generate
