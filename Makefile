@@ -57,6 +57,7 @@ regen-crd:
 	# Remove .annotations to drop controller-gen.kubebuilder.io/version as the only key set
 	yq eval 'del(.metadata.annotations)' -i manifests/kube-descheduler-operator.crd.yaml
 	cp manifests/kube-descheduler-operator.crd.yaml test/e2e/bindata/assets/00_kube-descheduler-operator-crd.yaml
+	yq '.spec.versions[] | select(.served == true) | .schema.openAPIV3Schema' manifests/kube-descheduler-operator.crd.yaml > bindata/assets/kube-descheduler/crdschema.yaml
 
 generate: update-codegen-crds generate-clients
 .PHONY: generate
