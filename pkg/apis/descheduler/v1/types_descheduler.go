@@ -34,6 +34,7 @@ type KubeDeschedulerSpec struct {
 
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
 	// +optional
+	// +kubebuilder:validation:Minimum=1
 	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds,omitempty"`
 
 	// evictionLimits restrict the number of evictions during each descheduling run

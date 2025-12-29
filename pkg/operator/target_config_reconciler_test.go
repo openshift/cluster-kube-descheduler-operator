@@ -1123,6 +1123,9 @@ func TestManageConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 			if tt.schedulerConfig == nil {
 				tt.schedulerConfig = configLowNodeUtilization
 			}
@@ -1202,6 +1205,7 @@ func TestManageDeployment(t *testing.T) {
 				},
 			},
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
 				spec.Mode = deschedulerv1.Automatic
 			}),
@@ -1265,6 +1269,7 @@ func TestManageDeployment(t *testing.T) {
 				},
 			},
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevEnableEvictionsInBackground: true}
 				spec.Mode = deschedulerv1.Automatic
@@ -1338,6 +1343,9 @@ func TestManageDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 			got, _, err := tt.targetConfigReconciler.manageDeschedulerDeployment(tt.descheduler, nil)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v\n", err)
@@ -1624,6 +1632,9 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 
 			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, tt.objects, nil, nil, nil)
 
@@ -1719,26 +1730,13 @@ func TestSync(t *testing.T) {
 				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.DevKubeVirtRelieveAndMigrate),
 			},
 		},
-		{
-			name: "Zeroed out descheduling interval",
-			targetConfigReconciler: &TargetConfigReconciler{
-				ctx:           context.TODO(),
-				kubeClient:    fake.NewSimpleClientset(),
-				eventRecorder: fakeRecorder,
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
-				},
-			},
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.DeschedulingIntervalSeconds = utilptr.To[int32](0)
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-			}),
-			err: fmt.Errorf("descheduler should have an interval set and it should be greater than 0"),
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 
 			ctx := context.TODO()
 
@@ -1928,6 +1926,30 @@ func TestValidateDescheduler(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"NonExistingProfile"}
 			}),
 			wantErr: true,
+		},
+		{
+			name: "Descheduler with zero interval - rejected by schema validation",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](0)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with negative interval - rejected by schema validation",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](-10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with positive interval",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](100)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: false,
 		},
 	}
 

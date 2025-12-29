@@ -39,6 +39,7 @@ spec:
                 deschedulingIntervalSeconds:
                   description: DeschedulingIntervalSeconds is the number of seconds between descheduler runs
                   format: int32
+                  minimum: 1
                   type: integer
                 evictionLimits:
                   description: evictionLimits restrict the number of evictions during each descheduling run
