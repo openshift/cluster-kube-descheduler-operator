@@ -136,6 +136,24 @@ func makeConfigMap(assetPath string) *corev1.ConfigMap {
 	}
 }
 
+// makeKubeVirtNodes creates two nodes with kubevirt.io/schedulable labels for testing.
+func makeKubeVirtNodes() []runtime.Object {
+	return []runtime.Object{
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node1",
+				Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node2",
+				Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+			},
+		},
+	}
+}
+
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
@@ -287,20 +305,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateEvictionLimits",
@@ -327,20 +332,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateLow",
@@ -363,20 +355,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateMedium",
@@ -399,20 +378,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDeviationLowWithCombinedMetrics",
@@ -438,20 +404,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateHigh",
@@ -474,20 +427,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateIncludedNamespace",
@@ -514,20 +454,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsLow",
@@ -552,20 +479,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsMedium",
@@ -590,20 +504,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsHigh",
@@ -628,20 +529,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicAndStaticThresholds",
@@ -666,21 +554,8 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
-			err: fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
+			nodes: makeKubeVirtNodes(),
+			err:   fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutKubeVirt",
@@ -741,20 +616,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				},
 			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			nodes:           makeKubeVirtNodes(),
 			missingPSI:      true,
 			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when PSI metrics are enabled for the worker nodes"),
 			forceDeployment: true,
@@ -765,22 +627,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want: makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
-			routes: []runtime.Object{},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes:          []runtime.Object{},
+			nodes:           makeKubeVirtNodes(),
 			err:             fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: route.route.openshift.io \"prometheus-k8s\" not found"),
 			forceDeployment: true,
 		},
