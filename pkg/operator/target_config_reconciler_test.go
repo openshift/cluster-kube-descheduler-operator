@@ -128,6 +128,50 @@ func buildKubeDeschedulerSpec(apply func(*deschedulerv1.KubeDeschedulerSpec)) *d
 	return descheduler
 }
 
+// makeConfigMap creates a ConfigMap with the given asset path for testing.
+func makeConfigMap(assetPath string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+		Data:     map[string]string{"policy.yaml": string(bindata.MustAsset(assetPath))},
+	}
+}
+
+// makeKubeVirtNodes creates two nodes with kubevirt.io/schedulable labels for testing.
+func makeKubeVirtNodes() []runtime.Object {
+	return []runtime.Object{
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node1",
+				Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node2",
+				Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+			},
+		},
+	}
+}
+
+// makePrometheusRoute creates a prometheus-k8s route for testing.
+func makePrometheusRoute() []runtime.Object {
+	return []runtime.Object{
+		&routev1.Route{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "openshift-monitoring",
+				Name:      "prometheus-k8s",
+			},
+			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+				{
+					Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+				},
+			},
+			},
+		},
+	}
+}
+
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
@@ -161,20 +205,14 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{PodLifetime: &fiveMinutes}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"),
 		},
 		{
 			name: "PvcPods",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization", "EvictPodsWithPVC"}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"),
 		},
 		{
 			name: "ThresholdPriorityClassName",
@@ -182,10 +220,7 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriorityClassName: "className"}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"),
 		},
 		{
 			name: "ThresholdPriority",
@@ -193,10 +228,7 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"),
 		},
 		{
 			name: "ThresholdPriorityClassNameAndValueError",
@@ -217,10 +249,7 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationIncludedNamespace.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationIncludedNamespace.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationLow",
@@ -228,10 +257,7 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationLowConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationLowConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationMedium",
@@ -239,20 +265,14 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationNoCustomization",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationEmptyDefault",
@@ -260,10 +280,7 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationHigh",
@@ -271,10 +288,7 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationHighConfig.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationHighConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationEvictionLimits",
@@ -286,10 +300,7 @@ func TestManageConfigMap(t *testing.T) {
 					Node:  utilptr.To[int32](3),
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationEvictionLimits.yaml"))},
-			},
+			want: makeConfigMap("assets/lowNodeUtilizationEvictionLimits.yaml"),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutCustomizations",
@@ -297,38 +308,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = nil
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDefaults.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateDefaults.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateEvictionLimits",
@@ -340,38 +322,9 @@ func TestManageConfigMap(t *testing.T) {
 					Node:  utilptr.To[int32](3),
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateEvictionLimits.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateEvictionLimits.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateLow",
@@ -379,38 +332,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateMedium",
@@ -418,38 +342,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateMediumConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateMediumConfig.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDeviationLowWithCombinedMetrics",
@@ -460,38 +355,9 @@ func TestManageConfigMap(t *testing.T) {
 					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDeviationLowWithCombinedMetrics.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateDeviationLowWithCombinedMetrics.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateHigh",
@@ -499,38 +365,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateHighConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateHighConfig.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateIncludedNamespace",
@@ -542,38 +379,9 @@ func TestManageConfigMap(t *testing.T) {
 					},
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateIncludedNamespace.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateIncludedNamespace.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsLow",
@@ -583,38 +391,9 @@ func TestManageConfigMap(t *testing.T) {
 					DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsLow.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsLow.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsMedium",
@@ -624,38 +403,9 @@ func TestManageConfigMap(t *testing.T) {
 					DevDeviationThresholds: &deschedulerv1.MediumDeviationThreshold,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsHigh",
@@ -665,38 +415,9 @@ func TestManageConfigMap(t *testing.T) {
 					DevDeviationThresholds: &deschedulerv1.HighDeviationThreshold,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicAndStaticThresholds",
@@ -707,35 +428,9 @@ func TestManageConfigMap(t *testing.T) {
 					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
 				}
 			}),
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
-			err: fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
+			err:    fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutKubeVirt",
@@ -746,20 +441,7 @@ func TestManageConfigMap(t *testing.T) {
 					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
 				}
 			}),
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
+			routes: makePrometheusRoute(),
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -781,38 +463,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes:          makePrometheusRoute(),
+			nodes:           makeKubeVirtNodes(),
 			missingPSI:      true,
 			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when PSI metrics are enabled for the worker nodes"),
 			forceDeployment: true,
@@ -823,25 +476,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
-			},
-			routes: []runtime.Object{},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes:          []runtime.Object{},
+			nodes:           makeKubeVirtNodes(),
 			err:             fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: route.route.openshift.io \"prometheus-k8s\" not found"),
 			forceDeployment: true,
 		},
@@ -853,10 +490,7 @@ func TestManageConfigMap(t *testing.T) {
 					Included: []string{"includedNamespace"},
 				}}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/affinityAndTaintsWithNamespaces.yaml"))},
-			},
+			want: makeConfigMap("assets/affinityAndTaintsWithNamespaces.yaml"),
 		},
 		{
 			name: "LongLifecycleWithNamespaces",
@@ -866,20 +500,14 @@ func TestManageConfigMap(t *testing.T) {
 					Included: []string{"includedNamespace"},
 				}}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithNamespaces.yaml"))},
-			},
+			want: makeConfigMap("assets/longLifecycleWithNamespaces.yaml"),
 		},
 		{
 			name: "LongLifecycleWithLocalStorage",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle", "EvictPodsWithLocalStorage"}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithLocalStorage.yaml"))},
-			},
+			want: makeConfigMap("assets/longLifecycleWithLocalStorage.yaml"),
 		},
 		{
 			name: "LongLifecycleWithMetrics",
@@ -889,44 +517,22 @@ func TestManageConfigMap(t *testing.T) {
 					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUUsageProfile,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithMetrics.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
+			want:   makeConfigMap("assets/longLifecycleWithMetrics.yaml"),
+			routes: makePrometheusRoute(),
 		},
 		{
 			name: "SoftTopologyAndDuplicates",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates"}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/softTopologyAndDuplicates.yaml"))},
-			},
+			want: makeConfigMap("assets/softTopologyAndDuplicates.yaml"),
 		},
 		{
 			name: "TopologyAndDuplicates",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"TopologyAndDuplicates"}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/topologyAndDuplicates.yaml"))},
-			},
+			want: makeConfigMap("assets/topologyAndDuplicates.yaml"),
 		},
 		{
 			name:            "CompactAndScaleWithNamespaces",
@@ -937,10 +543,7 @@ func TestManageConfigMap(t *testing.T) {
 					Included: []string{"includedNamespace"},
 				}}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationWithNamespaces.yaml"))},
-			},
+			want: makeConfigMap("assets/highNodeUtilizationWithNamespaces.yaml"),
 		},
 		{
 			name:            "CompactAndScaleMinimal",
@@ -951,10 +554,7 @@ func TestManageConfigMap(t *testing.T) {
 					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactMinimalThreshold,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationMinimal.yaml"))},
-			},
+			want: makeConfigMap("assets/highNodeUtilizationMinimal.yaml"),
 		},
 		{
 			name:            "CompactAndScaleModest",
@@ -965,10 +565,7 @@ func TestManageConfigMap(t *testing.T) {
 					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModestThreshold,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
-			},
+			want: makeConfigMap("assets/highNodeUtilization.yaml"),
 		},
 		{
 			name:            "CompactAndScaleDefault",
@@ -979,10 +576,7 @@ func TestManageConfigMap(t *testing.T) {
 					DevHighNodeUtilizationThresholds: utilptr.To[deschedulerv1.HighNodeUtilizationThresholdsType](""),
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
-			},
+			want: makeConfigMap("assets/highNodeUtilization.yaml"),
 		},
 		{
 			name:            "CompactAndScaleModerate",
@@ -993,10 +587,7 @@ func TestManageConfigMap(t *testing.T) {
 					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModerateThreshold,
 				}
 			}),
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationModerate.yaml"))},
-			},
+			want: makeConfigMap("assets/highNodeUtilizationModerate.yaml"),
 		},
 	}
 
