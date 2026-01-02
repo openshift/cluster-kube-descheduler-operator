@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -15,6 +16,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 	utilptr "k8s.io/utils/ptr"
 
 	fakeconfigv1client "github.com/openshift/client-go/config/clientset/versioned/fake"
@@ -62,6 +65,31 @@ var configHighNodeUtilization = &configv1.Scheduler{
 
 func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configObjects, routesObjects, deschedulerObjects []runtime.Object) (*TargetConfigReconciler, operatorconfigclient.Interface) {
 	fakeKubeClient := fake.NewSimpleClientset(kubeClientObjects...)
+
+	// Add a reactor to handle UpdateScale and update the deployment using the tracker
+	fakeKubeClient.PrependReactor("update", "deployments", func(action clienttesting.Action) (bool, runtime.Object, error) {
+		updateAction := action.(clienttesting.UpdateAction)
+		if updateAction.GetSubresource() == "scale" {
+			scale := updateAction.GetObject().(*autoscalingv1.Scale)
+			// Get the deployment from the tracker
+			gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+			obj, err := fakeKubeClient.Tracker().Get(gvr, operatorclient.OperatorNamespace, operatorclient.OperandName)
+			if err != nil {
+				return true, nil, err
+			}
+			dep := obj.(*appsv1.Deployment)
+			// Update the replicas
+			dep.Spec.Replicas = &scale.Spec.Replicas
+			// Update the deployment back in the tracker
+			err = fakeKubeClient.Tracker().Update(gvr, dep, operatorclient.OperatorNamespace)
+			if err != nil {
+				return true, nil, err
+			}
+			return true, scale, nil
+		}
+		return false, nil, nil
+	})
+
 	operatorConfigClient := operatorconfigclientfake.NewSimpleClientset(deschedulerObjects...)
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	deschedulerClient := &operatorclient.DeschedulerClient{
@@ -104,6 +132,73 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	return targetConfigReconciler, operatorConfigClient
 }
 
+// buildKubeDeschedulerSpec creates a KubeDescheduler object with common fields required for validation.
+// The apply function allows customizing the spec fields for specific test cases.
+func buildKubeDeschedulerSpec(apply func(*deschedulerv1.KubeDeschedulerSpec)) *deschedulerv1.KubeDescheduler {
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+		},
+		Spec: deschedulerv1.KubeDeschedulerSpec{
+			OperatorSpec: operatorv1.OperatorSpec{
+				ManagementState: operatorv1.Managed,
+			},
+			Mode: deschedulerv1.Predictive,
+		},
+	}
+
+	if apply != nil {
+		apply(&descheduler.Spec)
+	}
+
+	return descheduler
+}
+
+// makeConfigMap creates a ConfigMap with the given asset path for testing.
+func makeConfigMap(assetPath string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+		Data:     map[string]string{"policy.yaml": string(bindata.MustAsset(assetPath))},
+	}
+}
+
+// makeKubeVirtNodes creates two nodes with kubevirt.io/schedulable labels for testing.
+func makeKubeVirtNodes() []runtime.Object {
+	return []runtime.Object{
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node1",
+				Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+			},
+		},
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "node2",
+				Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+			},
+		},
+	}
+}
+
+// makePrometheusRoute creates a prometheus-k8s route for testing.
+func makePrometheusRoute() []runtime.Object {
+	return []runtime.Object{
+		&routev1.Route{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "openshift-monitoring",
+				Name:      "prometheus-k8s",
+			},
+			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
+				{
+					Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
+				},
+			},
+			},
+		},
+	}
+}
+
 func TestManageConfigMap(t *testing.T) {
 	fm, _ := time.ParseDuration("5m")
 	fiveMinutes := metav1.Duration{Duration: fm}
@@ -133,657 +228,247 @@ func TestManageConfigMap(t *testing.T) {
 	}{
 		{
 			name: "Podlifetime",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{PodLifetime: &fiveMinutes},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{PodLifetime: &fiveMinutes}
+			}),
+			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"),
 		},
 		{
 			name: "PvcPods",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization", "EvictPodsWithPVC"},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization", "EvictPodsWithPVC"}
+			}),
+			want: makeConfigMap("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"),
 		},
 		{
 			name: "ThresholdPriorityClassName",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriorityClassName: "className"},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriorityClassName: "className"}
+			}),
+			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"),
 		},
 		{
 			name: "ThresholdPriority",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority}
+			}),
+			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"),
 		},
 		{
 			name: "ThresholdPriorityClassNameAndValueError",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority, ThresholdPriorityClassName: "className"},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority, ThresholdPriorityClassName: "className"}
+			}),
 			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
 		{
 			name: "LowNodeUtilizationIncludedNamespace",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
-						Namespaces: deschedulerv1.Namespaces{
-							Included: []string{"includedNamespace"},
-						},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+					Namespaces: deschedulerv1.Namespaces{
+						Included: []string{"includedNamespace"},
 					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationIncludedNamespace.yaml"))},
-			},
+				}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationIncludedNamespace.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationLow",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationLowConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationLowConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationMedium",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationNoCustomization",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationEmptyDefault",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationMediumConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationHigh",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationHighConfig.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationHighConfig.yaml"),
 		},
 		{
 			name: "LowNodeUtilizationEvictionLimits",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")},
-					EvictionLimits: &deschedulerv1.EvictionLimits{
-						Total: utilptr.To[int32](10),
-						Node:  utilptr.To[int32](3),
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/lowNodeUtilizationEvictionLimits.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")}
+				spec.EvictionLimits = &deschedulerv1.EvictionLimits{
+					Total: utilptr.To[int32](10),
+					Node:  utilptr.To[int32](3),
+				}
+			}),
+			want: makeConfigMap("assets/lowNodeUtilizationEvictionLimits.yaml"),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutCustomizations",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: nil,
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDefaults.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = nil
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateDefaults.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateEvictionLimits",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: nil,
-					EvictionLimits: &deschedulerv1.EvictionLimits{
-						Total: utilptr.To[int32](10),
-						Node:  utilptr.To[int32](3),
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateEvictionLimits.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = nil
+				spec.EvictionLimits = &deschedulerv1.EvictionLimits{
+					Total: utilptr.To[int32](10),
+					Node:  utilptr.To[int32](3),
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateEvictionLimits.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateLow",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateMedium",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateMediumConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateMediumConfig.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDeviationLowWithCombinedMetrics",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDeviationLowWithCombinedMetrics.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateDeviationLowWithCombinedMetrics.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateHigh",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateHighConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateHighConfig.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateIncludedNamespace",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						Namespaces: deschedulerv1.Namespaces{
-							Included: []string{"includedNamespace"},
-						},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					Namespaces: deschedulerv1.Namespaces{
+						Included: []string{"includedNamespace"},
 					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateIncludedNamespace.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateIncludedNamespace.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsLow",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsLow.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsLow.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsMedium",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds: &deschedulerv1.MediumDeviationThreshold,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds: &deschedulerv1.MediumDeviationThreshold,
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsHigh",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds: &deschedulerv1.HighDeviationThreshold,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds: &deschedulerv1.HighDeviationThreshold,
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateDynamicAndStaticThresholds",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
-						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
-					},
-				},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
-			err: fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
+					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+				}
+			}),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
+			err:    fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutKubeVirt",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
-						DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
-					},
-				},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
+					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
+				}
+			}),
+			routes: makePrometheusRoute(),
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -801,399 +486,143 @@ func TestManageConfigMap(t *testing.T) {
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutPSI",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
+			}),
+			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes:          makePrometheusRoute(),
+			nodes:           makeKubeVirtNodes(),
 			missingPSI:      true,
 			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when PSI metrics are enabled for the worker nodes"),
 			forceDeployment: true,
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutPrometheusRoute",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:              []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/relieveAndMigrateLowConfig.yaml"))},
-			},
-			routes: []runtime.Object{},
-			nodes: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node2",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
+			}),
+			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
+			routes:          []runtime.Object{},
+			nodes:           makeKubeVirtNodes(),
 			err:             fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: route.route.openshift.io \"prometheus-k8s\" not found"),
 			forceDeployment: true,
 		},
 		{
 			name: "AffinityAndTaintsWithNamespaces",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"AffinityAndTaints"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
-						Included: []string{"includedNamespace"},
-					}},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/affinityAndTaintsWithNamespaces.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"AffinityAndTaints"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
+					Included: []string{"includedNamespace"},
+				}}
+			}),
+			want: makeConfigMap("assets/affinityAndTaintsWithNamespaces.yaml"),
 		},
 		{
 			name: "LongLifecycleWithNamespaces",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
-						Included: []string{"includedNamespace"},
-					}},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithNamespaces.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
+					Included: []string{"includedNamespace"},
+				}}
+			}),
+			want: makeConfigMap("assets/longLifecycleWithNamespaces.yaml"),
 		},
 		{
 			name: "LongLifecycleWithLocalStorage",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle", "EvictPodsWithLocalStorage"},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithLocalStorage.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle", "EvictPodsWithLocalStorage"}
+			}),
+			want: makeConfigMap("assets/longLifecycleWithLocalStorage.yaml"),
 		},
 		{
 			name: "LongLifecycleWithMetrics",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUUsageProfile,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/longLifecycleWithMetrics.yaml"))},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUUsageProfile,
+				}
+			}),
+			want:   makeConfigMap("assets/longLifecycleWithMetrics.yaml"),
+			routes: makePrometheusRoute(),
 		},
 		{
 			name: "SoftTopologyAndDuplicates",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates"},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/softTopologyAndDuplicates.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates"}
+			}),
+			want: makeConfigMap("assets/softTopologyAndDuplicates.yaml"),
 		},
 		{
 			name: "TopologyAndDuplicates",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"TopologyAndDuplicates"},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/topologyAndDuplicates.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"TopologyAndDuplicates"}
+			}),
+			want: makeConfigMap("assets/topologyAndDuplicates.yaml"),
 		},
 		{
 			name:            "CompactAndScaleWithNamespaces",
 			schedulerConfig: configHighNodeUtilization,
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
-						Included: []string{"includedNamespace"},
-					}},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationWithNamespaces.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
+					Included: []string{"includedNamespace"},
+				}}
+			}),
+			want: makeConfigMap("assets/highNodeUtilizationWithNamespaces.yaml"),
 		},
 		{
 			name:            "CompactAndScaleMinimal",
 			schedulerConfig: configHighNodeUtilization,
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevHighNodeUtilizationThresholds: &deschedulerv1.CompactMinimalThreshold,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationMinimal.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactMinimalThreshold,
+				}
+			}),
+			want: makeConfigMap("assets/highNodeUtilizationMinimal.yaml"),
 		},
 		{
 			name:            "CompactAndScaleModest",
 			schedulerConfig: configHighNodeUtilization,
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModestThreshold,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModestThreshold,
+				}
+			}),
+			want: makeConfigMap("assets/highNodeUtilization.yaml"),
 		},
 		{
 			name:            "CompactAndScaleDefault",
 			schedulerConfig: configHighNodeUtilization,
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevHighNodeUtilizationThresholds: utilptr.To[deschedulerv1.HighNodeUtilizationThresholdsType](""),
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilization.yaml"))},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevHighNodeUtilizationThresholds: utilptr.To[deschedulerv1.HighNodeUtilizationThresholdsType](""),
+				}
+			}),
+			want: makeConfigMap("assets/highNodeUtilization.yaml"),
 		},
 		{
 			name:            "CompactAndScaleModerate",
 			schedulerConfig: configHighNodeUtilization,
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale"},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModerateThreshold,
-					},
-				},
-			},
-			want: &corev1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				Data:     map[string]string{"policy.yaml": string(bindata.MustAsset("assets/highNodeUtilizationModerate.yaml"))},
-			},
-		},
-		{
-			name: "DevPreviewLongLifecycleAndLifecycleAndUtilizationProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"DevPreviewLongLifecycle", "LifecycleAndUtilization"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "LongLifecycleAndLifecycleAndUtilizationProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"LongLifecycle", "LifecycleAndUtilization"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "SoftTopologyAndDuplicatesAndTopologyAndDuplicatesProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates", "TopologyAndDuplicates"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndLifecycleAndUtilizationProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "LifecycleAndUtilization"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndLongLifecycleProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "LongLifecycle"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare CompactAndScale and LongLifecycle profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndDevPreviewLongLifecycleProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "DevPreviewLongLifecycle"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "CompactAndScaleAndTopologyAndDuplicatesProfileConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{"CompactAndScale", "TopologyAndDuplicates"},
-				},
-			},
-			err:             fmt.Errorf("cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously, ignoring"),
-			forceDeployment: true,
-		},
-		{
-			name: "DevPreviewLongLifecycleAndDevKubeVirtRelieveAndMigrateConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate},
-				},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
-			forceDeployment: true,
-		},
-		{
-			name: "LongLifecycleAndDevKubeVirtRelieveAndMigrateConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate},
-				},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
-			forceDeployment: true,
-		},
-		{
-			name: "LifecycleAndUtilizationAndDevKubeVirtRelieveAndMigrateConflict",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate},
-				},
-			},
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
-			err:             fmt.Errorf("cannot declare %v and %v profiles simultaneously, ignoring", deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate),
-			forceDeployment: true,
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModerateThreshold,
+				}
+			}),
+			want: makeConfigMap("assets/highNodeUtilizationModerate.yaml"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 			if tt.schedulerConfig == nil {
 				tt.schedulerConfig = configLowNodeUtilization
 			}
@@ -1272,11 +701,11 @@ func TestManageDeployment(t *testing.T) {
 					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
 				},
 			},
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+				spec.Mode = deschedulerv1.Automatic
+			}),
 			checkContainerOnly: true,
 			want: &appsv1.Deployment{
 				TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
@@ -1336,12 +765,12 @@ func TestManageDeployment(t *testing.T) {
 					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
 				},
 			},
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{DevEnableEvictionsInBackground: true},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevEnableEvictionsInBackground: true}
+				spec.Mode = deschedulerv1.Automatic
+			}),
 			checkContainerOnly:     true,
 			checkContainerArgsOnly: true,
 			want: &appsv1.Deployment{
@@ -1377,12 +806,11 @@ func TestManageDeployment(t *testing.T) {
 					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
 				},
 			},
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+				spec.Mode = deschedulerv1.Automatic
+			}),
 			checkContainerOnly:     true,
 			checkContainerArgsOnly: true,
 			want: &appsv1.Deployment{
@@ -1412,6 +840,9 @@ func TestManageDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 			got, _, err := tt.targetConfigReconciler.manageDeschedulerDeployment(tt.descheduler, nil)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v\n", err)
@@ -1454,9 +885,10 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "3410714199b93034a43b3103b92abcd75fc527463744386b7eff0809471bf81f"},
+			Namespace:       "openshift-kube-descheduler-operator",
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "6b9c733e7ea834308aa02b01074bf5d2e66e551c5e178f2d21a13c50ed152256"},
 			Labels:          map[string]string{"app": "softtainer"},
-			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler"}},
+			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler", Name: "cluster"}},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: utilptr.To(int32(1)),
@@ -1527,7 +959,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 					Volumes: []corev1.Volume{
 						{
 							Name:         "policy-volume",
-							VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{}}},
+							VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "cluster"}}},
 						},
 						{
 							Name:         "certs-dir",
@@ -1548,32 +980,28 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 	}{
 		{
 			name: "DevKubeVirtRelieveAndMigrate",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-					},
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
 			checkContainerOnly:     false,
 			checkContainerArgsOnly: false,
 			want:                   expectedSoftTainterDeployment,
 		},
 		{
 			name: "LifecycleAndUtilization (without the softtainer) and no leftovers on existing nodes",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-					},
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
 			objects: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1610,16 +1038,14 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		},
 		{
 			name: "LifecycleAndUtilization (without the softtainer) but a leftover on existing nodes - 1",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-					},
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
 			objects: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1651,16 +1077,14 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		},
 		{
 			name: "LifecycleAndUtilization (without the softtainer) but a leftover on existing nodes - 2",
-			descheduler: &deschedulerv1.KubeDescheduler{
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					Profiles: []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization},
-					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
-						DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-						DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-					},
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
 			objects: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1705,6 +1129,9 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 
 			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, tt.objects, nil, nil, nil)
 
@@ -1756,17 +1183,14 @@ func TestSync(t *testing.T) {
 					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
 				},
 			},
-			descheduler: &deschedulerv1.KubeDescheduler{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster",
-					Namespace: "openshift-kube-descheduler-operator",
-				},
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					ThresholdPriority:          utilptr.To[int32](1000),
+					ThresholdPriorityClassName: "className",
+				}
+			}),
 			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
 		},
 		{
@@ -1779,18 +1203,10 @@ func TestSync(t *testing.T) {
 					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
 				},
 			},
-			descheduler: &deschedulerv1.KubeDescheduler{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "KubeDescheduler"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      operatorclient.OperatorConfigName,
-					Namespace: operatorclient.OperatorNamespace,
-				},
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					DeschedulingIntervalSeconds: utilptr.To[int32](10),
-					Profiles:                    []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate},
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{},
-				},
-			},
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+			}),
 			routes: []runtime.Object{
 				&routev1.Route{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1811,33 +1227,13 @@ func TestSync(t *testing.T) {
 				Reason: fmt.Sprintf("profile %v can only be used when KubeVirt is properly deployed", deschedulerv1.DevKubeVirtRelieveAndMigrate),
 			},
 		},
-		{
-			name: "Zeroed out descheduling interval",
-			targetConfigReconciler: &TargetConfigReconciler{
-				ctx:           context.TODO(),
-				kubeClient:    fake.NewSimpleClientset(),
-				eventRecorder: fakeRecorder,
-				configSchedulerLister: &fakeSchedConfigLister{
-					Items: map[string]*configv1.Scheduler{"cluster": configLowNodeUtilization},
-				},
-			},
-			descheduler: &deschedulerv1.KubeDescheduler{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster",
-					Namespace: "openshift-kube-descheduler-operator",
-				},
-				Spec: deschedulerv1.KubeDeschedulerSpec{
-					DeschedulingIntervalSeconds: utilptr.To[int32](0),
-					Profiles:                    []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"},
-					ProfileCustomizations:       &deschedulerv1.ProfileCustomizations{ThresholdPriority: utilptr.To[int32](1000), ThresholdPriorityClassName: "className"},
-				},
-			},
-			err: fmt.Errorf("descheduler should have an interval set and it should be greater than 0"),
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if err := validateDeschedulerCR(tt.descheduler); err != nil {
+				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+			}
 
 			ctx := context.TODO()
 
@@ -1991,5 +1387,387 @@ func (f *fakeRecorder) Shutdown() {
 func NewFakeRecorder(bufferSize int) *fakeRecorder {
 	return &fakeRecorder{
 		Events: make(chan string, bufferSize),
+	}
+}
+
+func TestDeploymentScaling(t *testing.T) {
+	tests := []struct {
+		name             string
+		descheduler      *deschedulerv1.KubeDescheduler
+		routes           []runtime.Object
+		nodes            []runtime.Object
+		expectedReplicas int32
+		expectError      bool
+	}{
+		{
+			name: "Valid configuration should not scale down deployment",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
+			}),
+			expectedReplicas: 1,
+			expectError:      false,
+		},
+		{
+			name: "Invalid CR with negative descheduling interval should scale down deployment",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](-10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			expectedReplicas: 0,
+			expectError:      true,
+		},
+		{
+			name: "Invalid CR with unset descheduling interval should scale down deployment",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = nil
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			expectedReplicas: 0,
+			expectError:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.expectError {
+				if err := validateDeschedulerCR(tt.descheduler); err != nil {
+					t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+				}
+			}
+
+			ctx := context.TODO()
+
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      operatorclient.OperandName,
+					Namespace: operatorclient.OperatorNamespace,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: utilptr.To[int32](1),
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{},
+					},
+				},
+			}
+
+			objects := []runtime.Object{
+				deployment,
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   operatorclient.OperatorNamespace,
+						Labels: map[string]string{operatorclient.OpenshiftClusterMonitoringLabelKey: operatorclient.OpenshiftClusterMonitoringLabelValue},
+					},
+				},
+			}
+			objects = append(objects, tt.nodes...)
+
+			targetConfigReconciler, _ := initTargetConfigReconciler(
+				ctx,
+				objects,
+				[]runtime.Object{configLowNodeUtilization},
+				tt.routes,
+				[]runtime.Object{tt.descheduler},
+			)
+
+			err := targetConfigReconciler.sync()
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+			}
+
+			// Verify deployment replicas by getting it from the fake client
+			deployment, err = targetConfigReconciler.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("Failed to get deployment: %v", err)
+			}
+
+			if deployment.Spec.Replicas == nil {
+				t.Fatalf("Deployment replicas is nil")
+			}
+
+			if *deployment.Spec.Replicas != tt.expectedReplicas {
+				t.Errorf("Expected deployment replicas to be %d, got %d", tt.expectedReplicas, *deployment.Spec.Replicas)
+			}
+		})
+	}
+}
+
+func TestValidateDescheduler(t *testing.T) {
+	tests := []struct {
+		name        string
+		descheduler *deschedulerv1.KubeDescheduler
+		wantErr     bool
+	}{
+		{
+			name: "Valid descheduler configuration",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: false,
+		},
+		{
+			name: "Valid descheduler with multiple profiles",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](600)
+				spec.Mode = deschedulerv1.Automatic
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{
+					deschedulerv1.AffinityAndTaints,
+					deschedulerv1.TopologyAndDuplicates,
+				}
+			}),
+			wantErr: false,
+		},
+		{
+			name: "Invalid descheduler with non-existing profile",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{"NonExistingProfile"}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with zero interval - rejected by schema validation",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](0)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with negative interval - rejected by schema validation",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](-10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: true,
+		},
+		{
+			name: "Descheduler with positive interval",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](100)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDeschedulerCR(tt.descheduler)
+			t.Log(err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateDeschedulerCR() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCheckProfileConflicts(t *testing.T) {
+	// Helper function to create a KubeDescheduler with specified profiles
+	makeKubeDeschedulerWithProfiles := func(profiles ...deschedulerv1.DeschedulerProfile) *deschedulerv1.KubeDescheduler {
+		return buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+			spec.Profiles = profiles
+			spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+		})
+	}
+
+	tests := []struct {
+		name           string
+		descheduler    *deschedulerv1.KubeDescheduler
+		wantErr        bool
+		expectedErrMsg string
+	}{
+		// Valid single profiles
+		{
+			name:        "Valid single profile: AffinityAndTaints",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: TopologyAndDuplicates",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.TopologyAndDuplicates),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: LifecycleAndUtilization",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: LongLifecycle",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: CompactAndScale",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: DevKubeVirtRelieveAndMigrate",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid single profile: KubeVirtRelieveAndMigrate",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:     false,
+		},
+
+		// Valid multiple profiles
+		{
+			name:        "Valid combination: AffinityAndTaints + TopologyAndDuplicates",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.TopologyAndDuplicates),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: AffinityAndTaints + LifecycleAndUtilization",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.LifecycleAndUtilization),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: AffinityAndTaints + EvictPodsWithPVC",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.EvictPodsWithPVC),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: LifecycleAndUtilization + EvictPodsWithLocalStorage",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization, deschedulerv1.EvictPodsWithLocalStorage),
+			wantErr:     false,
+		},
+		{
+			name:        "Valid combination: LongLifecycle + TopologyAndDuplicates",
+			descheduler: makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.TopologyAndDuplicates),
+			wantErr:     false,
+		},
+
+		// Duplicate profile detection
+		{
+			name:           "Duplicate profile: AffinityAndTaints twice",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.AffinityAndTaints, deschedulerv1.AffinityAndTaints),
+			wantErr:        true,
+			expectedErrMsg: "duplicate profiles are not allowed",
+		},
+
+		// Invalid profile combinations - 16 conflict pairs
+		{
+			name:           "Conflict: DevPreviewLongLifecycle and LifecycleAndUtilization",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LifecycleAndUtilization),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare DevPreviewLongLifecycle and LifecycleAndUtilization profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LongLifecycle and LifecycleAndUtilization",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.LifecycleAndUtilization),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously",
+		},
+		{
+			name:           "Conflict: DevPreviewLongLifecycle and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare DevPreviewLongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LongLifecycle and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LongLifecycle and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LifecycleAndUtilization and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LifecycleAndUtilization and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: KubeVirtRelieveAndMigrate and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare KubeVirtRelieveAndMigrate and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: DevPreviewLongLifecycle and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare DevPreviewLongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LongLifecycle and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LongLifecycle, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LongLifecycle and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: LifecycleAndUtilization and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.LifecycleAndUtilization, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare LifecycleAndUtilization and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: SoftTopologyAndDuplicates and TopologyAndDuplicates",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.SoftTopologyAndDuplicates, deschedulerv1.TopologyAndDuplicates),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare SoftTopologyAndDuplicates and TopologyAndDuplicates profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and LifecycleAndUtilization",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.LifecycleAndUtilization),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and LongLifecycle",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.LongLifecycle),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and LongLifecycle profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and DevPreviewLongLifecycle",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.DevPreviewLongLifecycle),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and DevPreviewLongLifecycle profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and DevKubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.DevKubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and DevKubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and KubeVirtRelieveAndMigrate",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.KubeVirtRelieveAndMigrate),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and KubeVirtRelieveAndMigrate profiles simultaneously",
+		},
+		{
+			name:           "Conflict: CompactAndScale and TopologyAndDuplicates",
+			descheduler:    makeKubeDeschedulerWithProfiles(deschedulerv1.CompactAndScale, deschedulerv1.TopologyAndDuplicates),
+			wantErr:        true,
+			expectedErrMsg: "cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDeschedulerCR(tt.descheduler)
+			t.Log(err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateDeschedulerCR() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.expectedErrMsg != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectedErrMsg) {
+					t.Errorf("validateDeschedulerCR() error message = %v, expectedErrMsg to contain %v", err, tt.expectedErrMsg)
+				}
+			}
+		})
 	}
 }
