@@ -16,6 +16,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/operator/events"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 	utilptr "k8s.io/utils/ptr"
 
 	fakeconfigv1client "github.com/openshift/client-go/config/clientset/versioned/fake"
@@ -63,6 +65,31 @@ var configHighNodeUtilization = &configv1.Scheduler{
 
 func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configObjects, routesObjects, deschedulerObjects []runtime.Object) (*TargetConfigReconciler, operatorconfigclient.Interface) {
 	fakeKubeClient := fake.NewSimpleClientset(kubeClientObjects...)
+
+	// Add a reactor to handle UpdateScale and update the deployment using the tracker
+	fakeKubeClient.PrependReactor("update", "deployments", func(action clienttesting.Action) (bool, runtime.Object, error) {
+		updateAction := action.(clienttesting.UpdateAction)
+		if updateAction.GetSubresource() == "scale" {
+			scale := updateAction.GetObject().(*autoscalingv1.Scale)
+			// Get the deployment from the tracker
+			gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+			obj, err := fakeKubeClient.Tracker().Get(gvr, operatorclient.OperatorNamespace, operatorclient.OperandName)
+			if err != nil {
+				return true, nil, err
+			}
+			dep := obj.(*appsv1.Deployment)
+			// Update the replicas
+			dep.Spec.Replicas = &scale.Spec.Replicas
+			// Update the deployment back in the tracker
+			err = fakeKubeClient.Tracker().Update(gvr, dep, operatorclient.OperatorNamespace)
+			if err != nil {
+				return true, nil, err
+			}
+			return true, scale, nil
+		}
+		return false, nil, nil
+	})
+
 	operatorConfigClient := operatorconfigclientfake.NewSimpleClientset(deschedulerObjects...)
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	deschedulerClient := &operatorclient.DeschedulerClient{
@@ -1360,6 +1387,114 @@ func (f *fakeRecorder) Shutdown() {
 func NewFakeRecorder(bufferSize int) *fakeRecorder {
 	return &fakeRecorder{
 		Events: make(chan string, bufferSize),
+	}
+}
+
+func TestDeploymentScaling(t *testing.T) {
+	tests := []struct {
+		name             string
+		descheduler      *deschedulerv1.KubeDescheduler
+		routes           []runtime.Object
+		nodes            []runtime.Object
+		expectedReplicas int32
+		expectError      bool
+	}{
+		{
+			name: "Valid configuration should not scale down deployment",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
+			}),
+			expectedReplicas: 1,
+			expectError:      false,
+		},
+		{
+			name: "Invalid CR with negative descheduling interval should scale down deployment",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](-10)
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			expectedReplicas: 0,
+			expectError:      true,
+		},
+		{
+			name: "Invalid CR with unset descheduling interval should scale down deployment",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.DeschedulingIntervalSeconds = nil
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+			}),
+			expectedReplicas: 0,
+			expectError:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.expectError {
+				if err := validateDeschedulerCR(tt.descheduler); err != nil {
+					t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
+				}
+			}
+
+			ctx := context.TODO()
+
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      operatorclient.OperandName,
+					Namespace: operatorclient.OperatorNamespace,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: utilptr.To[int32](1),
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{},
+					},
+				},
+			}
+
+			objects := []runtime.Object{
+				deployment,
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   operatorclient.OperatorNamespace,
+						Labels: map[string]string{operatorclient.OpenshiftClusterMonitoringLabelKey: operatorclient.OpenshiftClusterMonitoringLabelValue},
+					},
+				},
+			}
+			objects = append(objects, tt.nodes...)
+
+			targetConfigReconciler, _ := initTargetConfigReconciler(
+				ctx,
+				objects,
+				[]runtime.Object{configLowNodeUtilization},
+				tt.routes,
+				[]runtime.Object{tt.descheduler},
+			)
+
+			err := targetConfigReconciler.sync()
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+			}
+
+			// Verify deployment replicas by getting it from the fake client
+			deployment, err = targetConfigReconciler.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("Failed to get deployment: %v", err)
+			}
+
+			if deployment.Spec.Replicas == nil {
+				t.Fatalf("Deployment replicas is nil")
+			}
+
+			if *deployment.Spec.Replicas != tt.expectedReplicas {
+				t.Errorf("Expected deployment replicas to be %d, got %d", tt.expectedReplicas, *deployment.Spec.Replicas)
+			}
+		})
 	}
 }
 
