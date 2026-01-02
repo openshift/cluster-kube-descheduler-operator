@@ -155,6 +155,32 @@ func NewTargetConfigReconciler(
 	return c
 }
 
+func (c TargetConfigReconciler) scaleDownDeployment(scaleDownError error) error {
+	_, err := c.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).UpdateScale(
+		c.ctx,
+		operatorclient.OperandName,
+		&autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      operatorclient.OperandName,
+				Namespace: operatorclient.OperatorNamespace,
+			},
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: 0,
+			},
+		},
+		metav1.UpdateOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	_, _, err = v1helpers.UpdateStatus(c.ctx, c.deschedulerClient,
+		v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
+			Type:   "TargetConfigControllerDegraded",
+			Status: operatorv1.ConditionTrue,
+			Reason: scaleDownError.Error(),
+		}))
+	return err
+}
+
 func (c TargetConfigReconciler) sync() error {
 	descheduler, err := c.operatorClient.KubeDeschedulers(operatorclient.OperatorNamespace).Get(c.ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
@@ -164,11 +190,18 @@ func (c TargetConfigReconciler) sync() error {
 
 	if err := validateDeschedulerCR(descheduler); err != nil {
 		klog.ErrorS(err, "descheduler validation failed")
+		if err := c.scaleDownDeployment(err); err != nil {
+			return fmt.Errorf("error scaling down the deployment: %w", err)
+		}
 		return fmt.Errorf("descheduler validation failed: %w", err)
 	}
 
 	if descheduler.Spec.DeschedulingIntervalSeconds == nil || *descheduler.Spec.DeschedulingIntervalSeconds <= 0 {
-		return fmt.Errorf("descheduler should have an interval set and it should be greater than 0")
+		valErr := fmt.Errorf("descheduler should have an interval set and it should be greater than 0")
+		if err := c.scaleDownDeployment(valErr); err != nil {
+			return fmt.Errorf("error scaling down the deployment: %w", err)
+		}
+		return valErr
 	}
 
 	specAnnotations := map[string]string{
@@ -181,29 +214,7 @@ func (c TargetConfigReconciler) sync() error {
 		// it means we want to scale the deployment to 0
 		if forceDeployment {
 			klog.ErrorS(manageConfigMapErr, "Error managing targetConfig")
-			_, err = c.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).UpdateScale(
-				c.ctx,
-				operatorclient.OperandName,
-				&autoscalingv1.Scale{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      operatorclient.OperandName,
-						Namespace: operatorclient.OperatorNamespace,
-					},
-					Spec: autoscalingv1.ScaleSpec{
-						Replicas: 0,
-					},
-				},
-				metav1.UpdateOptions{})
-			if err != nil && !errors.IsNotFound(err) {
-				return err
-			}
-			_, _, err = v1helpers.UpdateStatus(c.ctx, c.deschedulerClient,
-				v1helpers.UpdateConditionFn(operatorv1.OperatorCondition{
-					Type:   "TargetConfigControllerDegraded",
-					Status: operatorv1.ConditionTrue,
-					Reason: manageConfigMapErr.Error(),
-				}))
-			return err
+			return c.scaleDownDeployment(manageConfigMapErr)
 		}
 		return manageConfigMapErr
 	} else {
