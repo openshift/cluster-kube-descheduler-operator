@@ -7,7 +7,7 @@ COPY ./LICENSE licenses/.
 
 ARG OPERATOR_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:3c06b0ce57374e0aa1474601b751f4a8ee44114d28f442a751050f5e6f10eee6
 ARG SOFTTAINER_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:3c06b0ce57374e0aa1474601b751f4a8ee44114d28f442a751050f5e6f10eee6
-# artificial distance to avoid rebase conflicts when the operand and the operator image gets updated at the same time
+# artificial distance to avoid rebase conflicts when the operand and the operator image gets updated at the same time 
 #
 #
 #
