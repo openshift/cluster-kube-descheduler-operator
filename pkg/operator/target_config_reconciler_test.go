@@ -14,7 +14,9 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	routev1 "github.com/openshift/api/route/v1"
+	"github.com/openshift/library-go/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +31,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
+	"k8s.io/utils/clock"
 	utilptr "k8s.io/utils/ptr"
 
 	fakeconfigv1client "github.com/openshift/client-go/config/clientset/versioned/fake"
@@ -39,10 +42,13 @@ import (
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorconfigclientfake "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation/configobservercontroller"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
+	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/resourcesynccontroller"
 	bindata "github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/testdata"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/softtainter"
 	coreinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/util/workqueue"
 )
 
 var configLowNodeUtilization = &configv1.Scheduler{
@@ -197,6 +203,23 @@ func makePrometheusRoute() []runtime.Object {
 			},
 		},
 	}
+}
+
+// fakeSyncContext implements factory.SyncContext for testing
+type fakeSyncContext struct {
+	recorder events.Recorder
+}
+
+func (f *fakeSyncContext) Queue() workqueue.RateLimitingInterface {
+	return nil
+}
+
+func (f *fakeSyncContext) QueueKey() string {
+	return ""
+}
+
+func (f *fakeSyncContext) Recorder() events.Recorder {
+	return f.recorder
 }
 
 func TestManageConfigMap(t *testing.T) {
@@ -1564,6 +1587,219 @@ func TestValidateDescheduler(t *testing.T) {
 			t.Log(err)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateDeschedulerCR() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APIServer) (*TargetConfigReconciler, operatorconfigclient.Interface, *configobservercontroller.ConfigObserver) {
+	ctx := context.TODO()
+
+	// Create KubeDescheduler CR
+	kubeDescheduler := buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+		spec.DeschedulingIntervalSeconds = utilptr.To[int32](300)
+		spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+	})
+
+	// Build list of objects to pre-populate the fake config client
+	configObjects := []runtime.Object{configLowNodeUtilization}
+	if apiServer != nil {
+		configObjects = append(configObjects, apiServer)
+	}
+
+	// Setup required namespaces
+	kubeClientObjects := []runtime.Object{
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: operatorclient.OperatorNamespace,
+			},
+		},
+	}
+
+	// Create fake clients
+	fakeKubeClient := fake.NewSimpleClientset(kubeClientObjects...)
+	operatorConfigClient := operatorconfigclientfake.NewSimpleClientset(kubeDescheduler)
+	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
+
+	// Add KubeDescheduler to informer cache before creating deschedulerClient
+	operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer().GetIndexer().Add(kubeDescheduler)
+
+	deschedulerClient := &operatorclient.DeschedulerClient{
+		Ctx:            ctx,
+		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
+		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
+	}
+	openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(configObjects...)
+	configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
+
+	// Populate required informer caches
+	if apiServer != nil {
+		configInformers.Config().V1().APIServers().Informer().GetIndexer().Add(apiServer)
+	}
+
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
+		fakeKubeClient,
+		"",
+		operatorclient.OperatorNamespace,
+	)
+
+	eventRecorder := events.NewInMemoryRecorder("", clock.RealClock{})
+
+	// Create resource sync controller
+	resourceSyncController, err := resourcesynccontroller.NewResourceSyncController(
+		deschedulerClient,
+		kubeInformersForNamespaces,
+		fakeKubeClient,
+		eventRecorder,
+	)
+	if err != nil {
+		t.Fatalf("failed to create resource sync controller: %v", err)
+	}
+
+	// Create config observer - this registers event handlers with informers
+	configObserver := configobservercontroller.NewConfigObserver(
+		deschedulerClient,
+		kubeInformersForNamespaces,
+		configInformers,
+		resourceSyncController,
+		eventRecorder,
+	)
+
+	// Create target config reconciler - this registers event handlers with informers
+	targetConfigReconciler := NewTargetConfigReconciler(
+		ctx,
+		"RELATED_IMAGE_OPERAND_IMAGE",
+		"RELATED_IMAGE_SOFTTAINTER_IMAGE",
+		operatorConfigClient.KubedeschedulersV1(),
+		operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers(),
+		deschedulerClient,
+		fakeKubeClient,
+		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()),
+		configInformers,
+		routev1informers.NewSharedInformerFactory(fakeroutev1client.NewSimpleClientset(), 10*time.Minute),
+		coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute),
+		eventRecorder,
+	)
+
+	// Start informers after controllers have registered their event handlers
+	operatorConfigInformers.Start(ctx.Done())
+	configInformers.Start(ctx.Done())
+	kubeInformersForNamespaces.Start(ctx.Done())
+
+	operatorConfigInformers.WaitForCacheSync(ctx.Done())
+	configInformers.WaitForCacheSync(ctx.Done())
+	kubeInformersForNamespaces.WaitForCacheSync(ctx.Done())
+
+	return targetConfigReconciler, operatorConfigClient, configObserver
+}
+
+func TestManageDeschedulerDeployment_TLSConfiguration(t *testing.T) {
+	// Get the default Intermediate TLS profile
+	intermediateProfile := configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+	intermediateCiphers := crypto.OpenSSLToIANACipherSuites(intermediateProfile.Ciphers)
+
+	tests := []struct {
+		name                 string
+		apiServer            *configv1.APIServer
+		expectedCipherSuites string
+		expectedMinTLSVer    string
+	}{
+		{
+			name:                 "no APIServer config",
+			apiServer:            nil,
+			expectedCipherSuites: fmt.Sprintf("--tls-cipher-suites=%s", strings.Join(intermediateCiphers, ",")),
+			expectedMinTLSVer:    fmt.Sprintf("--tls-min-version=%s", intermediateProfile.MinTLSVersion),
+		},
+		{
+			name: "APIServer with TLS security profile",
+			apiServer: &configv1.APIServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+				Spec: configv1.APIServerSpec{
+					TLSSecurityProfile: &configv1.TLSSecurityProfile{
+						Type: configv1.TLSProfileCustomType,
+						Custom: &configv1.CustomTLSProfile{
+							TLSProfileSpec: configv1.TLSProfileSpec{
+								Ciphers: []string{
+									"ECDHE-ECDSA-AES128-GCM-SHA256",
+									"ECDHE-RSA-AES128-GCM-SHA256",
+								},
+								MinTLSVersion: configv1.VersionTLS12,
+							},
+						},
+					},
+				},
+			},
+			expectedCipherSuites: "--tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			expectedMinTLSVer:    "--tls-min-version=VersionTLS12",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+
+			// Setup fake clients with all required resources
+			targetConfigReconciler, operatorConfigClient, configObserver := setupFakeClientsWithConfigObserver(t, tt.apiServer)
+
+			// Verify ObservedConfig is empty before observer sync
+			kubeDescheduler, err := operatorConfigClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("failed to get kubedescheduler before observer sync: %v", err)
+			}
+			if len(kubeDescheduler.Spec.ObservedConfig.Raw) > 0 {
+				t.Errorf("Expected ObservedConfig to be empty before observer sync, but got: %s", string(kubeDescheduler.Spec.ObservedConfig.Raw))
+			}
+
+			// Run config observer sync to populate ObservedConfig
+			if err := configObserver.Sync(ctx, &fakeSyncContext{recorder: NewFakeRecorder(1024)}); err != nil {
+				t.Fatalf("configObserver.Sync failed: %v", err)
+			}
+
+			// Verify ObservedConfig is populated after observer sync
+			kubeDescheduler, err = operatorConfigClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("failed to get kubedescheduler after observer sync: %v", err)
+			}
+			if len(kubeDescheduler.Spec.ObservedConfig.Raw) == 0 {
+				t.Fatalf("Expected ObservedConfig to be populated after observer sync, but it was empty")
+			}
+
+			// Run target config reconciler sync
+			if err := targetConfigReconciler.sync(); err != nil {
+				t.Fatalf("targetConfigReconciler.sync failed: %v", err)
+			}
+
+			// Read the generated Deployment from the fake kube client
+			actualDeployment, err := targetConfigReconciler.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("failed to get deployment: %v", err)
+			}
+
+			// Check container args for TLS settings
+			foundCipherSuites := false
+			foundMinTLSVersion := false
+
+			for _, arg := range actualDeployment.Spec.Template.Spec.Containers[0].Args {
+				if strings.HasPrefix(arg, "--tls-cipher-suites=") {
+					foundCipherSuites = true
+					if arg != tt.expectedCipherSuites {
+						t.Errorf("Expected cipher suites arg %q, got %q", tt.expectedCipherSuites, arg)
+					}
+				}
+				if strings.HasPrefix(arg, "--tls-min-version=") {
+					foundMinTLSVersion = true
+					if arg != tt.expectedMinTLSVer {
+						t.Errorf("Expected min TLS version arg %q, got %q", tt.expectedMinTLSVer, arg)
+					}
+				}
+			}
+
+			if !foundCipherSuites {
+				t.Errorf("Expected to find --tls-cipher-suites arg but didn't")
+			}
+			if !foundMinTLSVersion {
+				t.Errorf("Expected to find --tls-min-version arg but didn't")
 			}
 		})
 	}
