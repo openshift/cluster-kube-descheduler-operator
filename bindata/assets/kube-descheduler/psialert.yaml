@@ -21,3 +21,4 @@ spec:
           annotations:
             summary: Kube Descheduler Operator is configured to consume a PSI metric but PSI is not enabled
             description: "Kube Descheduler Operator is configured (devActualUtilizationProfile) to consume a PSI metric but PSI is not enabled for all the worker nodes (psi=1 kernel argument)"
+            runbook_url: https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-descheduler-operator/DeschedulerPSIDisabled.md
