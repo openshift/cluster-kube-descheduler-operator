@@ -22,7 +22,7 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 | 5.2.1       | 4.19, 4.20  | 1.32        | 1.23   |
 | 5.3.0       | 4.20, 4.21  | 1.33        | 1.24   |
 | 5.3.1       | 4.20, 4.21  | 1.33        | 1.24   |
-| 5.3.2       | 4.20, 4.21  | 1.33        | 1.24   |
+| 5.3.2       | 4.20, 4.21  | 1.34        | 1.24   |
 
 ## Rebase instruction
 
