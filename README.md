@@ -30,4 +30,4 @@ $ opm alpha render-template basic v4.21/catalog-template.yaml --migrate-level bu
 | 5.2.1       | 12f78c7d13537b104f7641dcbb394a8e151252d28f87d7a72332bfea8d8f2f6e |
 | 5.3.0       | d6566b37989b6c5d45ce948e6f0165aecf37e3bd324c1c3623c98c4d757a749c |
 | 5.3.1       | c0ebb8c7fbaa325fef3d530da8bee7ea8773aa082c9b16f174c41ca4465ced24 |
-| 5.3.2       | 32f240743fca72457560136f52193dbc74d832c5500d2761f78763d9c461de13 |
+| 5.3.2       | 6c28742a874b5fa3e5d2d8fc8ef78151230aa316d9517edb802d028e6c9d6600 |
