@@ -99,7 +99,12 @@
                 {
                       "name": "clusterkubedescheduleroperator.v5.3.1",
                       "replaces": "clusterkubedescheduleroperator.v5.2.0",
-                      "skipRange": "\u003e=5.2.0 \u003c5.3.1",
+                      "skipRange": "\u003e=5.2.0 \u003c5.3.1"
+                },
+                {
+                      "name": "clusterkubedescheduleroperator.v5.3.2",
+                      "replaces": "clusterkubedescheduleroperator.v5.2.0",
+                      "skipRange": "\u003e=5.2.0 \u003c5.3.2",
                       "skips": [
                           "clusterkubedescheduleroperator.4.14.0-202310201027",
                           "clusterkubedescheduleroperator.4.14.0-202310271927",
@@ -142,9 +147,10 @@
                           "clusterkubedescheduleroperator.v5.2.4",
                           "clusterkubedescheduleroperator.v5.2.5",
                           "clusterkubedescheduleroperator.v5.2.6",
-                          "clusterkubedescheduleroperator.v5.3.0"
+                          "clusterkubedescheduleroperator.v5.3.0",
+                          "clusterkubedescheduleroperator.v5.3.1"
                       ]
-                  }
+                }
             ],
             "name": "stable",
             "package": "cluster-kube-descheduler-operator",
