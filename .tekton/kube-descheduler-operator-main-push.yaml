@@ -368,6 +368,8 @@ spec:
         value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+      - name: ARGS
+        value: "--project-name=cluster-kube-descheduler-operator-{{target_branch}} --report --org=b6dda4fc-c9ea-48da-ac45-67f75f258e5a"
       runAfter:
       - build-image-index
       taskRef:
