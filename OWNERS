@@ -1,5 +1,7 @@
 reviewers:
   - ingvagabund
+  - ricardomaraschini
 approvers:
   - ingvagabund
+  - ricardomaraschini
 component: "descheduler"
