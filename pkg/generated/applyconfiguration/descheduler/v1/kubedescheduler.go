@@ -13,11 +13,15 @@ import (
 
 // KubeDeschedulerApplyConfiguration represents a declarative configuration of the KubeDescheduler type for use
 // with apply.
+//
+// KubeDescheduler is the Schema for the deschedulers API
 type KubeDeschedulerApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *KubeDeschedulerSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                               *KubeDeschedulerStatusApplyConfiguration `json:"status,omitempty"`
+	// spec holds user settable values for configuration
+	Spec *KubeDeschedulerSpecApplyConfiguration `json:"spec,omitempty"`
+	// status holds observed values from the cluster. They may not be overridden.
+	Status *KubeDeschedulerStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // KubeDescheduler constructs a declarative configuration of the KubeDescheduler type for use with
@@ -31,29 +35,14 @@ func KubeDescheduler(name, namespace string) *KubeDeschedulerApplyConfiguration 
 	return b
 }
 
-// ExtractKubeDescheduler extracts the applied configuration owned by fieldManager from
-// kubeDescheduler. If no managedFields are found in kubeDescheduler for fieldManager, a
-// KubeDeschedulerApplyConfiguration is returned with only the Name, Namespace (if applicable),
-// APIVersion and Kind populated. It is possible that no managed fields were found for because other
-// field managers have taken ownership of all the fields previously owned by fieldManager, or because
-// the fieldManager never owned fields any fields.
+// ExtractKubeDeschedulerFrom extracts the applied configuration owned by fieldManager from
+// kubeDescheduler for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
 // kubeDescheduler must be a unmodified KubeDescheduler API object that was retrieved from the Kubernetes API.
-// ExtractKubeDescheduler provides a way to perform a extract/modify-in-place/apply workflow.
+// ExtractKubeDeschedulerFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-// Experimental!
-func ExtractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
-	return extractKubeDescheduler(kubeDescheduler, fieldManager, "")
-}
-
-// ExtractKubeDeschedulerStatus is the same as ExtractKubeDescheduler except
-// that it extracts the status subresource applied configuration.
-// Experimental!
-func ExtractKubeDeschedulerStatus(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
-	return extractKubeDescheduler(kubeDescheduler, fieldManager, "status")
-}
-
-func extractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string, subresource string) (*KubeDeschedulerApplyConfiguration, error) {
+func ExtractKubeDeschedulerFrom(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string, subresource string) (*KubeDeschedulerApplyConfiguration, error) {
 	b := &KubeDeschedulerApplyConfiguration{}
 	err := managedfields.ExtractInto(kubeDescheduler, internal.Parser().Type("com.github.openshift.cluster-kube-descheduler-operator.pkg.apis.descheduler.v1.KubeDescheduler"), fieldManager, b, subresource)
 	if err != nil {
@@ -66,6 +55,27 @@ func extractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fiel
 	b.WithAPIVersion("operator.openshift.io/v1")
 	return b, nil
 }
+
+// ExtractKubeDescheduler extracts the applied configuration owned by fieldManager from
+// kubeDescheduler. If no managedFields are found in kubeDescheduler for fieldManager, a
+// KubeDeschedulerApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// kubeDescheduler must be a unmodified KubeDescheduler API object that was retrieved from the Kubernetes API.
+// ExtractKubeDescheduler provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractKubeDescheduler(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
+	return ExtractKubeDeschedulerFrom(kubeDescheduler, fieldManager, "")
+}
+
+// ExtractKubeDeschedulerStatus extracts the applied configuration owned by fieldManager from
+// kubeDescheduler for the status subresource.
+func ExtractKubeDeschedulerStatus(kubeDescheduler *deschedulerv1.KubeDescheduler, fieldManager string) (*KubeDeschedulerApplyConfiguration, error) {
+	return ExtractKubeDeschedulerFrom(kubeDescheduler, fieldManager, "status")
+}
+
 func (b KubeDeschedulerApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

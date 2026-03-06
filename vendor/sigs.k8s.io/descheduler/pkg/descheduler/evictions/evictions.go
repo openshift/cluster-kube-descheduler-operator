@@ -403,12 +403,6 @@ func (pe *PodEvictor) ResetCounters() {
 	pe.totalPodCount = 0
 }
 
-func (pe *PodEvictor) SetClient(client clientset.Interface) {
-	pe.mu.Lock()
-	defer pe.mu.Unlock()
-	pe.client = client
-}
-
 func (pe *PodEvictor) evictionRequestsTotal() uint {
 	if pe.featureGates.Enabled(features.EvictionsInBackground) {
 		return pe.erCache.evictionRequestsTotal()
@@ -464,7 +458,7 @@ type EvictOptions struct {
 func (pe *PodEvictor) EvictPod(ctx context.Context, pod *v1.Pod, opts EvictOptions) error {
 	if len(pod.UID) == 0 {
 		klog.InfoS("Ignoring pod eviction due to missing UID", "pod", pod)
-		return fmt.Errorf("Pod %v is missing UID", klog.KObj(pod))
+		return fmt.Errorf("pod %v is missing UID", klog.KObj(pod))
 	}
 
 	if pe.featureGates.Enabled(features.EvictionsInBackground) {

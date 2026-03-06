@@ -9,17 +9,42 @@ import (
 
 // ProfileCustomizationsApplyConfiguration represents a declarative configuration of the ProfileCustomizations type for use
 // with apply.
+//
+// ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
 type ProfileCustomizationsApplyConfiguration struct {
-	PodLifetime                      *metav1.Duration                                 `json:"podLifetime,omitempty"`
-	ThresholdPriority                *int32                                           `json:"thresholdPriority,omitempty"`
-	ThresholdPriorityClassName       *string                                          `json:"thresholdPriorityClassName,omitempty"`
-	Namespaces                       *NamespacesApplyConfiguration                    `json:"namespaces,omitempty"`
-	DevLowNodeUtilizationThresholds  *deschedulerv1.LowNodeUtilizationThresholdsType  `json:"devLowNodeUtilizationThresholds,omitempty"`
-	DevEnableSoftTainter             *bool                                            `json:"devEnableSoftTainter,omitempty"`
-	DevEnableEvictionsInBackground   *bool                                            `json:"devEnableEvictionsInBackground,omitempty"`
+	// PodLifetime is the length of time after which pods should be evicted
+	// This field should be used with profiles that enable the PodLifetime strategy, such as LifecycleAndUtilization
+	PodLifetime *metav1.Duration `json:"podLifetime,omitempty"`
+	// ThresholdPriority when set will reject eviction of any pod with priority equal or higher
+	// It is invalid to set it alongside ThresholdPriorityClassName
+	ThresholdPriority *int32 `json:"thresholdPriority,omitempty"`
+	// ThresholdPriorityClassName when set will reject eviction of any pod with priority equal or higher
+	// It is invalid to set it alongside ThresholdPriority
+	ThresholdPriorityClassName *string `json:"thresholdPriorityClassName,omitempty"`
+	// Namespaces overrides included and excluded namespaces while keeping
+	// the default exclusion of all openshift-*, kube-system and hypershift namespaces
+	Namespaces *NamespacesApplyConfiguration `json:"namespaces,omitempty"`
+	// DevLowNodeUtilizationThresholds enumerates predefined experimental thresholds
+	DevLowNodeUtilizationThresholds *deschedulerv1.LowNodeUtilizationThresholdsType `json:"devLowNodeUtilizationThresholds,omitempty"`
+	// DevEnableSoftTainter enables SoftTainter alpha feature.
+	// The EnableSoftTainter alpha feature is a subject to change.
+	// Currently provided as an experimental feature.
+	// Deprecated: DevEnableSoftTainter field is deprecated and ignored.
+	DevEnableSoftTainter *bool `json:"devEnableSoftTainter,omitempty"`
+	// DevEnableEvictionsInBackground enables descheduler's EvictionsInBackground alpha feature.
+	// The EvictionsInBackground alpha feature is a subject to change.
+	// Currently provided as an experimental feature.
+	DevEnableEvictionsInBackground *bool `json:"devEnableEvictionsInBackground,omitempty"`
+	// devHighNodeUtilizationThresholds enumerates thresholds for node utilization levels.
+	// The threshold values are subject to change.
+	// Currently provided as an experimental feature.
 	DevHighNodeUtilizationThresholds *deschedulerv1.HighNodeUtilizationThresholdsType `json:"devHighNodeUtilizationThresholds,omitempty"`
-	DevActualUtilizationProfile      *deschedulerv1.ActualUtilizationProfile          `json:"devActualUtilizationProfile,omitempty"`
-	DevDeviationThresholds           *deschedulerv1.DeviationThresholdsType           `json:"devDeviationThresholds,omitempty"`
+	// devActualUtilizationProfile enables integration with metrics.
+	// LowNodeUtilization plugin can consume the metrics for now.
+	// Currently provided as an experimental feature.
+	DevActualUtilizationProfile *deschedulerv1.ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
+	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
+	DevDeviationThresholds *deschedulerv1.DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
 }
 
 // ProfileCustomizationsApplyConfiguration constructs a declarative configuration of the ProfileCustomizations type for use with

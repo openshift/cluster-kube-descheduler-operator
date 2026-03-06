@@ -3,7 +3,7 @@ Copyright 2022 The Kubernetes Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,15 +17,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	evictionutils "sigs.k8s.io/descheduler/pkg/descheduler/evictions/utils"
+
 	nodeutil "sigs.k8s.io/descheduler/pkg/descheduler/node"
 	podutil "sigs.k8s.io/descheduler/pkg/descheduler/pod"
 	frameworktypes "sigs.k8s.io/descheduler/pkg/framework/types"
@@ -33,8 +38,9 @@ import (
 )
 
 const (
-	PluginName            = "DefaultEvictor"
-	evictPodAnnotationKey = "descheduler.alpha.kubernetes.io/evict"
+	PluginName                 = "DefaultEvictor"
+	evictPodAnnotationKey      = "descheduler.alpha.kubernetes.io/evict"
+	namespaceWithLabelSelector = "namespaceWithLabelSelector-"
 )
 
 var _ frameworktypes.EvictorPlugin = &DefaultEvictor{}
@@ -83,7 +89,41 @@ func New(ctx context.Context, args runtime.Object, handle frameworktypes.Handle)
 	if err != nil {
 		return nil, err
 	}
+
+	if ev.args.NamespaceLabelSelector != nil && len(ev.args.NamespaceLabelSelector.MatchLabels) > 0 {
+		selector, nslErr := metav1.LabelSelectorAsSelector(ev.args.NamespaceLabelSelector)
+		if nslErr != nil {
+			return nil, fmt.Errorf("unable to convert namespaceLabelSelector to label selector: %w", nslErr)
+		}
+		indexName := namespaceWithLabelSelector + ev.handle.PluginInstanceID()
+		if nslErr := addNamespaceLabelSelectorIndexer(ev.handle.SharedInformerFactory().Core().V1().Namespaces().Informer(), indexName, selector); nslErr != nil {
+			return nil, fmt.Errorf("failed to add namespace label selector indexer: %w", nslErr)
+		}
+	}
 	return ev, nil
+}
+
+func addNamespaceLabelSelectorIndexer(informer cache.SharedIndexInformer, indexName string, selector labels.Selector) error {
+	indexer := informer.GetIndexer()
+	for name := range indexer.GetIndexers() {
+		if name == indexName {
+			return nil
+		}
+	}
+	return informer.AddIndexers(cache.Indexers{
+		indexName: func(obj interface{}) ([]string, error) {
+			ns, ok := obj.(*v1.Namespace)
+			if !ok {
+				return []string{}, errors.New("unexpected object")
+			}
+			if !selector.Empty() {
+				if !selector.Matches(labels.Set(ns.Labels)) {
+					return []string{}, nil
+				}
+			}
+			return []string{ns.GetName()}, nil
+		},
+	})
 }
 
 func (d *DefaultEvictor) addAllConstraints(logger klog.Logger, handle frameworktypes.Handle) error {
@@ -122,11 +162,65 @@ func applyEffectivePodProtections(d *DefaultEvictor, podProtections []PodProtect
 	applyFailedBarePodsProtection(d, protectionMap)
 	applyLocalStoragePodsProtection(d, protectionMap)
 	applyDaemonSetPodsProtection(d, protectionMap)
-	applyPvcPodsProtection(d, protectionMap)
+	applyPVCPodsProtection(d, protectionMap)
 	applyPodsWithoutPDBProtection(d, protectionMap, handle)
 	applyPodsWithResourceClaimsProtection(d, protectionMap)
 
 	return nil
+}
+
+// protectedPVCStorageClasses returns the list of storage classes that should
+// be protected from eviction. If the list is empty or nil then all storage
+// classes are protected (assuming PodsWithPVC protection is enabled).
+func protectedPVCStorageClasses(d *DefaultEvictor) []ProtectedStorageClass {
+	protcfg := d.args.PodProtections.Config
+	if protcfg == nil {
+		return nil
+	}
+	scconfig := protcfg.PodsWithPVC
+	if scconfig == nil {
+		return nil
+	}
+	return scconfig.ProtectedStorageClasses
+}
+
+// podStorageClasses returns a list of storage classes referred by a pod. We
+// need this when assessing if a pod should be protected because it refers to a
+// protected storage class.
+func podStorageClasses(inf informers.SharedInformerFactory, pod *v1.Pod) ([]string, error) {
+	lister := inf.Core().V1().PersistentVolumeClaims().Lister().PersistentVolumeClaims(
+		pod.Namespace,
+	)
+
+	referred := map[string]bool{}
+	for _, vol := range pod.Spec.Volumes {
+		if vol.PersistentVolumeClaim == nil {
+			continue
+		}
+
+		claim, err := lister.Get(vol.PersistentVolumeClaim.ClaimName)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to get persistent volume claim %q/%q: %w",
+				pod.Namespace, vol.PersistentVolumeClaim.ClaimName, err,
+			)
+		}
+
+		// this should never happen as once a pvc is created with a nil
+		// storageClass it is automatically picked up by the default
+		// storage class. By returning an error here we make the pod
+		// protected from eviction.
+		if claim.Spec.StorageClassName == nil || *claim.Spec.StorageClassName == "" {
+			return nil, fmt.Errorf(
+				"failed to resolve storage class for pod %q/%q",
+				pod.Namespace, claim.Name,
+			)
+		}
+
+		referred[*claim.Spec.StorageClassName] = true
+	}
+
+	return slices.Collect(maps.Keys(referred)), nil
 }
 
 func applyFailedBarePodsProtection(d *DefaultEvictor, protectionMap map[PodProtection]bool) {
@@ -206,16 +300,50 @@ func applyDaemonSetPodsProtection(d *DefaultEvictor, protectionMap map[PodProtec
 	}
 }
 
-func applyPvcPodsProtection(d *DefaultEvictor, protectionMap map[PodProtection]bool) {
-	isProtectionEnabled := protectionMap[PodsWithPVC]
-	if isProtectionEnabled {
-		d.constraints = append(d.constraints, func(pod *v1.Pod) error {
-			if utils.IsPodWithPVC(pod) {
-				return fmt.Errorf("pod with PVC is protected against eviction")
+// applyPVCPodsProtection protects pods that refer to a PVC from eviction. If
+// the user has specified a list of storage classes to protect then only pods
+// referring to PVCs of those storage classes are protected.
+func applyPVCPodsProtection(d *DefaultEvictor, enabledProtections map[PodProtection]bool) {
+	if !enabledProtections[PodsWithPVC] {
+		return
+	}
+
+	// if the user isn't filtering by storage classes we protect all pods
+	// referring to a PVC.
+	protected := protectedPVCStorageClasses(d)
+	if len(protected) == 0 {
+		d.constraints = append(
+			d.constraints,
+			func(pod *v1.Pod) error {
+				if utils.IsPodWithPVC(pod) {
+					return fmt.Errorf("pod with PVC is protected against eviction")
+				}
+				return nil
+			},
+		)
+		return
+	}
+
+	protectedsc := map[string]bool{}
+	for _, class := range protected {
+		protectedsc[class.Name] = true
+	}
+
+	d.constraints = append(
+		d.constraints, func(pod *v1.Pod) error {
+			classes, err := podStorageClasses(d.handle.SharedInformerFactory(), pod)
+			if err != nil {
+				return err
+			}
+			for _, class := range classes {
+				if !protectedsc[class] {
+					continue
+				}
+				return fmt.Errorf("pod using protected storage class %q", class)
 			}
 			return nil
-		})
-	}
+		},
+	)
 }
 
 func applyPodsWithoutPDBProtection(d *DefaultEvictor, protectionMap map[PodProtection]bool, handle frameworktypes.Handle) {
@@ -317,7 +445,20 @@ func (d *DefaultEvictor) PreEvictionFilter(pod *v1.Pod) bool {
 			logger.Info("pod does not fit on any other node because of nodeSelector(s), Taint(s), or nodes marked as unschedulable", "pod", klog.KObj(pod))
 			return false
 		}
+	}
+
+	if d.args.NamespaceLabelSelector == nil || len(d.args.NamespaceLabelSelector.MatchLabels) == 0 {
 		return true
+	}
+	indexName := namespaceWithLabelSelector + d.handle.PluginInstanceID()
+	objs, err := d.handle.SharedInformerFactory().Core().V1().Namespaces().Informer().GetIndexer().ByIndex(indexName, pod.Namespace)
+	if err != nil {
+		logger.Error(err, "unable to list namespaces for namespaceLabelSelector filter in the policy parameter", "pod", klog.KObj(pod))
+		return false
+	}
+	if len(objs) == 0 {
+		logger.Info("pod namespace do not match the namespaceLabelSelector filter in the policy parameter", "pod", klog.KObj(pod))
+		return false
 	}
 	return true
 }
@@ -383,6 +524,5 @@ func getPodIndexerByOwnerRefs(indexName string, handle frameworktypes.Handle) (c
 	}); err != nil {
 		return nil, err
 	}
-
 	return indexer, nil
 }
