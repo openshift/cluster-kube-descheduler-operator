@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -30,27 +29,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	v1 "k8s.io/api/core/v1"
-	policy "k8s.io/api/policy/v1"
-	policyv1 "k8s.io/api/policy/v1"
-	schedulingv1 "k8s.io/api/scheduling/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
-	corev1listers "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/rest"
-	core "k8s.io/client-go/testing"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
-	"k8s.io/client-go/util/workqueue"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
@@ -72,8 +59,7 @@ import (
 )
 
 const (
-	prometheusAuthTokenSecretKey = "prometheusAuthToken"
-	workQueueKey                 = "key"
+	indexerNodeSelectorGlobal = "indexer_node_selector_global"
 )
 
 type eprunner func(ctx context.Context, nodes []*v1.Node) *frameworktypes.Status
@@ -84,88 +70,62 @@ type profileRunner struct {
 }
 
 type descheduler struct {
-	rs                                *options.DeschedulerServer
-	ir                                *informerResources
-	getPodsAssignedToNode             podutil.GetPodsAssignedToNodeFunc
-	sharedInformerFactory             informers.SharedInformerFactory
-	namespacedSecretsLister           corev1listers.SecretNamespaceLister
-	deschedulerPolicy                 *api.DeschedulerPolicy
-	eventRecorder                     events.EventRecorder
-	podEvictor                        *evictions.PodEvictor
-	podEvictionReactionFnc            func(*fakeclientset.Clientset) func(action core.Action) (bool, runtime.Object, error)
-	metricsCollector                  *metricscollector.MetricsCollector
-	prometheusClient                  promapi.Client
-	previousPrometheusClientTransport *http.Transport
-	queue                             workqueue.RateLimitingInterface
-	currentPrometheusAuthToken        string
-	metricsProviders                  map[api.MetricsSource]*api.MetricsProvider
+	rs                        *options.DeschedulerServer
+	client                    clientset.Interface
+	kubeClientSandbox         *kubeClientSandbox
+	getPodsAssignedToNode     podutil.GetPodsAssignedToNodeFunc
+	sharedInformerFactory     informers.SharedInformerFactory
+	deschedulerPolicy         *api.DeschedulerPolicy
+	eventRecorder             events.EventRecorder
+	podEvictor                *evictions.PodEvictor
+	metricsCollector          *metricscollector.MetricsCollector
+	inClusterPromClientCtrl   *inClusterPromClientController
+	secretBasedPromClientCtrl *secretBasedPromClientController
+	profileRunners            []profileRunner
 }
 
-type informerResources struct {
-	sharedInformerFactory informers.SharedInformerFactory
-	resourceToInformer    map[schema.GroupVersionResource]informers.GenericInformer
-}
-
-func newInformerResources(sharedInformerFactory informers.SharedInformerFactory) *informerResources {
-	return &informerResources{
-		sharedInformerFactory: sharedInformerFactory,
-		resourceToInformer:    make(map[schema.GroupVersionResource]informers.GenericInformer),
-	}
-}
-
-func (ir *informerResources) Uses(resources ...schema.GroupVersionResource) error {
-	for _, resource := range resources {
-		informer, err := ir.sharedInformerFactory.ForResource(resource)
+func nodeSelectorFromPolicy(deschedulerPolicy *api.DeschedulerPolicy) (labels.Selector, error) {
+	nodeSelector := labels.Everything()
+	if deschedulerPolicy.NodeSelector != nil {
+		sel, err := labels.Parse(*deschedulerPolicy.NodeSelector)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		ir.resourceToInformer[resource] = informer
+		nodeSelector = sel
 	}
-	return nil
+	return nodeSelector, nil
 }
 
-// CopyTo Copy informer subscriptions to the new factory and objects to the fake client so that the backing caches are populated for when listers are used.
-func (ir *informerResources) CopyTo(fakeClient *fakeclientset.Clientset, newFactory informers.SharedInformerFactory) error {
-	for resource, informer := range ir.resourceToInformer {
-		_, err := newFactory.ForResource(resource)
-		if err != nil {
-			return fmt.Errorf("error getting resource %s: %w", resource, err)
-		}
-
-		objects, err := informer.Lister().List(labels.Everything())
-		if err != nil {
-			return fmt.Errorf("error listing %s: %w", informer, err)
-		}
-
-		for _, object := range objects {
-			fakeClient.Tracker().Add(object)
-		}
-	}
-	return nil
+func addNodeSelectorIndexer(sharedInformerFactory informers.SharedInformerFactory, nodeSelector labels.Selector) error {
+	return nodeutil.AddNodeSelectorIndexer(sharedInformerFactory.Core().V1().Nodes().Informer(), indexerNodeSelectorGlobal, nodeSelector)
 }
 
 func metricsProviderListToMap(providersList []api.MetricsProvider) map[api.MetricsSource]*api.MetricsProvider {
 	providersMap := make(map[api.MetricsSource]*api.MetricsProvider)
 	for _, provider := range providersList {
+		provider := provider
 		providersMap[provider.Source] = &provider
 	}
 	return providersMap
 }
 
-func newDescheduler(ctx context.Context, rs *options.DeschedulerServer, deschedulerPolicy *api.DeschedulerPolicy, evictionPolicyGroupVersion string, eventRecorder events.EventRecorder, sharedInformerFactory, namespacedSharedInformerFactory informers.SharedInformerFactory) (*descheduler, error) {
+func getPrometheusConfig(providersList []api.MetricsProvider) *api.Prometheus {
+	prometheusProvider := metricsProviderListToMap(providersList)[api.PrometheusMetrics]
+	if prometheusProvider == nil {
+		return nil
+	}
+	return prometheusProvider.Prometheus
+}
+
+func configureSecretPromClientReconciler(prometheusConfig *api.Prometheus) bool {
+	return prometheusConfig.URL != "" && prometheusConfig.AuthToken != nil
+}
+
+func newDescheduler(ctx context.Context, rs *options.DeschedulerServer, deschedulerPolicy *api.DeschedulerPolicy, evictionPolicyGroupVersion string, eventRecorder events.EventRecorder, client clientset.Interface, sharedInformerFactory, namespacedSharedInformerFactory informers.SharedInformerFactory, kubeClientSandbox *kubeClientSandbox) (*descheduler, error) {
 	podInformer := sharedInformerFactory.Core().V1().Pods().Informer()
-
-	ir := newInformerResources(sharedInformerFactory)
-	ir.Uses(v1.SchemeGroupVersion.WithResource("pods"),
-		v1.SchemeGroupVersion.WithResource("nodes"),
-		// Future work could be to let each plugin declare what type of resources it needs; that way dry runs would stay
-		// consistent with the real runs without having to keep the list here in sync.
-		v1.SchemeGroupVersion.WithResource("namespaces"),                 // Used by the defaultevictor plugin
-		schedulingv1.SchemeGroupVersion.WithResource("priorityclasses"),  // Used by the defaultevictor plugin
-		policyv1.SchemeGroupVersion.WithResource("poddisruptionbudgets"), // Used by the defaultevictor plugin
-
-	) // Used by the defaultevictor plugin
+	// Temporarily register the PVC because it is used by the DefaultEvictor plugin during
+	// the descheduling cycle, where informer registration is ignored.
+	_ = sharedInformerFactory.Core().V1().PersistentVolumeClaims().Informer()
 
 	getPodsAssignedToNode, err := podutil.BuildGetPodsAssignedToNodeFunc(podInformer)
 	if err != nil {
@@ -174,7 +134,7 @@ func newDescheduler(ctx context.Context, rs *options.DeschedulerServer, deschedu
 
 	podEvictor, err := evictions.NewPodEvictor(
 		ctx,
-		rs.Client,
+		client,
 		eventRecorder,
 		podInformer,
 		rs.DefaultFeatureGates,
@@ -193,159 +153,77 @@ func newDescheduler(ctx context.Context, rs *options.DeschedulerServer, deschedu
 	}
 
 	desch := &descheduler{
-		rs:                     rs,
-		ir:                     ir,
-		getPodsAssignedToNode:  getPodsAssignedToNode,
-		sharedInformerFactory:  sharedInformerFactory,
-		deschedulerPolicy:      deschedulerPolicy,
-		eventRecorder:          eventRecorder,
-		podEvictor:             podEvictor,
-		podEvictionReactionFnc: podEvictionReactionFnc,
-		prometheusClient:       rs.PrometheusClient,
-		queue:                  workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{Name: "descheduler"}),
-		metricsProviders:       metricsProviderListToMap(deschedulerPolicy.MetricsProviders),
+		rs:                    rs,
+		client:                client,
+		kubeClientSandbox:     kubeClientSandbox,
+		getPodsAssignedToNode: getPodsAssignedToNode,
+		sharedInformerFactory: sharedInformerFactory,
+		deschedulerPolicy:     deschedulerPolicy,
+		eventRecorder:         eventRecorder,
+		podEvictor:            podEvictor,
 	}
 
-	if rs.MetricsClient != nil {
-		nodeSelector := labels.Everything()
-		if deschedulerPolicy.NodeSelector != nil {
-			sel, err := labels.Parse(*deschedulerPolicy.NodeSelector)
+	prometheusConfig := getPrometheusConfig(deschedulerPolicy.MetricsProviders)
+	if prometheusConfig != nil && prometheusConfig.URL != "" {
+		if configureSecretPromClientReconciler(prometheusConfig) {
+			// Secret-based mode
+			ctrl, err := newSecretBasedPromClientController(rs.PrometheusClient, prometheusConfig, namespacedSharedInformerFactory)
 			if err != nil {
 				return nil, err
 			}
-			nodeSelector = sel
+			desch.secretBasedPromClientCtrl = ctrl
+		} else {
+			// In-cluster mode
+			desch.inClusterPromClientCtrl = newInClusterPromClientController(rs.PrometheusClient, prometheusConfig)
 		}
+	}
+
+	nodeSelector, err := nodeSelectorFromPolicy(deschedulerPolicy)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := addNodeSelectorIndexer(sharedInformerFactory, nodeSelector); err != nil {
+		return nil, err
+	}
+
+	if rs.MetricsClient != nil {
 		desch.metricsCollector = metricscollector.NewMetricsCollector(sharedInformerFactory.Core().V1().Nodes().Lister(), rs.MetricsClient, nodeSelector)
 	}
 
-	prometheusProvider := desch.metricsProviders[api.PrometheusMetrics]
-	if prometheusProvider != nil && prometheusProvider.Prometheus != nil && prometheusProvider.Prometheus.AuthToken != nil {
-		authTokenSecret := prometheusProvider.Prometheus.AuthToken.SecretReference
-		if authTokenSecret == nil || authTokenSecret.Namespace == "" {
-			return nil, fmt.Errorf("prometheus metrics source configuration is missing authentication token secret")
+	var profileRunners []profileRunner
+	for idx, profile := range deschedulerPolicy.Profiles {
+		var promClientGetter func() promapi.Client
+		if desch.inClusterPromClientCtrl != nil {
+			promClientGetter = desch.inClusterPromClientCtrl.prometheusClient
+		} else if desch.secretBasedPromClientCtrl != nil {
+			promClientGetter = desch.secretBasedPromClientCtrl.prometheusClient
 		}
-		if namespacedSharedInformerFactory == nil {
-			return nil, fmt.Errorf("namespacedSharedInformerFactory not configured")
+		currProfile, err := frameworkprofile.NewProfile(
+			ctx,
+			profile,
+			pluginregistry.PluginRegistry,
+			frameworkprofile.WithClientSet(desch.client),
+			frameworkprofile.WithSharedInformerFactory(desch.sharedInformerFactory),
+			frameworkprofile.WithPodEvictor(desch.podEvictor),
+			frameworkprofile.WithGetPodsAssignedToNodeFnc(desch.getPodsAssignedToNode),
+			frameworkprofile.WithMetricsCollector(desch.metricsCollector),
+			frameworkprofile.WithPrometheusClient(promClientGetter),
+			// Generate a unique instance ID using just the index to avoid long IDs
+			// when profile names are very long
+			frameworkprofile.WithProfileInstanceID(fmt.Sprintf("%d", idx)),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create %q profile: %v", profile.Name, err)
 		}
-		namespacedSharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(desch.eventHandler())
-		desch.namespacedSecretsLister = namespacedSharedInformerFactory.Core().V1().Secrets().Lister().Secrets(authTokenSecret.Namespace)
+		profileRunners = append(profileRunners, profileRunner{profile.Name, currProfile.RunDeschedulePlugins, currProfile.RunBalancePlugins})
 	}
 
+	desch.profileRunners = profileRunners
 	return desch, nil
 }
 
-func (d *descheduler) reconcileInClusterSAToken() error {
-	// Read the sa token and assume it has the sufficient permissions to authenticate
-	cfg, err := rest.InClusterConfig()
-	if err == nil {
-		if d.currentPrometheusAuthToken != cfg.BearerToken {
-			klog.V(2).Infof("Creating Prometheus client (with SA token)")
-			prometheusClient, transport, err := client.CreatePrometheusClient(d.metricsProviders[api.PrometheusMetrics].Prometheus.URL, cfg.BearerToken)
-			if err != nil {
-				return fmt.Errorf("unable to create a prometheus client: %v", err)
-			}
-			d.prometheusClient = prometheusClient
-			if d.previousPrometheusClientTransport != nil {
-				d.previousPrometheusClientTransport.CloseIdleConnections()
-			}
-			d.previousPrometheusClientTransport = transport
-			d.currentPrometheusAuthToken = cfg.BearerToken
-		}
-		return nil
-	}
-	if err == rest.ErrNotInCluster {
-		return nil
-	}
-	return fmt.Errorf("unexpected error when reading in cluster config: %v", err)
-}
-
-func (d *descheduler) runAuthenticationSecretReconciler(ctx context.Context) {
-	defer utilruntime.HandleCrash()
-	defer d.queue.ShutDown()
-
-	klog.Infof("Starting authentication secret reconciler")
-	defer klog.Infof("Shutting down authentication secret reconciler")
-
-	go wait.UntilWithContext(ctx, d.runAuthenticationSecretReconcilerWorker, time.Second)
-
-	<-ctx.Done()
-}
-
-func (d *descheduler) runAuthenticationSecretReconcilerWorker(ctx context.Context) {
-	for d.processNextWorkItem(ctx) {
-	}
-}
-
-func (d *descheduler) processNextWorkItem(ctx context.Context) bool {
-	dsKey, quit := d.queue.Get()
-	if quit {
-		return false
-	}
-	defer d.queue.Done(dsKey)
-
-	err := d.sync()
-	if err == nil {
-		d.queue.Forget(dsKey)
-		return true
-	}
-
-	utilruntime.HandleError(fmt.Errorf("%v failed with : %v", dsKey, err))
-	d.queue.AddRateLimited(dsKey)
-
-	return true
-}
-
-func (d *descheduler) sync() error {
-	prometheusConfig := d.metricsProviders[api.PrometheusMetrics].Prometheus
-	if prometheusConfig == nil || prometheusConfig.AuthToken == nil || prometheusConfig.AuthToken.SecretReference == nil {
-		return fmt.Errorf("prometheus metrics source configuration is missing authentication token secret")
-	}
-	ns := prometheusConfig.AuthToken.SecretReference.Namespace
-	name := prometheusConfig.AuthToken.SecretReference.Name
-	secretObj, err := d.namespacedSecretsLister.Get(name)
-	if err != nil {
-		// clear the token if the secret is not found
-		if apierrors.IsNotFound(err) {
-			d.currentPrometheusAuthToken = ""
-			if d.previousPrometheusClientTransport != nil {
-				d.previousPrometheusClientTransport.CloseIdleConnections()
-			}
-			d.previousPrometheusClientTransport = nil
-			d.prometheusClient = nil
-		}
-		return fmt.Errorf("unable to get %v/%v secret", ns, name)
-	}
-	authToken := string(secretObj.Data[prometheusAuthTokenSecretKey])
-	if authToken == "" {
-		return fmt.Errorf("prometheus authentication token secret missing %q data or empty", prometheusAuthTokenSecretKey)
-	}
-	if d.currentPrometheusAuthToken == authToken {
-		return nil
-	}
-
-	klog.V(2).Infof("authentication secret token updated, recreating prometheus client")
-	prometheusClient, transport, err := client.CreatePrometheusClient(prometheusConfig.URL, authToken)
-	if err != nil {
-		return fmt.Errorf("unable to create a prometheus client: %v", err)
-	}
-	d.prometheusClient = prometheusClient
-	if d.previousPrometheusClientTransport != nil {
-		d.previousPrometheusClientTransport.CloseIdleConnections()
-	}
-	d.previousPrometheusClientTransport = transport
-	d.currentPrometheusAuthToken = authToken
-	return nil
-}
-
-func (d *descheduler) eventHandler() cache.ResourceEventHandler {
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { d.queue.Add(workQueueKey) },
-		UpdateFunc: func(old, new interface{}) { d.queue.Add(workQueueKey) },
-		DeleteFunc: func(obj interface{}) { d.queue.Add(workQueueKey) },
-	}
-}
-
-func (d *descheduler) runDeschedulerLoop(ctx context.Context, nodes []*v1.Node) error {
+func (d *descheduler) runDeschedulerLoop(ctx context.Context) error {
 	var span trace.Span
 	ctx, span = tracing.Tracer().Start(ctx, "runDeschedulerLoop")
 	defer span.End()
@@ -354,52 +232,22 @@ func (d *descheduler) runDeschedulerLoop(ctx context.Context, nodes []*v1.Node) 
 		metrics.LoopDuration.With(map[string]string{}).Observe(time.Since(loopStartDuration).Seconds())
 	}(time.Now())
 
-	// if len is still <= 1 error out
-	if len(nodes) <= 1 {
-		klog.InfoS("Skipping descheduling cycle: requires >=2 nodes", "found", len(nodes))
-		return nil // gracefully skip this cycle instead of aborting
-	}
-
-	var client clientset.Interface
-	// When the dry mode is enable, collect all the relevant objects (mostly pods) under a fake client.
-	// So when evicting pods while running multiple strategies in a row have the cummulative effect
-	// as is when evicting pods for real.
-	if d.rs.DryRun {
-		klog.V(3).Infof("Building a cached client from the cluster for the dry run")
-		// Create a new cache so we start from scratch without any leftovers
-		fakeClient := fakeclientset.NewSimpleClientset()
-		// simulate a pod eviction by deleting a pod
-		fakeClient.PrependReactor("create", "pods", d.podEvictionReactionFnc(fakeClient))
-		fakeSharedInformerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
-
-		err := d.ir.CopyTo(fakeClient, fakeSharedInformerFactory)
-		if err != nil {
-			return err
-		}
-
-		// create a new instance of the shared informer factor from the cached client
-		// register the pod informer, otherwise it will not get running
-		d.getPodsAssignedToNode, err = podutil.BuildGetPodsAssignedToNodeFunc(fakeSharedInformerFactory.Core().V1().Pods().Informer())
-		if err != nil {
-			return fmt.Errorf("build get pods assigned to node function error: %v", err)
-		}
-
-		fakeCtx, cncl := context.WithCancel(context.TODO())
-		defer cncl()
-		fakeSharedInformerFactory.Start(fakeCtx.Done())
-		fakeSharedInformerFactory.WaitForCacheSync(fakeCtx.Done())
-
-		client = fakeClient
-		d.sharedInformerFactory = fakeSharedInformerFactory
-	} else {
-		client = d.rs.Client
-	}
-
-	klog.V(3).Infof("Setting up the pod evictor")
-	d.podEvictor.SetClient(client)
+	klog.V(3).Infof("Resetting pod evictor counters")
 	d.podEvictor.ResetCounters()
 
-	d.runProfiles(ctx, client, nodes)
+	d.runProfiles(ctx)
+
+	if d.rs.DryRun {
+		if d.kubeClientSandbox == nil {
+			return fmt.Errorf("kubeClientSandbox is nil in DryRun mode")
+		}
+		klog.V(3).Infof("Restoring evicted pods from cache")
+		if err := d.kubeClientSandbox.restoreEvictedPods(ctx); err != nil {
+			klog.ErrorS(err, "Failed to restore evicted pods")
+			return fmt.Errorf("failed to restore evicted pods: %w", err)
+		}
+		d.kubeClientSandbox.reset()
+	}
 
 	klog.V(1).InfoS("Number of evictions/requests", "totalEvicted", d.podEvictor.TotalEvicted(), "evictionRequests", d.podEvictor.TotalEvictionRequests())
 
@@ -409,31 +257,32 @@ func (d *descheduler) runDeschedulerLoop(ctx context.Context, nodes []*v1.Node) 
 // runProfiles runs all the deschedule plugins of all profiles and
 // later runs through all balance plugins of all profiles. (All Balance plugins should come after all Deschedule plugins)
 // see https://github.com/kubernetes-sigs/descheduler/issues/979
-func (d *descheduler) runProfiles(ctx context.Context, client clientset.Interface, nodes []*v1.Node) {
+func (d *descheduler) runProfiles(ctx context.Context) {
 	var span trace.Span
 	ctx, span = tracing.Tracer().Start(ctx, "runProfiles")
 	defer span.End()
-	var profileRunners []profileRunner
-	for _, profile := range d.deschedulerPolicy.Profiles {
-		currProfile, err := frameworkprofile.NewProfile(
-			ctx,
-			profile,
-			pluginregistry.PluginRegistry,
-			frameworkprofile.WithClientSet(client),
-			frameworkprofile.WithSharedInformerFactory(d.sharedInformerFactory),
-			frameworkprofile.WithPodEvictor(d.podEvictor),
-			frameworkprofile.WithGetPodsAssignedToNodeFnc(d.getPodsAssignedToNode),
-			frameworkprofile.WithMetricsCollector(d.metricsCollector),
-			frameworkprofile.WithPrometheusClient(d.prometheusClient),
-		)
-		if err != nil {
-			klog.ErrorS(err, "unable to create a profile", "profile", profile.Name)
-			continue
-		}
-		profileRunners = append(profileRunners, profileRunner{profile.Name, currProfile.RunDeschedulePlugins, currProfile.RunBalancePlugins})
+
+	nodesAsInterface, err := d.sharedInformerFactory.Core().V1().Nodes().Informer().GetIndexer().ByIndex(indexerNodeSelectorGlobal, indexerNodeSelectorGlobal)
+	if err != nil {
+		span.AddEvent("Failed to list nodes with global node selector", trace.WithAttributes(attribute.String("err", err.Error())))
+		klog.Error(err)
+		return
 	}
 
-	for _, profileR := range profileRunners {
+	nodes, err := nodeutil.ReadyNodesFromInterfaces(nodesAsInterface)
+	if err != nil {
+		span.AddEvent("Failed to convert node as interfaces into ready nodes", trace.WithAttributes(attribute.String("err", err.Error())))
+		klog.Error(err)
+		return
+	}
+
+	// if len is still <= 1 error out
+	if len(nodes) <= 1 {
+		klog.InfoS("Skipping descheduling cycle: requires >=2 nodes", "found", len(nodes))
+		return // gracefully skip this cycle instead of aborting
+	}
+
+	for _, profileR := range d.profileRunners {
 		// First deschedule
 		status := profileR.descheduleEPs(ctx, nodes)
 		if status != nil && status.Err != nil {
@@ -443,7 +292,7 @@ func (d *descheduler) runProfiles(ctx context.Context, client clientset.Interfac
 		}
 	}
 
-	for _, profileR := range profileRunners {
+	for _, profileR := range d.profileRunners {
 		// Balance Later
 		status := profileR.balanceEPs(ctx, nodes)
 		if status != nil && status.Err != nil {
@@ -551,46 +400,116 @@ func validateVersionCompatibility(discovery discovery.DiscoveryInterface, desche
 	return nil
 }
 
-func podEvictionReactionFnc(fakeClient *fakeclientset.Clientset) func(action core.Action) (bool, runtime.Object, error) {
-	return func(action core.Action) (bool, runtime.Object, error) {
-		if action.GetSubresource() == "eviction" {
-			createAct, matched := action.(core.CreateActionImpl)
-			if !matched {
-				return false, nil, fmt.Errorf("unable to convert action to core.CreateActionImpl")
-			}
-			eviction, matched := createAct.Object.(*policy.Eviction)
-			if !matched {
-				return false, nil, fmt.Errorf("unable to convert action object into *policy.Eviction")
-			}
-			if err := fakeClient.Tracker().Delete(action.GetResource(), eviction.GetNamespace(), eviction.GetName()); err != nil {
-				return false, nil, fmt.Errorf("unable to delete pod %v/%v: %v", eviction.GetNamespace(), eviction.GetName(), err)
-			}
-			return true, nil, nil
-		}
-		// fallback to the default reactor
-		return false, nil, nil
+type runFncType func(context.Context) error
+
+func bootstrapDescheduler(
+	ctx context.Context,
+	rs *options.DeschedulerServer,
+	deschedulerPolicy *api.DeschedulerPolicy,
+	evictionPolicyGroupVersion string,
+	sharedInformerFactory, namespacedSharedInformerFactory informers.SharedInformerFactory,
+	eventRecorder events.EventRecorder,
+) (*descheduler, runFncType, error) {
+	// Always create descheduler with real client/factory first to register all informers
+	descheduler, err := newDescheduler(ctx, rs, deschedulerPolicy, evictionPolicyGroupVersion, eventRecorder, rs.Client, sharedInformerFactory, namespacedSharedInformerFactory, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create new descheduler: %v", err)
 	}
+
+	// If in dry run mode, replace the descheduler with one using fake client/factory
+	if rs.DryRun {
+		// Create sandbox with resources to mirror from real client
+		kubeClientSandbox, err := newDefaultKubeClientSandbox(rs.Client, sharedInformerFactory)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create kube client sandbox: %v", err)
+		}
+
+		klog.V(3).Infof("Building a cached client from the cluster for the dry run")
+
+		// TODO(ingvagabund): drop the previous queue
+		// TODO(ingvagabund): stop the previous pod evictor
+		// Replace descheduler with one using fake client/factory
+		descheduler, err = newDescheduler(ctx, rs, deschedulerPolicy, evictionPolicyGroupVersion, eventRecorder, kubeClientSandbox.fakeClient(), kubeClientSandbox.fakeSharedInformerFactory(), namespacedSharedInformerFactory, kubeClientSandbox)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create dry run descheduler: %v", err)
+		}
+	}
+
+	// init is responsible for starting all informer factories, metrics providers
+	// and other parts that require to start before a first descheduling cycle is run
+	deschedulerInitFnc := func(ctx context.Context) error {
+		// In dry run mode, start and sync the fake shared informer factory so it can mirror
+		// events from the real factory. Reliable propagation depends on both factories being
+		// fully synced (see WaitForCacheSync calls below), not solely on startup order.
+		if rs.DryRun {
+			descheduler.kubeClientSandbox.fakeSharedInformerFactory().Start(ctx.Done())
+			descheduler.kubeClientSandbox.fakeSharedInformerFactory().WaitForCacheSync(ctx.Done())
+		}
+		sharedInformerFactory.Start(ctx.Done())
+		if descheduler.secretBasedPromClientCtrl != nil {
+			namespacedSharedInformerFactory.Start(ctx.Done())
+		}
+
+		sharedInformerFactory.WaitForCacheSync(ctx.Done())
+		if descheduler.secretBasedPromClientCtrl != nil {
+			namespacedSharedInformerFactory.WaitForCacheSync(ctx.Done())
+		}
+
+		descheduler.podEvictor.WaitForEventHandlersSync(ctx)
+
+		if descheduler.metricsCollector != nil {
+			go func() {
+				klog.V(2).Infof("Starting metrics collector")
+				descheduler.metricsCollector.Run(ctx)
+				klog.V(2).Infof("Stopped metrics collector")
+			}()
+			klog.V(2).Infof("Waiting for metrics collector to sync")
+			if err := wait.PollUntilContextTimeout(ctx, time.Second, time.Minute, true, func(context.Context) (done bool, err error) {
+				return descheduler.metricsCollector.HasSynced(), nil
+			}); err != nil {
+				return fmt.Errorf("unable to wait for metrics collector to sync: %v", err)
+			}
+		}
+
+		if descheduler.secretBasedPromClientCtrl != nil {
+			go descheduler.secretBasedPromClientCtrl.runAuthenticationSecretReconciler(ctx)
+		}
+
+		return nil
+	}
+
+	if err := deschedulerInitFnc(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	runFnc := func(ctx context.Context) error {
+		if descheduler.inClusterPromClientCtrl != nil {
+			// Read the sa token and assume it has the sufficient permissions to authenticate
+			if err := descheduler.inClusterPromClientCtrl.reconcileInClusterSAToken(); err != nil {
+				return fmt.Errorf("unable to reconcile an in cluster SA token: %v", err)
+			}
+		}
+
+		err = descheduler.runDeschedulerLoop(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to run descheduler loop: %v", err)
+		}
+
+		return nil
+	}
+
+	return descheduler, runFnc, nil
 }
 
-type tokenReconciliation int
-
-const (
-	noReconciliation tokenReconciliation = iota
-	inClusterReconciliation
-	secretReconciliation
-)
-
 func RunDeschedulerStrategies(ctx context.Context, rs *options.DeschedulerServer, deschedulerPolicy *api.DeschedulerPolicy, evictionPolicyGroupVersion string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var span trace.Span
 	ctx, span = tracing.Tracer().Start(ctx, "RunDeschedulerStrategies")
 	defer span.End()
 
 	sharedInformerFactory := informers.NewSharedInformerFactoryWithOptions(rs.Client, 0, informers.WithTransform(trimManagedFields))
-
-	var nodeSelector string
-	if deschedulerPolicy.NodeSelector != nil {
-		nodeSelector = *deschedulerPolicy.NodeSelector
-	}
 
 	var eventClient clientset.Interface
 	if rs.DryRun {
@@ -602,82 +521,25 @@ func RunDeschedulerStrategies(ctx context.Context, rs *options.DeschedulerServer
 	defer eventBroadcaster.Shutdown()
 
 	var namespacedSharedInformerFactory informers.SharedInformerFactory
-	metricProviderTokenReconciliation := noReconciliation
-
-	prometheusProvider := metricsProviderListToMap(deschedulerPolicy.MetricsProviders)[api.PrometheusMetrics]
-	if prometheusProvider != nil && prometheusProvider.Prometheus != nil && prometheusProvider.Prometheus.URL != "" {
-		if prometheusProvider.Prometheus.AuthToken != nil {
-			// Will get reconciled
-			namespacedSharedInformerFactory = informers.NewSharedInformerFactoryWithOptions(rs.Client, 0, informers.WithTransform(trimManagedFields), informers.WithNamespace(prometheusProvider.Prometheus.AuthToken.SecretReference.Namespace))
-			metricProviderTokenReconciliation = secretReconciliation
-		} else {
-			// Use the sa token and assume it has the sufficient permissions to authenticate
-			metricProviderTokenReconciliation = inClusterReconciliation
-		}
+	prometheusConfig := getPrometheusConfig(deschedulerPolicy.MetricsProviders)
+	if prometheusConfig != nil && configureSecretPromClientReconciler(prometheusConfig) {
+		namespacedSharedInformerFactory = informers.NewSharedInformerFactoryWithOptions(rs.Client, 0, informers.WithTransform(trimManagedFields), informers.WithNamespace(prometheusConfig.AuthToken.SecretReference.Namespace))
 	}
 
-	descheduler, err := newDescheduler(ctx, rs, deschedulerPolicy, evictionPolicyGroupVersion, eventRecorder, sharedInformerFactory, namespacedSharedInformerFactory)
+	_, runLoop, err := bootstrapDescheduler(ctx, rs, deschedulerPolicy, evictionPolicyGroupVersion, sharedInformerFactory, namespacedSharedInformerFactory, eventRecorder)
 	if err != nil {
-		span.AddEvent("Failed to create new descheduler", trace.WithAttributes(attribute.String("err", err.Error())))
+		span.AddEvent("Failed to bootstrap a descheduler", trace.WithAttributes(attribute.String("err", err.Error())))
 		return err
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	sharedInformerFactory.Start(ctx.Done())
-	if metricProviderTokenReconciliation == secretReconciliation {
-		namespacedSharedInformerFactory.Start(ctx.Done())
-	}
-
-	sharedInformerFactory.WaitForCacheSync(ctx.Done())
-	descheduler.podEvictor.WaitForEventHandlersSync(ctx)
-	if metricProviderTokenReconciliation == secretReconciliation {
-		namespacedSharedInformerFactory.WaitForCacheSync(ctx.Done())
-	}
-
-	if descheduler.metricsCollector != nil {
-		go func() {
-			klog.V(2).Infof("Starting metrics collector")
-			descheduler.metricsCollector.Run(ctx)
-			klog.V(2).Infof("Stopped metrics collector")
-		}()
-		klog.V(2).Infof("Waiting for metrics collector to sync")
-		if err := wait.PollWithContext(ctx, time.Second, time.Minute, func(context.Context) (done bool, err error) {
-			return descheduler.metricsCollector.HasSynced(), nil
-		}); err != nil {
-			return fmt.Errorf("unable to wait for metrics collector to sync: %v", err)
-		}
-	}
-
-	if metricProviderTokenReconciliation == secretReconciliation {
-		go descheduler.runAuthenticationSecretReconciler(ctx)
 	}
 
 	wait.NonSlidingUntil(func() {
-		if metricProviderTokenReconciliation == inClusterReconciliation {
-			// Read the sa token and assume it has the sufficient permissions to authenticate
-			if err := descheduler.reconcileInClusterSAToken(); err != nil {
-				klog.ErrorS(err, "unable to reconcile an in cluster SA token")
-				return
-			}
-		}
-
 		// A next context is created here intentionally to avoid nesting the spans via context.
 		sCtx, sSpan := tracing.Tracer().Start(ctx, "NonSlidingUntil")
 		defer sSpan.End()
 
-		nodes, err := nodeutil.ReadyNodes(sCtx, rs.Client, descheduler.sharedInformerFactory.Core().V1().Nodes().Lister(), nodeSelector)
-		if err != nil {
-			sSpan.AddEvent("Failed to detect ready nodes", trace.WithAttributes(attribute.String("err", err.Error())))
+		if err := runLoop(sCtx); err != nil {
+			sSpan.AddEvent("Descheduling loop failed", trace.WithAttributes(attribute.String("err", err.Error())))
 			klog.Error(err)
-			cancel()
-			return
-		}
-		err = descheduler.runDeschedulerLoop(sCtx, nodes)
-		if err != nil {
-			sSpan.AddEvent("Failed to run descheduler loop", trace.WithAttributes(attribute.String("err", err.Error())))
-			klog.Error(err)
-			cancel()
 			return
 		}
 		// If there was no interval specified, send a signal to the stopChannel to end the wait.Until loop after 1 iteration

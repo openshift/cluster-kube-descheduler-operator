@@ -8,6 +8,8 @@ import (
 
 // KubeDeschedulerStatusApplyConfiguration represents a declarative configuration of the KubeDeschedulerStatus type for use
 // with apply.
+//
+// KubeDeschedulerStatus defines the observed state of KubeDescheduler
 type KubeDeschedulerStatusApplyConfiguration struct {
 	operatorv1.OperatorStatusApplyConfiguration `json:",inline"`
 }

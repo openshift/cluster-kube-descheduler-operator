@@ -5,8 +5,10 @@ package v1
 // EvictionLimitsApplyConfiguration represents a declarative configuration of the EvictionLimits type for use
 // with apply.
 type EvictionLimitsApplyConfiguration struct {
+	// total restricts the maximum number of overall evictions
 	Total *int32 `json:"total,omitempty"`
-	Node  *int32 `json:"node,omitempty"`
+	// node restricts the maximum number of evictions per node
+	Node *int32 `json:"node,omitempty"`
 }
 
 // EvictionLimitsApplyConfiguration constructs a declarative configuration of the EvictionLimits type for use with

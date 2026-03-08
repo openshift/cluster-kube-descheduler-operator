@@ -4,6 +4,9 @@ package v1
 
 // NamespacesApplyConfiguration represents a declarative configuration of the Namespaces type for use
 // with apply.
+//
+// Namespaces overrides included and excluded namespaces while keeping
+// the default exclusion of all openshift-*, kube-system and hypershift namespaces
 type NamespacesApplyConfiguration struct {
 	Included []string `json:"included,omitempty"`
 	Excluded []string `json:"excluded,omitempty"`

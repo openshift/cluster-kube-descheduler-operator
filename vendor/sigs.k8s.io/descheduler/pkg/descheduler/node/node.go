@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	clientset "k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/descheduler/pkg/api"
@@ -78,6 +79,22 @@ func ReadyNodes(ctx context.Context, client clientset.Interface, nodeLister list
 	return readyNodes, nil
 }
 
+// ReadyNodesFromInterfaces converts a list of interface{} items to ready nodes.
+// Each interface{} item is expected to be a *v1.Node. Only ready nodes are returned.
+func ReadyNodesFromInterfaces(nodeInterfaces []interface{}) ([]*v1.Node, error) {
+	readyNodes := make([]*v1.Node, 0, len(nodeInterfaces))
+	for i, nodeInterface := range nodeInterfaces {
+		node, ok := nodeInterface.(*v1.Node)
+		if !ok {
+			return nil, fmt.Errorf("item at index %d is not a *v1.Node", i)
+		}
+		if IsReady(node) {
+			readyNodes = append(readyNodes, node)
+		}
+	}
+	return readyNodes, nil
+}
+
 // IsReady checks if the descheduler could run against given node.
 func IsReady(node *v1.Node) bool {
 	for i := range node.Status.Conditions {
@@ -114,7 +131,7 @@ func IsReady(node *v1.Node) bool {
 //
 // The checks are ordered from fastest to slowest to reduce unnecessary computation,
 // especially for nodes that are clearly unsuitable early in the evaluation process.
-func NodeFit(nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, node *v1.Node) error {
+func NodeFit(ctx context.Context, nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, node *v1.Node) error {
 	// Check if the node is marked as unschedulable.
 	if IsNodeUnschedulable(node) {
 		return errors.New("node is not schedulable")
@@ -128,7 +145,7 @@ func NodeFit(nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, node *v
 	}
 
 	// Check taints on the node that have effect NoSchedule or NoExecute.
-	ok := utils.TolerationsTolerateTaintsWithFilter(pod.Spec.Tolerations, node.Spec.Taints, func(taint *v1.Taint) bool {
+	ok := utils.TolerationsTolerateTaintsWithFilter(ctx, pod.Spec.Tolerations, node.Spec.Taints, func(taint *v1.Taint) bool {
 		return taint.Effect == v1.TaintEffectNoSchedule || taint.Effect == v1.TaintEffectNoExecute
 	})
 	if !ok {
@@ -163,7 +180,7 @@ func podFitsNodes(nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, no
 		if excludeFilter != nil && excludeFilter(pod, node) {
 			return
 		}
-		err := NodeFit(nodeIndexer, pod, node)
+		err := NodeFit(ctx, nodeIndexer, pod, node)
 		if err == nil {
 			klog.V(4).InfoS("Pod fits on node", "pod", klog.KObj(pod), "node", klog.KObj(node))
 			atomic.AddInt32(&filteredLen, 1)
@@ -195,8 +212,8 @@ func PodFitsAnyNode(nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, 
 
 // PodFitsCurrentNode checks if the given pod will fit onto the given node. The predicates used
 // to determine if the pod will fit can be found in the NodeFit function.
-func PodFitsCurrentNode(nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, node *v1.Node) bool {
-	err := NodeFit(nodeIndexer, pod, node)
+func PodFitsCurrentNode(ctx context.Context, nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, node *v1.Node) bool {
+	err := NodeFit(ctx, nodeIndexer, pod, node)
 	if err == nil {
 		klog.V(4).InfoS("Pod fits on node", "pod", klog.KObj(pod), "node", klog.KObj(node))
 		return true
@@ -241,7 +258,7 @@ func fitsRequest(nodeIndexer podutil.GetPodsAssignedToNodeFunc, pod *v1.Pod, nod
 			return false, fmt.Errorf("insufficient %v", resource)
 		}
 	}
-	// check pod num, at least one pod number is avaibalbe
+	// check pod num, at least one pod number is available
 	if quantity, ok := availableResources[v1.ResourcePods]; ok && quantity.MilliValue() <= 0 {
 		return false, fmt.Errorf("insufficient %v", v1.ResourcePods)
 	}
@@ -399,4 +416,23 @@ func podMatchesInterPodAntiAffinity(nodeIndexer podutil.GetPodsAssignedToNodeFun
 	}
 
 	return false, nil
+}
+
+// BuildGetPodsAssignedToNodeFunc establishes an indexer to map the pods and their assigned nodes.
+// It returns a function to help us get all the pods that assigned to a node based on the indexer.
+func AddNodeSelectorIndexer(nodeInformer cache.SharedIndexInformer, indexerName string, nodeSelector labels.Selector) error {
+	return nodeInformer.AddIndexers(cache.Indexers{
+		indexerName: func(obj interface{}) ([]string, error) {
+			node, ok := obj.(*v1.Node)
+			if !ok {
+				return []string{}, errors.New("unexpected object")
+			}
+
+			if nodeSelector.Matches(labels.Set(node.Labels)) {
+				return []string{indexerName}, nil
+			}
+
+			return []string{}, nil
+		},
+	})
 }

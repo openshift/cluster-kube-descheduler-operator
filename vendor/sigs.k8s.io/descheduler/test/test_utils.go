@@ -29,17 +29,40 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	clientgotesting "k8s.io/client-go/testing"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	utilptr "k8s.io/utils/ptr"
 )
 
+// BuildTestNamespace creates a test namespace with given parameters.
+func BuildTestNamespace(name string) *v1.Namespace {
+	namespace := &v1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Namespace",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			UID:    uuid.NewUUID(),
+			Labels: map[string]string{"kubernetes.io/metadata.name": name},
+		},
+	}
+	return namespace
+}
+
 // BuildTestPod creates a test pod with given parameters.
 func BuildTestPod(name string, cpu, memory int64, nodeName string, apply func(*v1.Pod)) *v1.Pod {
 	pod := &v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      name,
@@ -73,6 +96,10 @@ func BuildTestPod(name string, cpu, memory int64, nodeName string, apply func(*v
 func BuildTestPDB(name, appLabel string) *policyv1.PodDisruptionBudget {
 	maxUnavailable := intstr.FromInt32(1)
 	pdb := &policyv1.PodDisruptionBudget{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "policy/v1",
+			Kind:       "PodDisruptionBudget",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      name,
@@ -89,9 +116,36 @@ func BuildTestPDB(name, appLabel string) *policyv1.PodDisruptionBudget {
 	return pdb
 }
 
+func BuildTestPVC(name, storageClass string) *v1.PersistentVolumeClaim {
+	pvc := &v1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      name,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			StorageClassName: &storageClass,
+			Resources: v1.VolumeResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+	return pvc
+}
+
 // BuildPodMetrics creates a test podmetrics with given parameters.
 func BuildPodMetrics(name string, millicpu, mem int64) *v1beta1.PodMetrics {
 	return &v1beta1.PodMetrics{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "metrics.k8s.io/v1beta1",
+			Kind:       "PodMetrics",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: "default",
@@ -149,6 +203,10 @@ func GetDaemonSetOwnerRefList() []metav1.OwnerReference {
 // BuildTestNode creates a node with specified capacity.
 func BuildTestNode(name string, millicpu, mem, pods int64, apply func(*v1.Node)) *v1.Node {
 	node := &v1.Node{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Node",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:     name,
 			SelfLink: fmt.Sprintf("/api/v1/nodes/%s", name),
@@ -179,6 +237,10 @@ func BuildTestNode(name string, millicpu, mem, pods int64, apply func(*v1.Node))
 
 func BuildNodeMetrics(name string, millicpu, mem int64) *v1beta1.NodeMetrics {
 	return &v1beta1.NodeMetrics{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "metrics.k8s.io/v1beta1",
+			Kind:       "NodeMetrics",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -230,9 +292,28 @@ func SetNormalOwnerRef(pod *v1.Pod) {
 	pod.ObjectMeta.OwnerReferences = GetNormalPodOwnerRefList()
 }
 
+// SetMirrorPodAnnotation sets the given pod's annotations to mirror pod annotations
+func SetMirrorPodAnnotation(pod *v1.Pod) {
+	pod.Annotations = GetMirrorPodAnnotation()
+}
+
 // SetPodPriority sets the given pod's priority
 func SetPodPriority(pod *v1.Pod, priority int32) {
 	pod.Spec.Priority = &priority
+}
+
+func SetHostPathEmptyDirVolumeSource(pod *v1.Pod) {
+	pod.Spec.Volumes = []v1.Volume{
+		{
+			Name: "sample",
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{Path: "somePath"},
+				EmptyDir: &v1.EmptyDirVolumeSource{
+					SizeLimit: resource.NewQuantity(int64(10), resource.BinarySI),
+				},
+			},
+		},
+	}
 }
 
 // SetNodeUnschedulable sets the given node unschedulable
@@ -321,4 +402,19 @@ func PodWithPodAntiAffinity(inputPod *v1.Pod, labelKey, labelValue string) *v1.P
 	SetPodAntiAffinity(inputPod, labelKey, labelValue)
 	inputPod.Labels = map[string]string{labelKey: labelValue}
 	return inputPod
+}
+
+func RegisterEvictedPodsCollector(fakeClient *fake.Clientset, evictedPods *[]string) {
+	fakeClient.PrependReactor("create", "pods", func(action clientgotesting.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() == "eviction" {
+			createAct, matched := action.(clientgotesting.CreateActionImpl)
+			if !matched {
+				return false, nil, fmt.Errorf("unable to convert action to core.CreateActionImpl")
+			}
+			if eviction, matched := createAct.Object.(*policyv1.Eviction); matched {
+				*evictedPods = append(*evictedPods, eviction.GetName())
+			}
+		}
+		return false, nil, nil // fallback to the default reactor
+	})
 }

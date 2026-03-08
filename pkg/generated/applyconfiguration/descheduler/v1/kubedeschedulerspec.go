@@ -11,13 +11,20 @@ import (
 
 // KubeDeschedulerSpecApplyConfiguration represents a declarative configuration of the KubeDeschedulerSpec type for use
 // with apply.
+//
+// KubeDeschedulerSpec defines the desired state of KubeDescheduler
 type KubeDeschedulerSpecApplyConfiguration struct {
 	operatorv1.OperatorSpecApplyConfiguration `json:",inline"`
-	Profiles                                  []deschedulerv1.DeschedulerProfile       `json:"profiles,omitempty"`
-	DeschedulingIntervalSeconds               *int32                                   `json:"deschedulingIntervalSeconds,omitempty"`
-	EvictionLimits                            *EvictionLimitsApplyConfiguration        `json:"evictionLimits,omitempty"`
-	ProfileCustomizations                     *ProfileCustomizationsApplyConfiguration `json:"profileCustomizations,omitempty"`
-	Mode                                      *deschedulerv1.Mode                      `json:"mode,omitempty"`
+	// Profiles sets which descheduler strategy profiles are enabled
+	Profiles []deschedulerv1.DeschedulerProfile `json:"profiles,omitempty"`
+	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
+	DeschedulingIntervalSeconds *int32 `json:"deschedulingIntervalSeconds,omitempty"`
+	// evictionLimits restrict the number of evictions during each descheduling run
+	EvictionLimits *EvictionLimitsApplyConfiguration `json:"evictionLimits,omitempty"`
+	// ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
+	ProfileCustomizations *ProfileCustomizationsApplyConfiguration `json:"profileCustomizations,omitempty"`
+	// Mode configures the descheduler to either evict pods (Automatic) or to simulate the eviction (Predictive)
+	Mode *deschedulerv1.Mode `json:"mode,omitempty"`
 }
 
 // KubeDeschedulerSpecApplyConfiguration constructs a declarative configuration of the KubeDeschedulerSpec type for use with
