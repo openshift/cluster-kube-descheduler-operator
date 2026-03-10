@@ -23,3 +23,4 @@ $ opm alpha render-template basic catalog-template.json > catalog/cluster-kube-d
 | kdo version | bundle image                                                     |
 | ----------- | ---------------------------------------------------------------- |
 | 4.14.1      | 73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9 |
+| 4.14.2      | 44e944c78a641dc2fec2281276d5382f6193f0c34340963fd465a34a54d60c96 |
