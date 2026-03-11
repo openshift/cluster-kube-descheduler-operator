@@ -2,7 +2,7 @@ all: build
 .PHONY: all
 
 # Version to use when bumping Dockerfile versions
-VERSION ?= 5.2.2
+VERSION ?= 5.1.5
 
 # Include the library makefile
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
