@@ -29,7 +29,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: 2026/03/08
+    createdAt: "2026-03-13"
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
@@ -123,7 +123,8 @@ spec:
     - clusterkubedescheduleroperator.4.14.0-202503131537
     - clusterkubedescheduleroperator.4.14.0-202503171209
     - clusterkubedescheduleroperator.4.14.0-202503310335
-    - clusterkubedescheduleroperator.4.14.1
+    - clusterkubedescheduleroperator.v4.14.0
+    - clusterkubedescheduleroperator.v4.14.1
   customresourcedefinitions:
     owned:
       - displayName: Kube Descheduler
