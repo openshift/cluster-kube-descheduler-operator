@@ -1,16 +1,18 @@
 all: build
 .PHONY: all
 
+# Version to use when bumping Dockerfile versions
+VERSION ?= 4.12.2
+
 # Include the library makefile
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
 	targets/openshift/images.mk \
-	targets/openshift/codegen.mk \
 	targets/openshift/deps.mk \
-	targets/openshift/crd-schema-gen.mk \
+	targets/openshift/bindata.mk \
 )
 
-# Exclude e2e tests from unit testing 
+# Exclude e2e tests from unit testing
 GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 
 IMAGE_REGISTRY :=registry.svc.ci.openshift.org
@@ -45,3 +47,14 @@ generate-clients:
 clean:
 	$(RM) ./cluster-kube-descheduler-operator
 .PHONY: clean
+
+update-version:
+	./hack/update-version.sh $(VERSION)
+.PHONY: update-version
+
+verify-version:
+	./hack/verify-version.sh $(VERSION)
+.PHONY: verify-version
+
+# Extend the verify target from vendor/github.com/openshift/build-machinery-go
+verify: verify-version
