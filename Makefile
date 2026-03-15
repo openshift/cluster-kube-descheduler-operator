@@ -1,6 +1,9 @@
 all: build
 .PHONY: all
 
+# Version to use when bumping Dockerfile versions
+VERSION ?= 4.14.2
+
 # Include the library makefile 
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
@@ -45,3 +48,14 @@ generate-clients:
 clean:
 	$(RM) ./cluster-kube-descheduler-operator
 .PHONY: clean
+
+update-version:
+	./hack/update-version.sh $(VERSION)
+.PHONY: update-version
+
+verify-version:
+	./hack/verify-version.sh $(VERSION)
+.PHONY: verify-version
+
+# Extend the verify target from vendor/github.com/openshift/build-machinery-go
+verify: verify-version
