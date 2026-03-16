@@ -33,7 +33,7 @@ update_dockerfile_version() {
 update_csv_version() {
     local file=$1
     local version=$2
-    local current_date=$(date +%Y/%m/%d)
+    local current_date=$(date -I)
 
     echo "Updating $file..."
 
