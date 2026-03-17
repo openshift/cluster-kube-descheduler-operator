@@ -957,7 +957,7 @@ func getKubeVirtRelieveAndMigrateThresholds(profileCustomizations *deschedulerv1
 	return lowThreshold, highThreshold, nil
 }
 
-func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, evictionLimits *deschedulerv1.EvictionLimits, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
 		Name: string(deschedulerv1.LifecycleAndUtilization),
 		PluginConfigs: []v1alpha2.PluginConfig{
@@ -1066,10 +1066,17 @@ func lifecycleAndUtilizationProfile(profileCustomizations *deschedulerv1.Profile
 		args.TargetThresholds[resourceName] = highThreshold
 	}
 
+	// Set plugin-level eviction limits if provided
+	if evictionLimits != nil && evictionLimits.Node != nil {
+		args.EvictionLimits = &deschedulerapi.EvictionLimits{
+			Node: utilptr.To(uint(*evictionLimits.Node)),
+		}
+	}
+
 	return profile, nil
 }
 
-func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string) (*v1alpha2.DeschedulerProfile, error) {
+func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, evictionLimits *deschedulerv1.EvictionLimits, includedNamespaces, excludedNamespaces, protectedNamespaces []string) (*v1alpha2.DeschedulerProfile, error) {
 	profile := &v1alpha2.DeschedulerProfile{
 		Name: string(deschedulerv1.KubeVirtRelieveAndMigrate),
 		PluginConfigs: []v1alpha2.PluginConfig{
@@ -1168,11 +1175,18 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 		args.TargetThresholds[resourceName] = highThreshold
 	}
 
+	// Set plugin-level eviction limits if provided
+	if evictionLimits != nil && evictionLimits.Node != nil {
+		args.EvictionLimits = &deschedulerapi.EvictionLimits{
+			Node: utilptr.To(uint(*evictionLimits.Node)),
+		}
+	}
+
 	return profile, nil
 }
 
-func longLifecycleProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
-	profile, err := lifecycleAndUtilizationProfile(profileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+func longLifecycleProfile(profileCustomizations *deschedulerv1.ProfileCustomizations, evictionLimits *deschedulerv1.EvictionLimits, includedNamespaces, excludedNamespaces, protectedNamespaces []string, ignorePVCPods, evictLocalStoragePods bool) (*v1alpha2.DeschedulerProfile, error) {
+	profile, err := lifecycleAndUtilizationProfile(profileCustomizations, evictionLimits, includedNamespaces, excludedNamespaces, protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 	if err != nil {
 		return profile, err
 	}
@@ -1375,11 +1389,11 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		case deschedulerv1.SoftTopologyAndDuplicates:
 			profile, err = softTopologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.LifecycleAndUtilization:
-			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, descheduler.Spec.EvictionLimits, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.EvictPodsWithLocalStorage, deschedulerv1.EvictPodsWithPVC:
 			continue
 		case deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LongLifecycle:
-			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, descheduler.Spec.EvictionLimits, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate:
@@ -1399,7 +1413,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			}
 			kubeVirtShedulable := kubeVirtShedulableLabelSelector
 			policy.NodeSelector = &kubeVirtShedulable
-			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
+			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, descheduler.Spec.EvictionLimits, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}
