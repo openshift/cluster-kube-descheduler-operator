@@ -25,3 +25,4 @@ $ opm alpha render-template basic catalog-template.json > catalog/cluster-kube-d
 | 4.14.1      | 73e3b45b83ecbb91a805780467b1326171c0d860ac0b640f3e888980cde9a6e9 |
 | 5.0.2       | 72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7 |
 | 5.0.3       | d601b1ab843f10dfcb984e4e3853ee8dad64a96c5be0e4f17cc0c32882926f71 |
+| 5.0.4       | ae6e1f2c5224817a9af88404eb84e9a30e9c3ec865db95b88daeb98bf9c7730b |

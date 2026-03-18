@@ -163,7 +163,11 @@
                 },
                 {
                     "name": "clusterkubedescheduleroperator.v5.0.3",
-                    "skipRange": "\u003e=4.12.0 \u003c5.0.3",
+                    "skipRange": "\u003e=4.12.0 \u003c5.0.3"
+                },
+                {
+                    "name": "clusterkubedescheduleroperator.v5.0.4",
+                    "skipRange": "\u003e=4.12.0 \u003c5.0.4",
                     "skips": [
                       "clusterkubedescheduleroperator.4.14.0-202304241531",
                       "clusterkubedescheduleroperator.4.14.0-202305180141",
@@ -225,8 +229,10 @@
                       "clusterkubedescheduleroperator.4.14.0-202503171209",
                       "clusterkubedescheduleroperator.4.14.0-202503310335",
                       "clusterkubedescheduleroperator.v4.14.1",
+                      "clusterkubedescheduleroperator.v4.14.2",
                       "clusterkubedescheduleroperator.v5.0.1",
-                      "clusterkubedescheduleroperator.v5.0.2"
+                      "clusterkubedescheduleroperator.v5.0.2",
+                      "clusterkubedescheduleroperator.v5.0.3"
                     ]
                 }
             ],
@@ -357,6 +363,10 @@
         {
             "schema": "olm.bundle",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:d601b1ab843f10dfcb984e4e3853ee8dad64a96c5be0e4f17cc0c32882926f71"
-        }
+        },
+        {
+            "schema": "olm.bundle",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:ae6e1f2c5224817a9af88404eb84e9a30e9c3ec865db95b88daeb98bf9c7730b"
+        },
     ]
 }
