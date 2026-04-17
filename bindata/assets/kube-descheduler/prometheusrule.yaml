@@ -163,3 +163,29 @@ spec:
               3 * descheduler:node:ideal_point_positive_distance:p66_5m,
               1.0
             )
+
+        # Track successful eviction by LowNodeUtilization strategy count per node in the last 10 minutes
+        - record: descheduler:node:eviction_count:10m
+          expr: |-
+            label_replace(
+              sum by (node) (increase(descheduler_pods_evicted_total{strategy="LowNodeUtilization", result="success"}[10m])),
+              'instance', "$1", 'node', '(.+)'
+            ) or on (instance)
+            descheduler:nodeutilization:cpu:avg1m * 0
+
+        # Calculate the Dampening Factor (Multiplier)
+        # We use a linear decay: each eviction reduces the score by 10%.
+        # 10 evictions in 10m will effectively "mute" the node (multiplier close to 0).
+        - record: descheduler:node:cooldown_multiplier:10m
+          expr: |-
+            clamp_min(
+              1 - (descheduler:node:eviction_count:10m * 0.10),
+              0.01
+            )
+
+        # Actuation Priority: Stable Distance x Cooldown
+        # If the node was recently touched, the distance is suppressed.
+        - record: descheduler:node:actuation_priority:p66_5m
+          expr: |-
+            descheduler:node:linear_amplified_ideal_point_positive_distance:k3:p66_5m
+            * on(instance) descheduler:node:cooldown_multiplier:10m
