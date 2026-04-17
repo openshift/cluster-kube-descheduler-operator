@@ -1,7 +1,5 @@
 reviewers:
-  - ingvagabund
-  - ricardomaraschini
+  - control-plane-approvers
 approvers:
-  - ingvagabund
-  - ricardomaraschini
+  - control-plane-approvers
 component: "descheduler"
