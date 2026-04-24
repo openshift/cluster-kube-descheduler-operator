@@ -33,6 +33,10 @@ spec:
           # return cpu pressure as zero to (partially) filter out false
           # positives pressure spikes due to CPU limited pods.
           # See: https://github.com/kubernetes/enhancements/issues/5062
+          # Ideally, PSI pressure per container (see:
+          # https://github.com/kubernetes/kubernetes/pull/130701 ) combined
+          # with a quantile aggregation would better filter out outlier pods
+          # driving pressure spikes, but per-container PSI is not yet available.
           expr: |-
             (
               avg by (instance) (rate(node_pressure_cpu_waiting_seconds_total[1m]))
@@ -46,10 +50,21 @@ spec:
           expr: avg(descheduler:nodepressure:cpu:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
 
         - record: descheduler:nodepressure:memory:avg1m
+          # return the memory pressure if the memory usage is over 70% otherwise
+          # return memory pressure as zero to (partially) filter out false
+          # positives pressure spikes due to memory limited pods.
+          # Ideally, PSI pressure per container (see:
+          # https://github.com/kubernetes/kubernetes/pull/130701 ) combined
+          # with a quantile aggregation would better filter out outlier pods
+          # driving pressure spikes, but per-container PSI is not yet available.
           expr: |-
-            avg by (instance) (
-              rate(node_pressure_memory_waiting_seconds_total[1m])
+            (
+              avg by (instance) (rate(node_pressure_memory_waiting_seconds_total[1m]))
+              and
+              descheduler:nodeutilization:memory:avg1m > 0.7
             )
+            or
+            (avg by (instance) (rate(node_pressure_memory_waiting_seconds_total[1m])) * 0)
 
         - record: descheduler:averageworkerspressure:memory:avg1m
           expr: avg(descheduler:nodepressure:memory:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
