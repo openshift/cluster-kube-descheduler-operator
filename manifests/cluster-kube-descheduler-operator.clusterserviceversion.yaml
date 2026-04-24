@@ -29,7 +29,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: 2026/03/11
+    createdAt: "2026-04-23"
     features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
@@ -56,13 +56,6 @@ spec:
   # The buffer len 6 should be sufficient for normal cadance. Including CVE releases.
   # The buffer can be extened later as needed.
   skips:
-    - clusterkubedescheduleroperator.v5.1.0
-    - clusterkubedescheduleroperator.v5.1.1
-    - clusterkubedescheduleroperator.v5.1.2
-    - clusterkubedescheduleroperator.v5.1.3
-    - clusterkubedescheduleroperator.v5.1.4
-    - clusterkubedescheduleroperator.v5.1.5
-    - clusterkubedescheduleroperator.v5.1.6
     - clusterkubedescheduleroperator.v5.2.0
     - clusterkubedescheduleroperator.v5.2.1
     - clusterkubedescheduleroperator.v5.2.2
