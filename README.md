@@ -2,20 +2,19 @@
 
 ## FBC catalog rendering
 
-To initiliaze catalog-template.json
+To initiliaze catalog-template.yaml
 
 ```sh
-$ opm migrate registry.redhat.io/redhat/redhat-operator-index:v4.19 ./catalog-migrate
+$ opm migrate registry.redhat.io/redhat/redhat-operator-index:v4.20 ./catalog-migrate
 $ mkdir -p v4.20/catalog/cluster-kube-descheduler-operator
-$ opm alpha convert-template basic ./catalog-migrate/cluster-kube-descheduler-operator/catalog.json > v4.20/catalog-template.json
+$ opm alpha convert-template basic -o yaml ./catalog-migrate/cluster-kube-descheduler-operator/catalog.json > v4.20/catalog-template.yaml
 ```
 
 To update the catalog
 
 ```
-$ cd v4.20
 $ export REGISTRY_AUTH_FILE=...
-$ opm alpha render-template basic catalog-template.json --migrate-level bundle-object-to-csv-metadata > catalog/cluster-kube-descheduler-operator/catalog.json
+$ opm alpha render-template basic v4.20/catalog-template.yaml --migrate-level bundle-object-to-csv-metadata > v4.20/catalog/cluster-kube-descheduler-operator/catalog.json
 ```
 
 ## Releases
