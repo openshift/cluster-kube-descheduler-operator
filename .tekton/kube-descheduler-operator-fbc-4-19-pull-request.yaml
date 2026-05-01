@@ -6,17 +6,15 @@ metadata:
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    pipelinesascode.tekton.dev/cancel-in-progress: "true"
-    pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "fbc" && ( "v4.21/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-21-pull-request.yaml".pathChanged()
-      )
-  creationTimestamp: null
+    pipelinesascode.tekton.dev/cancel-in-progress: 'true'
+    pipelinesascode.tekton.dev/max-keep-runs: '3'
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "fbc" && ( "v4.19/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-19-pull-request.yaml".pathChanged() )
+  creationTimestamp:
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-21
-    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-21
+    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-19
+    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-19
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-fbc-4-21-on-pull-request
+  name: kube-descheduler-operator-fbc-4-19-on-pull-request
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -25,7 +23,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-21:on-pr-{{revision}}
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-19:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: build-platforms
@@ -37,18 +35,32 @@ spec:
   - name: dockerfile
     value: catalog.Dockerfile
   - name: path-context
-    value: v4.21
+    value: v4.19
   pipelineSpec:
     description: |
-      This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
+      This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/advanced-how-tos/building-olm.adoc#building-the-file-based-catalog).
 
       _Uses `buildah` to create a container image. Its build-time tests are limited to verifying the included catalog and do not scan the image.
       This pipeline is pushed as a Tekton bundle to [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-fbc-builder?tab=tags)_
+    finally:
+    - name: show-sbom
+      params:
+      - name: IMAGE_URL
+        value: $(tasks.build-image-index.results.IMAGE_URL)
+      taskRef:
+        params:
+        - name: name
+          value: show-sbom
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-show-sbom:0.1@sha256:a7346ed61237db4f82ff782e0c9e8b30536e0e67b907ad600341a6d192e80012
+        - name: kind
+          value: task
+        resolver: bundles
     params:
     - description: Source Repository URL
       name: git-url
       type: string
-    - default: ""
+    - default: ''
       description: Revision of the Source Repository
       name: revision
       type: string
@@ -56,37 +68,33 @@ spec:
       name: output-image
       type: string
     - default: .
-      description: Path to the source code of an application's component from where
-        to build image.
+      description: Path to the source code of an application's component from where to build image.
       name: path-context
       type: string
     - default: Dockerfile
-      description: Path to the Dockerfile inside the context specified by parameter
-        path-context
+      description: Path to the Dockerfile inside the context specified by parameter path-context
       name: dockerfile
       type: string
-    - default: "false"
+    - default: 'false'
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: "true"
+    - default: 'true'
       description: Execute the build with network isolation
       name: hermetic
       type: string
-    - default: ""
-      description: Build dependencies to be prefetched
+    - default: ''
+      description: Build dependencies to be prefetched by Cachi2
       name: prefetch-input
       type: string
-    - default: ""
-      description: Image tag expiration time, time values could be something like
-        1h, 2d, 3w for hours, days, and weeks, respectively.
+    - default: ''
+      description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
-      type: string
-    - default: "true"
+    - default: 'true'
       description: Build a source image.
       name: build-source-image
       type: string
-    - default: "true"
+    - default: 'true'
       description: Add built image into an OCI image index
       name: build-image-index
       type: string
@@ -94,7 +102,7 @@ spec:
       description: Array of --build-arg values ("arg=value" strings) for buildah
       name: build-args
       type: array
-    - default: ""
+    - default: ''
       description: Path to a file with build arguments for buildah, see https://www.mankier.com/1/buildah-build#--build-arg-file
       name: build-args-file
       type: string
@@ -103,10 +111,13 @@ spec:
       - linux/arm64
       - linux/ppc64le
       - linux/s390x
-      description: List of platforms to build the container images on. The available
-        set of values is determined by the configuration of the multi-platform-controller.
+      description: List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
       name: build-platforms
       type: array
+    - name: buildah-format
+      default: oci
+      type: string
+      description: The format for the resulting image's mediaType. Valid values are oci or docker.
     - name: enable-cache-proxy
       default: 'false'
       description: Enable cache proxy configuration
@@ -116,16 +127,16 @@ spec:
       description: Use the package registry proxy when prefetching dependencies
       type: string
     results:
-    - description: ""
+    - description: ''
       name: IMAGE_URL
       value: $(tasks.build-image-index.results.IMAGE_URL)
-    - description: ""
+    - description: ''
       name: IMAGE_DIGEST
       value: $(tasks.build-image-index.results.IMAGE_DIGEST)
-    - description: ""
+    - description: ''
       name: CHAINS-GIT_URL
       value: $(tasks.clone-repository.results.url)
-    - description: ""
+    - description: ''
       name: CHAINS-GIT_COMMIT
       value: $(tasks.clone-repository.results.commit)
     tasks:
@@ -166,37 +177,12 @@ spec:
       workspaces:
       - name: basic-auth
         workspace: git-auth
-    - name: run-opm-command
-      params:
-      - name: SOURCE_ARTIFACT
-        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
-      - name: ociStorage
-        value: $(params.output-image).opm
-      - name: ociArtifactExpiresAfter
-        value: $(params.image-expires-after)
-      - name: OPM_ARGS
-        value: []
-      - name: OPM_OUTPUT_PATH
-        value: ""
-      - name: IDMS_PATH
-        value: ""
-      runAfter:
-      - clone-repository
-      taskRef:
-        params:
-        - name: name
-          value: run-opm-command-oci-ta
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-run-opm-command-oci-ta:0.1@sha256:c79858b867713e44927438f6193c49004bf40bfd9248682f20c5a83ea2a9d2f1
-        - name: kind
-          value: task
-        resolver: bundles
     - name: prefetch-dependencies
       params:
       - name: input
         value: $(params.prefetch-input)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.run-opm-command.results.SOURCE_ARTIFACT)
+        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
       - name: ociStorage
         value: $(params.output-image).prefetch
       - name: ociArtifactExpiresAfter
@@ -204,7 +190,7 @@ spec:
       - name: enable-package-registry-proxy
         value: $(params.enable-package-registry-proxy)
       runAfter:
-      - run-opm-command
+      - clone-repository
       taskRef:
         params:
         - name: name
@@ -250,7 +236,9 @@ spec:
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: IMAGE_APPEND_PLATFORM
-        value: "true"
+        value: 'true'
+      - name: BUILDAH_FORMAT
+        value: $(params.buildah-format)
       - name: HTTP_PROXY
         value: $(tasks.init.results.http-proxy)
       - name: NO_PROXY
@@ -275,6 +263,8 @@ spec:
       - name: IMAGES
         value:
         - $(tasks.build-images.results.IMAGE_REF[*])
+      - name: BUILDAH_FORMAT
+        value: $(params.buildah-format)
       runAfter:
       - build-images
       taskRef:
@@ -307,7 +297,7 @@ spec:
       - input: $(params.skip-checks)
         operator: in
         values:
-        - "false"
+        - 'false'
     - name: apply-tags
       params:
       - name: IMAGE_URL
@@ -346,7 +336,7 @@ spec:
       - input: $(params.skip-checks)
         operator: in
         values:
-        - "false"
+        - 'false'
     - name: fbc-target-index-pruning-check
       params:
       - name: IMAGE_URL
@@ -372,7 +362,7 @@ spec:
       - input: $(params.skip-checks)
         operator: in
         values:
-        - "false"
+        - 'false'
     - name: fbc-fips-check-oci-ta
       params:
       - name: image-digest
@@ -396,14 +386,14 @@ spec:
       - input: $(params.skip-checks)
         operator: in
         values:
-        - "false"
+        - 'false'
     workspaces:
     - name: git-auth
       optional: true
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-21
+    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-19
   workspaces:
   - name: git-auth
     secret:

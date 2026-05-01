@@ -2,7 +2,7 @@
 apiVersion: operator.openshift.io/v1alpha1
 kind: ImageDigestMirrorSet
 metadata:
-  name: mirror-set-kube-descheduler-operator-4-20
+  name: mirror-set-kube-descheduler-operator
 spec:
   imageDigestMirrors:
     - mirrors:
@@ -10,34 +10,70 @@ spec:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-20
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-19
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-18
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-17
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-16
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-14
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-13
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-12
       source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-21
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-20
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-19
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-18
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-17
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-16
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-14
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-13
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-12
       source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-21
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-20
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-19
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-18
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-17
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-16
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-14
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-13
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-12
       source: registry.stage.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-21
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-20
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-19
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-18
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-17
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-16
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-14
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-13
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-12
       source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-21
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-20
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-19
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-18
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-17
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-16
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-14
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-13
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-12
       source: registry.stage.redhat.io/kube-descheduler-operator/descheduler-rhel9
     - mirrors:
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-21
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-20
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-19
         - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-18
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-17
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-16
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-15
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-14
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-13
+        - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-12
       source: registry.redhat.io/kube-descheduler-operator/descheduler-rhel9

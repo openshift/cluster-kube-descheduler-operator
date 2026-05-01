@@ -4,19 +4,18 @@ metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/cluster-kube-descheduler-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    pipelinesascode.tekton.dev/cancel-in-progress: "true"
+    pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "fbc" && ( "v4.21/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-21-pull-request.yaml".pathChanged()
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+      == "fbc" && ( "v4.20/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-20-push.yaml".pathChanged()
       )
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-21
-    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-21
+    appstudio.openshift.io/application: kube-descheduler-operator-fbc-4-20
+    appstudio.openshift.io/component: kube-descheduler-operator-fbc-4-20
     pipelines.appstudio.openshift.io/type: build
-  name: kube-descheduler-operator-fbc-4-21-on-pull-request
+  name: kube-descheduler-operator-fbc-4-20-on-push
   namespace: kdo-workloads-tenant
 spec:
   params:
@@ -25,9 +24,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-21:on-pr-{{revision}}
-  - name: image-expires-after
-    value: 5d
+    value: quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-fbc-4-20:{{revision}}
   - name: build-platforms
     value:
     - linux/x86_64
@@ -37,7 +34,7 @@ spec:
   - name: dockerfile
     value: catalog.Dockerfile
   - name: path-context
-    value: v4.21
+    value: v4.20
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
@@ -107,10 +104,6 @@ spec:
         set of values is determined by the configuration of the multi-platform-controller.
       name: build-platforms
       type: array
-    - name: enable-cache-proxy
-      default: 'false'
-      description: Enable cache proxy configuration
-      type: string
     - name: enable-package-registry-proxy
       default: 'true'
       description: Use the package registry proxy when prefetching dependencies
@@ -130,9 +123,6 @@ spec:
       value: $(tasks.clone-repository.results.commit)
     tasks:
     - name: init
-      params:
-      - name: enable-cache-proxy
-        value: $(params.enable-cache-proxy)
       taskRef:
         params:
         - name: name
@@ -251,10 +241,6 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: IMAGE_APPEND_PLATFORM
         value: "true"
-      - name: HTTP_PROXY
-        value: $(tasks.init.results.http-proxy)
-      - name: NO_PROXY
-        value: $(tasks.init.results.no-proxy)
       runAfter:
       - clone-repository
       taskRef:
@@ -403,7 +389,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-21
+    serviceAccountName: build-pipeline-kube-descheduler-operator-fbc-4-20
   workspaces:
   - name: git-auth
     secret:

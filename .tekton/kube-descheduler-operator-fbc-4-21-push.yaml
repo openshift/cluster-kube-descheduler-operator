@@ -8,7 +8,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "fbc-4.21" && ( "v4.21/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-21-push.yaml".pathChanged()
+      == "fbc" && ( "v4.21/***".pathChanged() || ".tekton/kube-descheduler-operator-fbc-4-21-push.yaml".pathChanged()
       )
   creationTimestamp: null
   labels:
