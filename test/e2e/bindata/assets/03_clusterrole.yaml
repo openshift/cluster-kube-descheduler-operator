@@ -71,6 +71,7 @@ rules:
     resources:
       - namespaces
       - pods
+      - persistentvolumeclaims
     verbs:
       - get
       - watch
