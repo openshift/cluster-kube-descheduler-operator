@@ -137,6 +137,24 @@ properties:
               - High
               - ""
             type: string
+          devMaxMigrationCooldown:
+            description: |-
+              devMaxMigrationCooldown configures the maximum migration cooldown for the KubevirtMigrationAware plugin.
+              Only applicable for the KubeVirtRelieveAndMigrate profile.
+            format: duration
+            type: string
+          devMigrationCooldown:
+            description: |-
+              devMigrationCooldown configures the base migration cooldown for the KubevirtMigrationAware plugin.
+              Only applicable for the KubeVirtRelieveAndMigrate profile.
+            format: duration
+            type: string
+          devMigrationHistoryWindow:
+            description: |-
+              devMigrationHistoryWindow configures the migration history window for the KubevirtMigrationAware plugin.
+              Only applicable for the KubeVirtRelieveAndMigrate profile.
+            format: duration
+            type: string
           namespaces:
             description: |-
               Namespaces overrides included and excluded namespaces while keeping
