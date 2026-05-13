@@ -1117,6 +1117,9 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 	// profile defaults
 	const defaultActualUtilizationProfile = deschedulerv1.PrometheusCPUMemoryCombinedProfile
 	args.UseDeviationThresholds = true
+	args.EvictionLimits = &deschedulerapi.EvictionLimits{
+		Node: utilptr.To[uint](uint(defaultKVParallelOutboundMigrationsPerNode)),
+	}
 	query, err := utilizationProfileToPrometheusQuery(defaultActualUtilizationProfile)
 	if err != nil {
 		return nil, err
@@ -1321,8 +1324,6 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		Profiles: []v1alpha2.DeschedulerProfile{},
 	}
 
-	c.setEvictionsLimits(descheduler, policy)
-
 	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {
 		// detect the prometheus server url
 		route, err := c.routeRouteLister.Routes("openshift-monitoring").Get("prometheus-k8s")
@@ -1408,6 +1409,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		}
 		policy.Profiles = append(policy.Profiles, *profile)
 	}
+
+	c.setEvictionsLimits(descheduler, policy)
 
 	// Check for conflicting kube-scheduler config
 	if scheduler.Spec.Profile == configv1.HighNodeUtilization &&
@@ -1818,6 +1821,17 @@ func (c *TargetConfigReconciler) setEvictionsLimits(descheduler *deschedulerv1.K
 		}
 		if descheduler.Spec.EvictionLimits.Node != nil {
 			policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
+			for i := range policy.Profiles {
+				for j := range policy.Profiles[i].PluginConfigs {
+					if policy.Profiles[i].PluginConfigs[j].Name == nodeutilization.LowNodeUtilizationPluginName {
+						args := policy.Profiles[i].PluginConfigs[j].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+						if args.EvictionLimits == nil {
+							args.EvictionLimits = &deschedulerapi.EvictionLimits{}
+						}
+						args.EvictionLimits.Node = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
+					}
+				}
+			}
 		}
 	}
 }
