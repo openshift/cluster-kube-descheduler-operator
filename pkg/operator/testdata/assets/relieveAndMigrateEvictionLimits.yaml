@@ -18,6 +18,8 @@ profiles:
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
+      evictionLimits:
+        node: 3
       metricsUtilization:
         prometheus:
           query: descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m

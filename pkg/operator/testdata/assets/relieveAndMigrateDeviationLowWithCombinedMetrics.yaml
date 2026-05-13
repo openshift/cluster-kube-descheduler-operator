@@ -18,6 +18,8 @@ profiles:
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
+      evictionLimits:
+        node: 2
       metricsUtilization:
         prometheus:
           query: descheduler:combined_utilization_and_pressure:avg1m
