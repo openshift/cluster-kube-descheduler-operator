@@ -1,0 +1,35 @@
+apiVersion: operator.openshift.io/v1
+kind: KubeDescheduler
+metadata:
+  name: cluster
+  namespace: openshift-kube-descheduler-operator
+spec:
+  managementState: Managed
+  deschedulingIntervalSeconds: 30
+  mode: "Automatic"
+  logLevel: "Debug"
+  operatorLogLevel: "Debug"
+  evictionLimits:
+    node: 10
+    total: 100
+  profiles:
+    - AffinityAndTaints
+    - SoftTopologyAndDuplicates
+    - LifecycleAndUtilization
+    - EvictPodsWithLocalStorage
+    - EvictPodsWithPVC
+  profileCustomizations:
+    podLifetime: "48h"
+    devActualUtilizationProfile: "production-metrics"
+    devDeviationThresholds: "Medium"
+    devEnableEvictionsInBackground: true
+    devHighNodeUtilizationThresholds: "Moderate"
+    devLowNodeUtilizationThresholds: "Medium"
+    thresholdPriorityClassName: "system-cluster-critical"
+    namespaces:
+      included:
+        - "default"
+        - "test-descheduling"
+      excluded:
+        - "kube-system"
+        - "openshift-monitoring"

@@ -1,0 +1,24 @@
+config:
+  configVersion: 6
+  googleCloudStorage:
+    keyFile: "/etc/gcs/sa-key"
+    bucketName: "secaut-bucket"
+    # Current: latest scan overwrites previous for the same version (same as OTEL).
+    # To keep per-run history in GCS, append a unique suffix, e.g.:
+    #   directory: "kdo/${KDO_VERSION}/oobtkube/${PIPELINE_RUN_ID}"
+    # Note: Konflux UI already preserves SCAN_OUTPUT per PipelineRun regardless.
+    directory: "kdo/${KDO_VERSION}/oobtkube"
+
+application:
+  shortName: "kdo"
+  url: "https://kubernetes.default.svc"
+
+general:
+  container:
+    type: "none"
+
+scanners:
+  generic_oobtkube:
+    results: "/opt/rapidast/results/oobtkube-results.sarif"
+    inline: |
+      python3.12 oobtkube.py --find-all --log-level debug -d 300 -p 6000 -i ${POD_IP} -f /opt/rapidast/config/kdo-cr.yaml -o /opt/rapidast/results/oobtkube-results.sarif
