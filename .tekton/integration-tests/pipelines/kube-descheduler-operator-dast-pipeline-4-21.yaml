@@ -18,6 +18,10 @@ spec:
     - name: kdo_version
       description: "KDO product version used to tag RapiDAST scan results in GCS"
       type: string
+    - name: config_git_revision
+      description: "Git branch/revision used to fetch config files (rapidastconfig.yaml, kdo-cr.yaml, rapidast-job.yaml). Set to a PR branch for pre-merge testing."
+      default: "main"
+      type: string
   tasks:
     # ──────────────────────────────────────────────────────────────────────────
     # Task 1: parse-metadata
@@ -191,7 +195,7 @@ spec:
               set -euxo pipefail
 
               export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
-              export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/latest/download
+              export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.42.2
               curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_linux_${ARCH}
               chmod +x operator-sdk_linux_${ARCH}
               mv operator-sdk_linux_${ARCH} /usr/local/bin/operator-sdk
@@ -228,10 +232,14 @@ spec:
           value: $(params.SNAPSHOT)
         - name: kdo_version
           value: $(params.kdo_version)
+        - name: config_git_revision
+          value: $(params.config_git_revision)
       taskSpec:
         params:
           - name: SNAPSHOT
           - name: kdo_version
+            type: string
+          - name: config_git_revision
             type: string
         results:
           - name: TEST_OUTPUT
@@ -274,6 +282,8 @@ spec:
                 value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
               - name: KDO_VERSION
                 value: "$(params.kdo_version)"
+              - name: CONFIG_GIT_REVISION
+                value: "$(params.config_git_revision)"
             volumeMounts:
               - name: credentials
                 mountPath: /credentials
@@ -300,7 +310,7 @@ spec:
                 --dry-run=client -o yaml | kubectl apply -f -
 
               # --- 3. Fetch config files from repo ---
-              REPO_RAW="https://raw.githubusercontent.com/openshift/cluster-kube-descheduler-operator/main"
+              REPO_RAW="https://raw.githubusercontent.com/openshift/cluster-kube-descheduler-operator/${CONFIG_GIT_REVISION}"
               CONFIG_DIR=".tekton/integration-tests/configs"
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/rapidastconfig.yaml" > /tmp/rapidastconfig.yaml
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/kdo-cr.yaml" > /tmp/kdo-cr.yaml
