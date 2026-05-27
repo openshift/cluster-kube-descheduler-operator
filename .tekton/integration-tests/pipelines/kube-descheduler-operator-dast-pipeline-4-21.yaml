@@ -126,7 +126,7 @@ spec:
               - name: instanceType
                 value: "m5.xlarge"
               - name: timeout
-                value: "30m"
+                value: "40m"
               - name: imageContentSources
                 value: |
                   - source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
