@@ -27,6 +27,7 @@ spec:
     # Task 1: parse-metadata
     # ──────────────────────────────────────────────────────────────────────────
     - name: parse-metadata
+      timeout: "5m"
       taskRef:
         resolver: git
         params:
@@ -44,6 +45,7 @@ spec:
     # Task 2: eaas-provision-space
     # ──────────────────────────────────────────────────────────────────────────
     - name: eaas-provision-space
+      timeout: "5m"
       runAfter:
         - parse-metadata
       when:
@@ -71,6 +73,7 @@ spec:
     # Task 3: provision-cluster (OCP 4.21 + imageContentSources for KDO)
     # ──────────────────────────────────────────────────────────────────────────
     - name: provision-cluster
+      timeout: "35m"
       runAfter:
         - eaas-provision-space
       when:
@@ -126,7 +129,7 @@ spec:
               - name: instanceType
                 value: "m5.xlarge"
               - name: timeout
-                value: "40m"
+                value: "30m"
               - name: imageContentSources
                 value: |
                   - source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
@@ -143,6 +146,7 @@ spec:
     # Task 4: install-kdo-operator (from SNAPSHOT bundle via operator-sdk)
     # ──────────────────────────────────────────────────────────────────────────
     - name: install-kdo-operator
+      timeout: "15m"
       runAfter:
         - provision-cluster
       when:
@@ -207,7 +211,7 @@ spec:
 
               oc create namespace openshift-kube-descheduler-operator || true
 
-              operator-sdk run bundle --timeout=5m \
+              operator-sdk run bundle --timeout=10m \
                 --namespace openshift-kube-descheduler-operator \
                 "$BUNDLE_IMAGE" --verbose
 
@@ -220,6 +224,7 @@ spec:
     # Task 5: dast-test (oobtkube Job + Trivy + post-process)
     # ──────────────────────────────────────────────────────────────────────────
     - name: dast-test
+      timeout: "20m"
       description: DAST testing with RapiDAST oobtkube and Trivy misconfiguration scan
       runAfter:
         - install-kdo-operator
