@@ -321,7 +321,8 @@ spec:
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/kdo-cr.yaml" > /tmp/kdo-cr.yaml
 
               # Expand ${KDO_VERSION} in the RapiDAST config
-              sed "s/\${KDO_VERSION}/${KDO_VERSION}/g" /tmp/rapidastconfig.yaml > /tmp/rapidastconfig-resolved.yaml
+              export KDO_VERSION
+              envsubst '${KDO_VERSION}' < /tmp/rapidastconfig.yaml > /tmp/rapidastconfig-resolved.yaml
 
               # --- 4. Create PVC for results on ephemeral cluster ---
               cat <<'PVCEOF' | oc apply -f -
@@ -391,32 +392,11 @@ spec:
               CPEOF
               oc wait --for=condition=Ready pod/results-fetcher -n rapidast-kdo --timeout=60s
               oc cp rapidast-kdo/results-fetcher:/results/oobtkube-results.sarif /shared/oobtkube-results.sarif || true
+              oc cp rapidast-kdo/results-fetcher:/results/trivy-results.json /shared/trivy-results.json || true
 
               echo "DAST orchestration complete. Results in /shared/"
 
-          # Step 5c: Run Trivy misconfiguration scan
-          - name: run-trivy
-            image: quay.io/redhatproductsecurity/rapidast:latest
-            env:
-              - name: KUBECONFIG
-                value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
-            volumeMounts:
-              - name: credentials
-                mountPath: /credentials
-              - name: shared
-                mountPath: /shared
-            script: |
-              #!/bin/bash
-              set -euxo pipefail
-
-              trivy k8s --report summary --severity HIGH,CRITICAL \
-                --include-namespaces openshift-kube-descheduler-operator \
-                --format json --output /shared/trivy-results.json \
-                --kubeconfig "$KUBECONFIG"
-
-              echo "Trivy scan complete"
-
-          # Step 5d: Post-process results for Konflux UI
+          # Step 5c: Post-process results for Konflux UI
           - name: post-process
             image: quay.io/konflux-ci/konflux-test:latest
             volumeMounts:
@@ -429,20 +409,37 @@ spec:
 
               scan_result='{"vulnerabilities":{"critical":0,"high":0,"medium":0,"low":0,"unknown":0}}'
 
+              # --- Parse oobtkube SARIF results ---
               sarif_file=/shared/oobtkube-results.sarif
               if [ -s "$sarif_file" ]; then
-              result=$(jq -rce '{
-                vulnerabilities:{
-                  critical: ([.runs[0].results[]? | select(.level == "error")] | length),
-                  high: ([.runs[0].results[]? | select(.level == "warning")] | length),
-                  medium: ([.runs[0].results[]? | select(.level == "note")] | length),
-                  low: ([.runs[0].results[]? | select(.level == "none" or .level == null or .level == "")] | length),
-                  unknown: ([.runs[0].results[]? | select(.level != "error" and .level != "warning" and .level != "note" and .level != "none" and .level != null and .level != "")] | length)
-                }}' "$sarif_file")
+                result=$(jq -rce '{
+                  vulnerabilities:{
+                    critical: ([.runs[0].results[]? | select(.level == "error")] | length),
+                    high: ([.runs[0].results[]? | select(.level == "warning")] | length),
+                    medium: ([.runs[0].results[]? | select(.level == "note")] | length),
+                    low: ([.runs[0].results[]? | select(.level == "none" or .level == null or .level == "")] | length),
+                    unknown: ([.runs[0].results[]? | select(.level != "error" and .level != "warning" and .level != "note" and .level != "none" and .level != null and .level != "")] | length)
+                  }}' "$sarif_file")
                 scan_result=$(jq -s -rce '.[0].vulnerabilities.critical += .[1].vulnerabilities.critical |
                   .[0].vulnerabilities.high += .[1].vulnerabilities.high |
                   .[0].vulnerabilities.medium += .[1].vulnerabilities.medium |
                   .[0]' <<<"$scan_result $result")
+              fi
+
+              # --- Parse Trivy JSON results ---
+              trivy_file=/shared/trivy-results.json
+              if [ -s "$trivy_file" ]; then
+                trivy_result=$(jq -rce '{
+                  vulnerabilities:{
+                    critical: ([.Resources[]?.Results[]?.Misconfigurations[]? | select(.Severity == "CRITICAL")] | length),
+                    high: ([.Resources[]?.Results[]?.Misconfigurations[]? | select(.Severity == "HIGH")] | length),
+                    medium: 0,
+                    low: 0,
+                    unknown: 0
+                  }}' "$trivy_file")
+                scan_result=$(jq -s -rce '.[0].vulnerabilities.critical += .[1].vulnerabilities.critical |
+                  .[0].vulnerabilities.high += .[1].vulnerabilities.high |
+                  .[0]' <<<"$scan_result $trivy_result")
               fi
 
               echo "$scan_result" | tee "$(results.SCAN_OUTPUT.path)"

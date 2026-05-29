@@ -18,6 +18,7 @@ spec:
               rapidast.py --log-level debug --config /opt/rapidast/config/rapidastconfig.yaml
               RESULT=$?
               cp /opt/rapidast/results/*.sarif /opt/rapidast/pvc-results/ 2>/dev/null || true
+              cp /opt/rapidast/results/*.json /opt/rapidast/pvc-results/ 2>/dev/null || true
               exit $RESULT
           env:
             - name: POD_IP

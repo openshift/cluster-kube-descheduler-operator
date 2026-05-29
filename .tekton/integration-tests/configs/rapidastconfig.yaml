@@ -3,11 +3,8 @@ config:
   googleCloudStorage:
     keyFile: "/etc/gcs/sa-key"
     bucketName: "secaut-bucket"
-    # Current: latest scan overwrites previous for the same version (same as OTEL).
-    # To keep per-run history in GCS, append a unique suffix, e.g.:
-    #   directory: "kdo/${KDO_VERSION}/oobtkube/${PIPELINE_RUN_ID}"
-    # Note: Konflux UI already preserves SCAN_OUTPUT per PipelineRun regardless.
-    directory: "kdo/${KDO_VERSION}/oobtkube"
+    # Each scanner's results land under kdo/<version>/<scanner-name>/
+    directory: "kdo/${KDO_VERSION}"
 
 application:
   shortName: "kdo"
@@ -22,3 +19,8 @@ scanners:
     results: "/opt/rapidast/results/oobtkube-results.sarif"
     inline: |
       python3.12 oobtkube.py --find-all --log-level debug -d 300 -p 6000 -i ${POD_IP} -f /opt/rapidast/config/kdo-cr.yaml -o /opt/rapidast/results/oobtkube-results.sarif
+
+  generic_trivy:
+    results: "/opt/rapidast/results/trivy-results.json"
+    inline: |
+      trivy k8s --include-namespaces openshift-kube-descheduler-operator --scanners=misconfig --severity HIGH,CRITICAL --report all --format json --output /opt/rapidast/results/trivy-results.json --skip-check-update
