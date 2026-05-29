@@ -20,7 +20,7 @@ spec:
       type: string
     - name: config_git_revision
       description: "Git branch/revision used to fetch config files (rapidastconfig.yaml, kdo-cr.yaml, rapidast-job.yaml). Set to a PR branch for pre-merge testing."
-      default: "dast-pipeline-kdo-4-21"
+      default: "main"
       type: string
   tasks:
     # ──────────────────────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ spec:
                 --dry-run=client -o yaml | oc apply -f -
 
               # --- 3. Fetch config files from repo ---
-              REPO_RAW="https://raw.githubusercontent.com/thedeveloper-ctl/cluster-kube-descheduler-operator/${CONFIG_GIT_REVISION}"
+              REPO_RAW="https://raw.githubusercontent.com/openshift/cluster-kube-descheduler-operator/${CONFIG_GIT_REVISION}"
               CONFIG_DIR=".tekton/integration-tests/configs"
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/rapidastconfig.yaml" > /tmp/rapidastconfig.yaml
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/kdo-cr.yaml" > /tmp/kdo-cr.yaml
