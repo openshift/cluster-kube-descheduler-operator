@@ -251,6 +251,12 @@ spec:
             description: Tekton task test output.
           - name: SCAN_OUTPUT
             description: DAST scan result.
+          - name: OOBTKUBE_SARIF
+            description: Raw oobtkube SARIF results (truncated to 4KB if needed).
+          - name: TRIVY_JSON
+            description: Raw Trivy misconfiguration JSON results (truncated to 4KB if needed).
+          - name: RAPIDAST_LOG
+            description: RapiDAST Job logs (truncated to 4KB if needed).
         volumes:
           - name: credentials
             emptyDir: {}
@@ -443,6 +449,25 @@ spec:
               fi
 
               echo "$scan_result" | tee "$(results.SCAN_OUTPUT.path)"
+
+              # --- Write raw scan artifacts (truncated to 4KB for Tekton limit) ---
+              truncate_to_result() {
+                local file="$1" dest="$2" limit=4096
+                if [ -s "$file" ]; then
+                  if [ "$(wc -c < "$file")" -gt "$limit" ]; then
+                    head -c $limit "$file" > "$dest"
+                    echo -e "\n... [TRUNCATED - full results in GCS]" >> "$dest"
+                  else
+                    cp "$file" "$dest"
+                  fi
+                else
+                  echo "No results collected" > "$dest"
+                fi
+              }
+
+              truncate_to_result /shared/oobtkube-results.sarif "$(results.OOBTKUBE_SARIF.path)"
+              truncate_to_result /shared/trivy-results.json "$(results.TRIVY_JSON.path)"
+              truncate_to_result /shared/rapidast-kdo-log.txt "$(results.RAPIDAST_LOG.path)"
 
               note="Task $(context.task.name) completed: Refer to SCAN_OUTPUT for DAST findings."
               TEST_OUTPUT=$(make_result_json -r "SUCCESS" -t "$note")
