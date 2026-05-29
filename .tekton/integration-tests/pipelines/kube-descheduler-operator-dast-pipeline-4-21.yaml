@@ -217,7 +217,7 @@ spec:
 
               oc wait --for condition=Available \
                 -n openshift-kube-descheduler-operator \
-                deployment -l name=descheduler-operator \
+                deployment/descheduler-operator \
                 --timeout=120s
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -352,7 +352,7 @@ spec:
               sleep 15
               kubectl wait --for condition=Available \
                 -n openshift-kube-descheduler-operator \
-                deployment -l name=descheduler-operator \
+                deployment/descheduler-operator \
                 --timeout=120s
 
               # --- 7. Create RapiDAST Job on ephemeral cluster ---
