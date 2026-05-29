@@ -20,7 +20,7 @@ spec:
       type: string
     - name: config_git_revision
       description: "Git branch/revision used to fetch config files (rapidastconfig.yaml, kdo-cr.yaml, rapidast-job.yaml). Set to a PR branch for pre-merge testing."
-      default: "main"
+      default: "dast-pipeline-kdo-4-21"
       type: string
   tasks:
     # ──────────────────────────────────────────────────────────────────────────
