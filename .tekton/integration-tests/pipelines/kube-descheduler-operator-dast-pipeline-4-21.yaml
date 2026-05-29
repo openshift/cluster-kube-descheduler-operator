@@ -321,8 +321,7 @@ spec:
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/kdo-cr.yaml" > /tmp/kdo-cr.yaml
 
               # Expand ${KDO_VERSION} in the RapiDAST config
-              export KDO_VERSION
-              envsubst '${KDO_VERSION}' < /tmp/rapidastconfig.yaml > /tmp/rapidastconfig-resolved.yaml
+              sed "s/\${KDO_VERSION}/${KDO_VERSION}/g" /tmp/rapidastconfig.yaml > /tmp/rapidastconfig-resolved.yaml
 
               # --- 4. Create PVC for results on ephemeral cluster ---
               cat <<'PVCEOF' | oc apply -f -
