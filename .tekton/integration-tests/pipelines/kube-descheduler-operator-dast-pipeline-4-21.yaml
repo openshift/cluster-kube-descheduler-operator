@@ -303,16 +303,16 @@ spec:
               trap 'echo "DAST orchestration failed"; exit 1' ERR
 
               # --- 1. Create namespace and RBAC on ephemeral cluster ---
-              kubectl create namespace rapidast-kdo
-              kubectl create sa privileged-sa -n rapidast-kdo
-              kubectl create clusterrolebinding rapidast-privileged \
+              oc create namespace rapidast-kdo
+              oc create sa privileged-sa -n rapidast-kdo
+              oc create clusterrolebinding rapidast-privileged \
                 --clusterrole=cluster-admin --serviceaccount=rapidast-kdo:privileged-sa
 
               # --- 2. Propagate GCS secret to ephemeral cluster ---
-              kubectl create secret generic rapidast-sa-kdo-key \
+              oc create secret generic rapidast-sa-kdo-key \
                 --from-file=sa-key=/etc/gcs/sa-key \
                 --namespace=rapidast-kdo \
-                --dry-run=client -o yaml | kubectl apply -f -
+                --dry-run=client -o yaml | oc apply -f -
 
               # --- 3. Fetch config files from repo ---
               REPO_RAW="https://raw.githubusercontent.com/openshift/cluster-kube-descheduler-operator/${CONFIG_GIT_REVISION}"
@@ -325,7 +325,7 @@ spec:
               envsubst '${KDO_VERSION}' < /tmp/rapidastconfig.yaml > /tmp/rapidastconfig-resolved.yaml
 
               # --- 4. Create PVC for results on ephemeral cluster ---
-              cat <<'PVCEOF' | kubectl apply -f -
+              cat <<'PVCEOF' | oc apply -f -
               apiVersion: v1
               kind: PersistentVolumeClaim
               metadata:
@@ -340,37 +340,37 @@ spec:
               PVCEOF
 
               # --- 5. Create RapiDAST ConfigMap from fetched config files ---
-              kubectl create configmap rapidast-kdo-config \
+              oc create configmap rapidast-kdo-config \
                 --from-file=rapidastconfig.yaml=/tmp/rapidastconfig-resolved.yaml \
                 --from-file=kdo-cr.yaml=/tmp/kdo-cr.yaml \
                 --namespace=rapidast-kdo
 
               # --- 6. Apply enriched CR on ephemeral cluster (for operator to reconcile) ---
-              kubectl apply -f /tmp/kdo-cr.yaml
+              oc apply -f /tmp/kdo-cr.yaml
 
               # Wait for operator to reconcile the CR
               sleep 15
-              kubectl wait --for condition=Available \
+              oc wait --for condition=Available \
                 -n openshift-kube-descheduler-operator \
                 deployment/descheduler-operator \
                 --timeout=120s
 
               # --- 7. Create RapiDAST Job on ephemeral cluster ---
               curl -sfL "${REPO_RAW}/${CONFIG_DIR}/rapidast-job.yaml" > /tmp/rapidast-job.yaml
-              kubectl apply -f /tmp/rapidast-job.yaml
+              oc apply -f /tmp/rapidast-job.yaml
 
               # --- 8. Wait for Job to terminate (complete or fail) ---
-              kubectl wait --for=condition=complete job/rapidast-kdo-oobtkube \
+              oc wait --for=condition=complete job/rapidast-kdo-oobtkube \
                 -n rapidast-kdo --timeout=600s 2>/dev/null \
-                || kubectl wait --for=condition=failed job/rapidast-kdo-oobtkube \
+                || oc wait --for=condition=failed job/rapidast-kdo-oobtkube \
                 -n rapidast-kdo --timeout=30s 2>/dev/null \
                 || echo "Job still running after timeout"
 
               # --- 9. Capture Job logs ---
-              kubectl logs job/rapidast-kdo-oobtkube -n rapidast-kdo > /shared/rapidast-kdo-log.txt 2>&1 || true
+              oc logs job/rapidast-kdo-oobtkube -n rapidast-kdo > /shared/rapidast-kdo-log.txt 2>&1 || true
 
               # --- 10. Retrieve SARIF from PVC via helper pod ---
-              cat <<'CPEOF' | kubectl apply -f -
+              cat <<'CPEOF' | oc apply -f -
               apiVersion: v1
               kind: Pod
               metadata:
@@ -390,8 +390,8 @@ spec:
                       claimName: rapidast-pvc
                 restartPolicy: Never
               CPEOF
-              kubectl wait --for=condition=Ready pod/results-fetcher -n rapidast-kdo --timeout=60s
-              kubectl cp rapidast-kdo/results-fetcher:/results/oobtkube-results.sarif /shared/oobtkube-results.sarif || true
+              oc wait --for=condition=Ready pod/results-fetcher -n rapidast-kdo --timeout=60s
+              oc cp rapidast-kdo/results-fetcher:/results/oobtkube-results.sarif /shared/oobtkube-results.sarif || true
 
               echo "DAST orchestration complete. Results in /shared/"
 
