@@ -134,13 +134,13 @@ spec:
                 value: |
                   - source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
                     mirrors:
-                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator
+                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-21
                   - source: registry.redhat.io/kube-descheduler-operator/descheduler-rhel9
                     mirrors:
-                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator
+                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-21
                   - source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
                     mirrors:
-                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle
+                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-21
 
     # ──────────────────────────────────────────────────────────────────────────
     # Task 4: install-kdo-operator (from SNAPSHOT bundle via operator-sdk)
