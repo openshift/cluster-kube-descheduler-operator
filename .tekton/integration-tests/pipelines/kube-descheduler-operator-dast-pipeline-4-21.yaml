@@ -1,0 +1,449 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: kube-descheduler-operator-dast-pipeline
+spec:
+  description: |
+    DAST pipeline for Kube Descheduler Operator on Konflux.
+    Provisions an ephemeral OCP 4.21 cluster, installs KDO from SNAPSHOT bundle,
+    runs oobtkube (blind command injection testing via RapiDAST) as a Job on the
+    ephemeral cluster, and Trivy for misconfiguration scanning. Results are uploaded
+    to GCS and surfaced in Konflux UI via TEST_OUTPUT/SCAN_OUTPUT.
+  params:
+    - name: SNAPSHOT
+      description: "The JSON string representing the snapshot of the application under test."
+      default: '{"components": [{"name":"test-app", "containerImage": "quay.io/example/repo:latest"}]}'
+      type: string
+    - name: kdo_version
+      description: "KDO product version used to tag RapiDAST scan results in GCS"
+      type: string
+    - name: config_git_revision
+      description: "Git branch/revision used to fetch config files (rapidastconfig.yaml, kdo-cr.yaml, rapidast-job.yaml). Set to a PR branch for pre-merge testing."
+      default: "main"
+      type: string
+  tasks:
+    # ──────────────────────────────────────────────────────────────────────────
+    # Task 1: parse-metadata
+    # ──────────────────────────────────────────────────────────────────────────
+    - name: parse-metadata
+      timeout: "5m"
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/integration-examples
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/test_metadata.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Task 2: eaas-provision-space
+    # ──────────────────────────────────────────────────────────────────────────
+    - name: eaas-provision-space
+      timeout: "5m"
+      runAfter:
+        - parse-metadata
+      when:
+        - input: $(tasks.parse-metadata.results.test-event-type)
+          operator: in
+          values: ["push", "Push", "PUSH", "incoming", "Incoming", "INCOMING"]
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/build-definitions.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: task/eaas-provision-space/0.1/eaas-provision-space.yaml
+      params:
+        - name: ownerKind
+          value: PipelineRun
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Task 3: provision-cluster (OCP 4.21 + imageContentSources for KDO)
+    # ──────────────────────────────────────────────────────────────────────────
+    - name: provision-cluster
+      timeout: "35m"
+      runAfter:
+        - eaas-provision-space
+      when:
+        - input: $(tasks.parse-metadata.results.test-event-type)
+          operator: in
+          values: ["push", "Push", "PUSH", "incoming", "Incoming", "INCOMING"]
+      taskSpec:
+        results:
+          - name: clusterName
+            value: "$(steps.create-cluster.results.clusterName)"
+        steps:
+          - name: get-supported-versions
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-supported-ephemeral-cluster-versions/0.1/eaas-get-supported-ephemeral-cluster-versions.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.eaas-provision-space.results.secretRef)
+          - name: pick-version
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-latest-openshift-version-by-prefix/0.1/eaas-get-latest-openshift-version-by-prefix.yaml
+            params:
+              - name: prefix
+                value: "4.20."
+          - name: create-cluster
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-create-ephemeral-cluster-hypershift-aws/0.1/eaas-create-ephemeral-cluster-hypershift-aws.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.eaas-provision-space.results.secretRef)
+              - name: version
+                value: "$(steps.pick-version.results.version)"
+              - name: instanceType
+                value: "m5.xlarge"
+              - name: timeout
+                value: "30m"
+              - name: imageContentSources
+                value: |
+                  - source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator
+                    mirrors:
+                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-4-21
+                  - source: registry.redhat.io/kube-descheduler-operator/descheduler-rhel9
+                    mirrors:
+                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/descheduler-4-21
+                  - source: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
+                    mirrors:
+                      - quay.io/redhat-user-workloads/kdo-workloads-tenant/kube-descheduler-operator-bundle-4-21
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Task 4: install-kdo-operator (from SNAPSHOT bundle via operator-sdk)
+    # ──────────────────────────────────────────────────────────────────────────
+    - name: install-kdo-operator
+      timeout: "5m"
+      runAfter:
+        - provision-cluster
+      when:
+        - input: $(tasks.parse-metadata.results.test-event-type)
+          operator: in
+          values: ["push", "Push", "PUSH", "incoming", "Incoming", "INCOMING"]
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+        volumes:
+          - name: credentials
+            emptyDir: {}
+        steps:
+          - name: get-kubeconfig
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-ephemeral-cluster-credentials/0.1/eaas-get-ephemeral-cluster-credentials.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.eaas-provision-space.results.secretRef)
+              - name: clusterName
+                value: "$(tasks.provision-cluster.results.clusterName)"
+              - name: credentials
+                value: credentials
+          - name: install-operator
+            image: quay.io/konflux-ci/konflux-test:latest
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+              - name: KONFLUX_COMPONENT_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['appstudio.openshift.io/component']
+              - name: KUBECONFIG
+                value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+            script: |
+              #!/bin/bash
+              set -euxo pipefail
+
+              export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
+              export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.42.2
+              curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_linux_${ARCH}
+              chmod +x operator-sdk_linux_${ARCH}
+              mv operator-sdk_linux_${ARCH} /usr/local/bin/operator-sdk
+
+              echo "KONFLUX_COMPONENT_NAME: ${KONFLUX_COMPONENT_NAME}"
+              BUNDLE_IMAGE="$(jq -r --arg component_name "$KONFLUX_COMPONENT_NAME" \
+                '.components[] | select(.name == $component_name) | .containerImage' <<< "$SNAPSHOT")"
+              echo "BUNDLE_IMAGE: ${BUNDLE_IMAGE}"
+
+              oc create namespace openshift-kube-descheduler-operator || true
+
+              operator-sdk run bundle --timeout=10m \
+                --namespace openshift-kube-descheduler-operator \
+                "$BUNDLE_IMAGE" --verbose
+
+              oc wait --for condition=Available \
+                -n openshift-kube-descheduler-operator \
+                deployment/descheduler-operator \
+                --timeout=120s
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Task 5: dast-test (oobtkube Job + Trivy + post-process)
+    # ──────────────────────────────────────────────────────────────────────────
+    - name: dast-test
+      timeout: "10m"
+      description: DAST testing with RapiDAST oobtkube and Trivy misconfiguration scan
+      runAfter:
+        - install-kdo-operator
+      when:
+        - input: $(tasks.parse-metadata.results.test-event-type)
+          operator: in
+          values: ["push", "Push", "PUSH", "incoming", "Incoming", "INCOMING"]
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: kdo_version
+          value: $(params.kdo_version)
+        - name: config_git_revision
+          value: $(params.config_git_revision)
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+          - name: kdo_version
+            type: string
+          - name: config_git_revision
+            type: string
+        results:
+          - name: TEST_OUTPUT
+            description: Tekton task test output.
+          - name: SCAN_OUTPUT
+            description: DAST scan result.
+        volumes:
+          - name: credentials
+            emptyDir: {}
+          - name: gcs-key
+            secret:
+              secretName: rapidast-sa-kdo-key
+          - name: shared
+            emptyDir: {}
+        steps:
+          # Step 5a: Get kubeconfig for ephemeral cluster
+          - name: get-kubeconfig
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-ephemeral-cluster-credentials/0.1/eaas-get-ephemeral-cluster-credentials.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.eaas-provision-space.results.secretRef)
+              - name: clusterName
+                value: "$(tasks.provision-cluster.results.clusterName)"
+              - name: credentials
+                value: credentials
+
+          # Step 5b: Orchestrate oobtkube DAST on ephemeral cluster
+          - name: orchestrate-dast
+            image: quay.io/konflux-ci/konflux-test:latest
+            env:
+              - name: KUBECONFIG
+                value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
+              - name: KDO_VERSION
+                value: "$(params.kdo_version)"
+              - name: CONFIG_GIT_REVISION
+                value: "$(params.config_git_revision)"
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+              - name: gcs-key
+                mountPath: /etc/gcs
+                readOnly: true
+              - name: shared
+                mountPath: /shared
+            script: |
+              #!/bin/bash
+              set -euxo pipefail
+              trap 'echo "DAST orchestration failed"; exit 1' ERR
+
+              # --- 1. Create namespace and RBAC on ephemeral cluster ---
+              oc create namespace rapidast-kdo
+              oc create sa privileged-sa -n rapidast-kdo
+              oc create clusterrolebinding rapidast-privileged \
+                --clusterrole=cluster-admin --serviceaccount=rapidast-kdo:privileged-sa
+
+              # --- 2. Propagate GCS secret to ephemeral cluster ---
+              oc create secret generic rapidast-sa-kdo-key \
+                --from-file=sa-key=/etc/gcs/sa-key \
+                --namespace=rapidast-kdo \
+                --dry-run=client -o yaml | oc apply -f -
+
+              # --- 3. Fetch config files from repo ---
+              REPO_RAW="https://raw.githubusercontent.com/openshift/cluster-kube-descheduler-operator/${CONFIG_GIT_REVISION}"
+              CONFIG_DIR=".tekton/integration-tests/configs"
+              curl -sfL "${REPO_RAW}/${CONFIG_DIR}/rapidastconfig.yaml" > /tmp/rapidastconfig.yaml
+              curl -sfL "${REPO_RAW}/${CONFIG_DIR}/kdo-cr.yaml" > /tmp/kdo-cr.yaml
+
+              # Expand ${KDO_VERSION} in the RapiDAST config
+              export KDO_VERSION
+              sed "s/\${KDO_VERSION}/${KDO_VERSION}/g" /tmp/rapidastconfig.yaml > /tmp/rapidastconfig-resolved.yaml
+
+              # --- 4. Create PVC for results on ephemeral cluster ---
+              cat <<'PVCEOF' | oc apply -f -
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: rapidast-pvc
+                namespace: rapidast-kdo
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+              PVCEOF
+
+              # --- 5. Create RapiDAST ConfigMap from fetched config files ---
+              oc create configmap rapidast-kdo-config \
+                --from-file=rapidastconfig.yaml=/tmp/rapidastconfig-resolved.yaml \
+                --from-file=kdo-cr.yaml=/tmp/kdo-cr.yaml \
+                --namespace=rapidast-kdo
+
+              # --- 6. Apply enriched CR on ephemeral cluster (for operator to reconcile) ---
+              oc apply -f /tmp/kdo-cr.yaml
+
+              # Wait for operator to reconcile the CR
+              sleep 15
+              oc wait --for condition=Available \
+                -n openshift-kube-descheduler-operator \
+                deployment/descheduler-operator \
+                --timeout=120s
+
+              # --- 7. Create RapiDAST Job on ephemeral cluster ---
+              curl -sfL "${REPO_RAW}/${CONFIG_DIR}/rapidast-job.yaml" > /tmp/rapidast-job.yaml
+              oc apply -f /tmp/rapidast-job.yaml
+
+              # --- 8. Wait for Job to terminate (complete or fail) ---
+              oc wait --for=condition=complete job/rapidast-kdo-oobtkube \
+                -n rapidast-kdo --timeout=600s 2>/dev/null \
+                || oc wait --for=condition=failed job/rapidast-kdo-oobtkube \
+                -n rapidast-kdo --timeout=30s 2>/dev/null \
+                || echo "Job still running after timeout"
+
+              # --- 9. Capture Job logs ---
+              oc logs job/rapidast-kdo-oobtkube -n rapidast-kdo > /shared/rapidast-kdo-log.txt 2>&1 || true
+
+              # --- 10. Retrieve SARIF from PVC via helper pod ---
+              cat <<'CPEOF' | oc apply -f -
+              apiVersion: v1
+              kind: Pod
+              metadata:
+                name: results-fetcher
+                namespace: rapidast-kdo
+              spec:
+                containers:
+                  - name: fetcher
+                    image: registry.access.redhat.com/ubi9/ubi:latest
+                    command: ["sleep", "300"]
+                    volumeMounts:
+                      - name: results
+                        mountPath: /results
+                volumes:
+                  - name: results
+                    persistentVolumeClaim:
+                      claimName: rapidast-pvc
+                restartPolicy: Never
+              CPEOF
+              oc wait --for=condition=Ready pod/results-fetcher -n rapidast-kdo --timeout=60s
+              oc cp rapidast-kdo/results-fetcher:/results/oobtkube-results.sarif /shared/oobtkube-results.sarif || true
+              oc cp rapidast-kdo/results-fetcher:/results/trivy-results.json /shared/trivy-results.json || true
+
+              echo "DAST orchestration complete. Results in /shared/"
+
+          # Step 5c: Post-process results for Konflux UI
+          - name: post-process
+            image: quay.io/konflux-ci/konflux-test:latest
+            volumeMounts:
+              - name: shared
+                mountPath: /shared
+            script: |
+              #!/bin/bash
+              source /utils.sh
+              trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
+
+              scan_result='{"vulnerabilities":{"critical":0,"high":0,"medium":0,"low":0,"unknown":0}}'
+
+              # --- Parse oobtkube SARIF results ---
+              sarif_file=/shared/oobtkube-results.sarif
+              if [ -s "$sarif_file" ]; then
+                result=$(jq -rce '{
+                  vulnerabilities:{
+                    critical: ([.runs[0].results[]? | select(.level == "error")] | length),
+                    high: ([.runs[0].results[]? | select(.level == "warning")] | length),
+                    medium: ([.runs[0].results[]? | select(.level == "note")] | length),
+                    low: ([.runs[0].results[]? | select(.level == "none" or .level == null or .level == "")] | length),
+                    unknown: ([.runs[0].results[]? | select(.level != "error" and .level != "warning" and .level != "note" and .level != "none" and .level != null and .level != "")] | length)
+                  }}' "$sarif_file")
+                scan_result=$(jq -s -rce '.[0].vulnerabilities.critical += .[1].vulnerabilities.critical |
+                  .[0].vulnerabilities.high += .[1].vulnerabilities.high |
+                  .[0].vulnerabilities.medium += .[1].vulnerabilities.medium |
+                  .[0]' <<<"$scan_result $result")
+              fi
+
+              # --- Parse Trivy JSON results ---
+              trivy_file=/shared/trivy-results.json
+              if [ -s "$trivy_file" ]; then
+                trivy_result=$(jq -rce '{
+                  vulnerabilities:{
+                    critical: ([.Resources[]?.Results[]?.Misconfigurations[]? | select(.Severity == "CRITICAL")] | length),
+                    high: ([.Resources[]?.Results[]?.Misconfigurations[]? | select(.Severity == "HIGH")] | length),
+                    medium: 0,
+                    low: 0,
+                    unknown: 0
+                  }}' "$trivy_file")
+                scan_result=$(jq -s -rce '.[0].vulnerabilities.critical += .[1].vulnerabilities.critical |
+                  .[0].vulnerabilities.high += .[1].vulnerabilities.high |
+                  .[0]' <<<"$scan_result $trivy_result")
+              fi
+
+              echo "$scan_result" | tee "$(results.SCAN_OUTPUT.path)"
+
+              note="Task $(context.task.name) completed: Refer to SCAN_OUTPUT for DAST findings."
+              TEST_OUTPUT=$(make_result_json -r "SUCCESS" -t "$note")
+              echo "${TEST_OUTPUT}" | tee "$(results.TEST_OUTPUT.path)"

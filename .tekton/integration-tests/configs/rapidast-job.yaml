@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rapidast-kdo-oobtkube
+  namespace: rapidast-kdo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: privileged-sa
+      containers:
+        - name: rapidast
+          image: quay.io/redhatproductsecurity/rapidast:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              rapidast.py --log-level debug --config /opt/rapidast/config/rapidastconfig.yaml
+              RESULT=$?
+              cp /opt/rapidast/results/*.sarif /opt/rapidast/pvc-results/ 2>/dev/null || true
+              cp /opt/rapidast/results/*.json /opt/rapidast/pvc-results/ 2>/dev/null || true
+              exit $RESULT
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          volumeMounts:
+            - name: config
+              mountPath: /opt/rapidast/config
+            - name: results
+              mountPath: /opt/rapidast/pvc-results
+            - name: gcs-key
+              mountPath: /etc/gcs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: rapidast-kdo-config
+        - name: results
+          persistentVolumeClaim:
+            claimName: rapidast-pvc
+        - name: gcs-key
+          secret:
+            secretName: rapidast-sa-kdo-key
+      restartPolicy: Never

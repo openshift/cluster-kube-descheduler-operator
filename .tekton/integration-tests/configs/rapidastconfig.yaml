@@ -1,0 +1,26 @@
+config:
+  configVersion: 6
+  googleCloudStorage:
+    keyFile: "/etc/gcs/sa-key"
+    bucketName: "secaut-bucket"
+    # Each scanner's results land under kdo/<version>/<scanner-name>/
+    directory: "kdo/${KDO_VERSION}"
+
+application:
+  shortName: "kdo"
+  url: "https://kubernetes.default.svc"
+
+general:
+  container:
+    type: "none"
+
+scanners:
+  generic_oobtkube:
+    results: "/opt/rapidast/results/oobtkube-results.sarif"
+    inline: |
+      python3.12 oobtkube.py --find-all --log-level debug -d 300 -p 6000 -i ${POD_IP} -f /opt/rapidast/config/kdo-cr.yaml -o /opt/rapidast/results/oobtkube-results.sarif
+
+  generic_trivy:
+    results: "/opt/rapidast/results/trivy-results.json"
+    inline: |
+      trivy k8s --include-namespaces openshift-kube-descheduler-operator --scanners=misconfig --severity HIGH,CRITICAL --report all --format json --output /opt/rapidast/results/trivy-results.json --skip-check-update
