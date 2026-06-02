@@ -366,6 +366,8 @@ spec:
                 name: descheduler-operator
             template:
               metadata:
+                annotations:
+                  openshift.io/required-scc: restricted-v2
                 labels:
                   name: descheduler-operator
               spec:
@@ -381,6 +383,7 @@ spec:
                       capabilities:
                         drop: ["ALL"]
                     image: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
+                    terminationMessagePolicy: FallbackToLogsOnError
                     resources:
                       requests:
                         memory: 50Mi

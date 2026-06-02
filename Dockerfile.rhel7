@@ -1,10 +1,12 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
-RUN make build --warn-undefined-variables
+RUN make build --warn-undefined-variables \
+    && gzip cluster-kube-descheduler-operator-tests-ext
 
 FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator-tests-ext.gz /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/soft-tainter /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
