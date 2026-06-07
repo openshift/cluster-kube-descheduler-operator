@@ -24,11 +24,13 @@ func NewRunSuiteCommand(registry *extension.Registry) *cobra.Command {
 		outputFlags      *flags.OutputFlags
 		concurrencyFlags *flags.ConcurrencyFlags
 		junitPath        string
+		htmlPath         string
 	}{
 		componentFlags:   flags.NewComponentFlags(),
 		outputFlags:      flags.NewOutputFlags(),
 		concurrencyFlags: flags.NewConcurrencyFlags(),
 		junitPath:        "",
+		htmlPath:         "",
 	}
 
 	cmd := &cobra.Command{
@@ -90,6 +92,14 @@ func NewRunSuiteCommand(registry *extension.Registry) *cobra.Command {
 				}
 				compositeWriter.AddWriter(junitWriter)
 			}
+			// HTML writer if needed
+			if opts.htmlPath != "" {
+				htmlWriter, err := extensiontests.NewHTMLResultWriter(opts.htmlPath, suite.Name)
+				if err != nil {
+					return errors.Wrap(err, "couldn't create html writer")
+				}
+				compositeWriter.AddWriter(htmlWriter)
+			}
 
 			// JSON writer
 			jsonWriter, err := extensiontests.NewJSONResultWriter(os.Stdout,
@@ -104,7 +114,11 @@ func NewRunSuiteCommand(registry *extension.Registry) *cobra.Command {
 				return errors.Wrap(err, "couldn't filter specs")
 			}
 
-			results, runErr := specs.Run(ctx, compositeWriter, opts.concurrencyFlags.MaxConcurency)
+			concurrency := opts.concurrencyFlags.MaxConcurency
+			if suite.Parallelism > 0 {
+				concurrency = min(concurrency, suite.Parallelism)
+			}
+			results, runErr := specs.Run(ctx, compositeWriter, concurrency)
 			if opts.junitPath != "" {
 				// we want to commit the results to disk regardless of the success or failure of the specs
 				if err := writeResults(opts.junitPath, results); err != nil {
@@ -118,6 +132,7 @@ func NewRunSuiteCommand(registry *extension.Registry) *cobra.Command {
 	opts.outputFlags.BindFlags(cmd.Flags())
 	opts.concurrencyFlags.BindFlags(cmd.Flags())
 	cmd.Flags().StringVarP(&opts.junitPath, "junit-path", "j", opts.junitPath, "write results to junit XML")
+	cmd.Flags().StringVar(&opts.htmlPath, "html-path", opts.htmlPath, "write results to summary HTML")
 
 	return cmd
 }
