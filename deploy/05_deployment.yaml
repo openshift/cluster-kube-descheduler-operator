@@ -10,6 +10,8 @@ spec:
       name: descheduler-operator
   template:
     metadata:
+      annotations:
+        openshift.io/required-scc: restricted-v2
       labels:
         name: descheduler-operator
     spec:
@@ -21,6 +23,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           image: quay.io/openshift/origin-cluster-kube-descheduler-operator:latest
+          terminationMessagePolicy: FallbackToLogsOnError
           ports:
           - containerPort: 60000
             name: metrics

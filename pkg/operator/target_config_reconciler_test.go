@@ -737,8 +737,9 @@ func TestManageDeployment(t *testing.T) {
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
-									Name:  "openshift-descheduler",
-									Image: "",
+									Name:                     "openshift-descheduler",
+									Image:                    "",
+									TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 									SecurityContext: &corev1.SecurityContext{
 										AllowPrivilegeEscalation: utilptr.To[bool](false),
 										ReadOnlyRootFilesystem:   utilptr.To[bool](true),
@@ -909,7 +910,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
 			Namespace:       "openshift-kube-descheduler-operator",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "6b9c733e7ea834308aa02b01074bf5d2e66e551c5e178f2d21a13c50ed152256"},
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "ef97d3d0f3b5175d75facaefb8102ae00469a9d38676a3b6b4a96ef67b52b1b5"},
 			Labels:          map[string]string{"app": "softtainer"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler", Name: "cluster"}},
 		},
@@ -922,8 +923,11 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      map[string]string{"app": "softtainer"},
-					Annotations: map[string]string{"kubectl.kubernetes.io/default-container": "openshift-softtainer"},
+					Labels: map[string]string{"app": "softtainer"},
+					Annotations: map[string]string{
+						"kubectl.kubernetes.io/default-container": "openshift-softtainer",
+						"openshift.io/required-scc":               "restricted-v2",
+					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -934,7 +938,8 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 								"--policy-config-file=/policy-dir/policy.yaml",
 								"-v=2",
 							},
-							Image: "RELATED_IMAGE_SOFTTAINTER_IMAGE",
+							Image:                    "RELATED_IMAGE_SOFTTAINTER_IMAGE",
+							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(6060), Scheme: corev1.URISchemeHTTP}},
 								InitialDelaySeconds: 30,
