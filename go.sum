@@ -166,6 +166,8 @@ github.com/onsi/gomega v1.36.2 h1:koNYke6TVk6ZmnyHrCXba/T/MoLBXFjeC1PtvYgw0A8=
 github.com/onsi/gomega v1.36.2/go.mod h1:DdwyADRjrc825LhMEkD76cHR5+pUnjhUN8GlHlRPHzY=
 github.com/openshift-eng/openshift-tests-extension v0.0.0-20251125140340-13f4631a80b0 h1:d27Tezkhb3zGSuweEeNXYnMK3aJLYgOzVu32cVTfhDE=
 github.com/openshift-eng/openshift-tests-extension v0.0.0-20251125140340-13f4631a80b0/go.mod h1:6gkP5f2HL0meusT0Aim8icAspcD1cG055xxBZ9yC68M=
+github.com/openshift-virtualization/kubevirt-descheduler-plugins v0.0.0-20260730151137-93719a52e758 h1:CU8lQumxskXvJ7r6Vh16veqwp7izfJC//WXz8WHG2rA=
+github.com/openshift-virtualization/kubevirt-descheduler-plugins v0.0.0-20260730151137-93719a52e758/go.mod h1:9jcbI9s4g2uWVPwBc4KQ1ScZQHB4iUuEIYosA81dpF8=
 github.com/openshift/api v0.0.0-20251023193535-8691c3014652 h1:iFo7XEz9/q6qxZey/MCCBTqCC88DXbtUz7mUWtGkQzg=
 github.com/openshift/api v0.0.0-20251023193535-8691c3014652/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
 github.com/openshift/build-machinery-go v0.0.0-20251023084048-5d77c1a5e5af h1:UiYYMi/CCV+kwWrXuXfuUSOY2yNXOpWpNVgHc6aLQlE=
@@ -220,6 +222,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+github.com/tiraboschi/descheduler v0.0.0-20260730151803-6e8c772fd028 h1:a/ZYHOI/sObsnDn4SqwmxyLU2D/T2x2uTa7rjlNMsas=
+github.com/tiraboschi/descheduler v0.0.0-20260730151803-6e8c772fd028/go.mod h1:rul3Lw3/DQiJEA1tE8TFppBM5w1MWw58v7f4GhXNbnc=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 h1:6fotK7otjonDflCTK0BCfls4SPy3NcCVb5dqqmbRknE=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75/go.mod h1:KO6IkyS8Y3j8OdNO85qEYBsRPuteD+YciPomcXdrMnk=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
@@ -396,8 +400,6 @@ sigs.k8s.io/controller-runtime v0.20.4 h1:X3c+Odnxz+iPTRobG4tp092+CvBU9UK0t/bRf+
 sigs.k8s.io/controller-runtime v0.20.4/go.mod h1:xg2XB0K5ShQzAgsoujxuKN4LNXR2LfwwHsPj7Iaw+XY=
 sigs.k8s.io/controller-tools v0.17.3 h1:lwFPLicpBKLgIepah+c8ikRBubFW5kOQyT88r3EwfNw=
 sigs.k8s.io/controller-tools v0.17.3/go.mod h1:1ii+oXcYZkxcBXzwv3YZBlzjt1fvkrCGjVF73blosJI=
-sigs.k8s.io/descheduler v0.33.1-0.20251021190039-e3503d22f457 h1:12icPIOpT4svS4yPjA6VoqGQ5nVDgymZd6GFQCW0Yb4=
-sigs.k8s.io/descheduler v0.33.1-0.20251021190039-e3503d22f457/go.mod h1:FAhhfTnd1vPTD5MWo4aRPaV2gbbgbDtwfRa9SQHsrt4=
 sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 h1:gBQPwqORJ8d8/YNZWEjoZs7npUVDpVXUUOFfW6CgAqE=
 sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8/go.mod h1:mdzfpAEoE6DHQEN0uh9ZbOCuHbLK5wOm7dK4ctXE9Tg=
 sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 h1:PFWFSkpArPNJxFX4ZKWAk9NSeRoZaXschn+ULa4xVek=

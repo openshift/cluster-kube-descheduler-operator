@@ -209,6 +209,10 @@ github.com/openshift-eng/openshift-tests-extension/pkg/flags
 github.com/openshift-eng/openshift-tests-extension/pkg/junit
 github.com/openshift-eng/openshift-tests-extension/pkg/util/sets
 github.com/openshift-eng/openshift-tests-extension/pkg/version
+# github.com/openshift-virtualization/kubevirt-descheduler-plugins v0.0.0-20260730151137-93719a52e758
+## explicit; go 1.24.0
+github.com/openshift-virtualization/kubevirt-descheduler-plugins
+github.com/openshift-virtualization/kubevirt-descheduler-plugins/plugins/kubevirtmigrationaware
 # github.com/openshift/api v0.0.0-20251023193535-8691c3014652
 ## explicit; go 1.24.0
 github.com/openshift/api
@@ -1640,7 +1644,7 @@ sigs.k8s.io/controller-tools/pkg/schemapatcher
 sigs.k8s.io/controller-tools/pkg/schemapatcher/internal/yaml
 sigs.k8s.io/controller-tools/pkg/version
 sigs.k8s.io/controller-tools/pkg/webhook
-# sigs.k8s.io/descheduler v0.33.1-0.20251021190039-e3503d22f457
+# sigs.k8s.io/descheduler v0.33.1-0.20251021190039-e3503d22f457 => github.com/tiraboschi/descheduler v0.0.0-20260730151803-6e8c772fd028
 ## explicit; go 1.24.0
 sigs.k8s.io/descheduler/cmd/descheduler/app/options
 sigs.k8s.io/descheduler/metrics
@@ -1700,4 +1704,5 @@ sigs.k8s.io/structured-merge-diff/v6/value
 # sigs.k8s.io/yaml v1.6.0
 ## explicit; go 1.22
 sigs.k8s.io/yaml
+# sigs.k8s.io/descheduler => github.com/tiraboschi/descheduler v0.0.0-20260730151803-6e8c772fd028
 # k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
