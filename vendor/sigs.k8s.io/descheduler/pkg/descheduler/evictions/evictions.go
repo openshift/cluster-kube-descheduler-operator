@@ -57,6 +57,7 @@ var (
 
 type evictionRequestItem struct {
 	podName, podNamespace, podNodeName string
+	strategyName, profileName          string
 	evictionAssumed                    bool
 	assumedTimestamp                   metav1.Time
 }
@@ -68,6 +69,7 @@ type evictionRequestsCache struct {
 	requestsPerNamespace         map[string]uint
 	requestsTotal                uint
 	assumedRequestTimeoutSeconds uint
+	onAssumedTimeout             func(item evictionRequestItem)
 }
 
 func newEvictionRequestsCache(assumedRequestTimeoutSeconds uint) *evictionRequestsCache {
@@ -94,6 +96,9 @@ func (erc *evictionRequestsCache) cleanCache(ctx context.Context) {
 			requestAgeSeconds := uint(metav1.Now().Sub(item.assumedTimestamp.Local()).Seconds())
 			if requestAgeSeconds > erc.assumedRequestTimeoutSeconds {
 				klog.V(4).InfoS("Assumed eviction request in background timed out, deleting", "timeout", erc.assumedRequestTimeoutSeconds, "podNamespace", item.podNamespace, "podName", item.podName)
+				if erc.onAssumedTimeout != nil {
+					erc.onAssumedTimeout(item)
+				}
 				erc.deleteItem(uid)
 			}
 		}
@@ -149,17 +154,35 @@ func (erc *evictionRequestsCache) addPod(pod *v1.Pod) {
 	erc.requestsTotal++
 }
 
-func (erc *evictionRequestsCache) assumePod(pod *v1.Pod) {
+func (erc *evictionRequestsCache) assumePod(pod *v1.Pod, profileName, strategyName string) {
 	erc.mu.Lock()
 	defer erc.mu.Unlock()
 	uid := getPodKey(pod)
-	if _, exists := erc.requests[uid]; exists {
+	if item, exists := erc.requests[uid]; exists {
+		if item.evictionAssumed {
+			// Pod already assumed by a previous strategy/profile; first one wins.
+			return
+		}
+		// The informer's UpdateFunc called addPod (evictionAssumed=false) before
+		// the TooManyRequests response arrived. Upgrade the entry in place without
+		// bumping the counters a second time.
+		erc.requests[uid] = evictionRequestItem{
+			podNamespace:     item.podNamespace,
+			podName:          item.podName,
+			podNodeName:      item.podNodeName,
+			strategyName:     strategyName,
+			profileName:      profileName,
+			evictionAssumed:  true,
+			assumedTimestamp: metav1.NewTime(time.Now()),
+		}
 		return
 	}
 	erc.requests[uid] = evictionRequestItem{
 		podNamespace:     pod.Namespace,
 		podName:          pod.Name,
 		podNodeName:      pod.Spec.NodeName,
+		strategyName:     strategyName,
+		profileName:      profileName,
 		evictionAssumed:  true,
 		assumedTimestamp: metav1.NewTime(time.Now()),
 	}
@@ -189,6 +212,14 @@ func (erc *evictionRequestsCache) deletePod(pod *v1.Pod) {
 	if _, exists := erc.requests[uid]; exists {
 		erc.deleteItem(uid)
 	}
+}
+
+func (erc *evictionRequestsCache) getPod(pod *v1.Pod) (evictionRequestItem, bool) {
+	erc.mu.RLock()
+	defer erc.mu.RUnlock()
+	uid := getPodKey(pod)
+	item, exists := erc.requests[uid]
+	return item, exists
 }
 
 func (erc *evictionRequestsCache) hasPod(pod *v1.Pod) bool {
@@ -263,6 +294,12 @@ func NewPodEvictor(
 
 	if featureGates.Enabled(features.EvictionsInBackground) {
 		erCache := newEvictionRequestsCache(assumedEvictionRequestTimeoutSeconds)
+		if podEvictor.metricsEnabled {
+			erCache.onAssumedTimeout = func(item evictionRequestItem) {
+				metrics.PodsEvicted.With(map[string]string{"result": "error", "strategy": item.strategyName, "namespace": item.podNamespace, "node": item.podNodeName, "profile": item.profileName}).Inc()
+				metrics.PodsEvictedTotal.With(map[string]string{"result": "error", "strategy": item.strategyName, "namespace": item.podNamespace, "node": item.podNodeName, "profile": item.profileName}).Inc()
+			}
+		}
 
 		handlerRegistration, err := podInformer.AddEventHandler(
 			cache.ResourceEventHandlerFuncs{
@@ -303,8 +340,18 @@ func NewPodEvictor(
 					}
 					// Remove completed/suceeeded or failed pods from the cache
 					if newPod.Status.Phase == v1.PodSucceeded || newPod.Status.Phase == v1.PodFailed {
-						klog.V(3).InfoS("Pod with eviction in background completed. Removing pod from the cache.", "pod", klog.KObj(newPod))
-						erCache.deletePod(newPod)
+						if item, exists := erCache.getPod(newPod); exists {
+							klog.V(3).InfoS("Pod with eviction in background completed. Removing pod from the cache.", "pod", klog.KObj(newPod))
+							if item.evictionAssumed && podEvictor.metricsEnabled {
+								result := "success"
+								if newPod.Status.Phase == v1.PodFailed {
+									result = "error"
+								}
+								metrics.PodsEvicted.With(map[string]string{"result": result, "strategy": item.strategyName, "namespace": item.podNamespace, "node": item.podNodeName, "profile": item.profileName}).Inc()
+								metrics.PodsEvictedTotal.With(map[string]string{"result": result, "strategy": item.strategyName, "namespace": item.podNamespace, "node": item.podNodeName, "profile": item.profileName}).Inc()
+							}
+							erCache.deletePod(newPod)
+						}
 						return
 					}
 					// Ignore any pod that does not have eviction in progress
@@ -347,8 +394,12 @@ func NewPodEvictor(
 						klog.ErrorS(nil, "Cannot convert to *v1.Pod", "obj", t)
 						return
 					}
-					if erCache.hasPod(pod) {
+					if item, exists := erCache.getPod(pod); exists {
 						klog.V(3).InfoS("Pod with eviction in background deleted/evicted. Removing pod from the cache.", "pod", klog.KObj(pod))
+						if item.evictionAssumed && podEvictor.metricsEnabled {
+							metrics.PodsEvicted.With(map[string]string{"result": "success", "strategy": item.strategyName, "namespace": item.podNamespace, "node": item.podNodeName, "profile": item.profileName}).Inc()
+							metrics.PodsEvictedTotal.With(map[string]string{"result": "success", "strategy": item.strategyName, "namespace": item.podNamespace, "node": item.podNodeName, "profile": item.profileName}).Inc()
+						}
 					}
 					erCache.deletePod(pod)
 				},
@@ -608,7 +659,11 @@ func (pe *PodEvictor) evictPod(ctx context.Context, pod *v1.Pod, opts EvictOptio
 					return true, nil
 				}
 				klog.V(3).InfoS("Eviction in background assumed", "pod", klog.KObj(pod))
-				pe.erCache.assumePod(pod)
+				pe.erCache.assumePod(pod, opts.ProfileName, opts.StrategyName)
+				if pe.metricsEnabled {
+					metrics.PodsEvicted.With(map[string]string{"result": "background", "strategy": opts.StrategyName, "namespace": pod.Namespace, "node": pod.Spec.NodeName, "profile": opts.ProfileName}).Inc()
+					metrics.PodsEvictedTotal.With(map[string]string{"result": "background", "strategy": opts.StrategyName, "namespace": pod.Namespace, "node": pod.Spec.NodeName, "profile": opts.ProfileName}).Inc()
+				}
 				return true, nil
 			}
 		}

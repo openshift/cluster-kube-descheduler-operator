@@ -1,0 +1,46 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+metricsProviders:
+  - prometheus:
+      url: https://prometheus-k8s-openshift-monitoring.apps.example.com
+    source: Prometheus
+nodeSelector: kubevirt.io/schedulable=true
+profiles:
+  - name: DevKubeVirtRelieveAndMigrate
+    pluginConfig:
+      - args:
+          evictableNamespaces:
+            exclude:
+              - kube-system
+              - hypershift
+              - openshift
+              - openshift-kube-descheduler-operator
+              - openshift-kube-scheduler
+          metricsUtilization:
+            prometheus:
+              query: descheduler:combined_utilization_and_pressure:avg1m
+            source: Prometheus
+          targetThresholds:
+            MetricResource: 10
+          thresholds:
+            MetricResource: 10
+          useDeviationThresholds: true
+        name: LowNodeUtilization
+      - args:
+          evictLocalStoragePods: true
+          noEvictionPolicy: Mandatory
+          podProtections: {}
+        name: DefaultEvictor
+      - args: {}
+        name: KubevirtMigrationAware
+    plugins:
+      balance:
+        enabled:
+          - LowNodeUtilization
+      filter:
+        enabled:
+          - DefaultEvictor
+          - KubevirtMigrationAware
+      preevictionfilter:
+        enabled:
+          - KubevirtMigrationAware
