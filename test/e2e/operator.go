@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -76,8 +77,37 @@ var _ = g.Describe("[sig-scheduling][Operator][Serial] KubeDescheduler Operator"
 	})
 
 	g.AfterAll(func() {
+		// Create a fresh context for cleanup operations (don't use the cancelled ctx)
+		cleanupCtx := context.Background()
+
 		if cancelFnc != nil {
 			cancelFnc()
+		}
+
+		// Delete the operator namespace to clean up all resources
+		g.By("Deleting operator namespace")
+		err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
+		}
+
+		// Wait for namespace to be fully deleted before completing AfterAll
+		g.By("Ensuring namespace is fully deleted")
+		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
+					return true, nil
+				}
+				klog.Warningf("Error checking namespace: %v", err)
+				return false, nil
+			}
+			klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
+			return false, nil
+		})
+		if err != nil {
+			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
 		}
 	})
 

@@ -22,7 +22,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/client-go/dynamic"
 	k8sclient "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
@@ -33,15 +35,19 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 )
 
-// GetKubeClient returns a Kubernetes clientset or fails the test
-func GetKubeClient() *k8sclient.Clientset {
+// getRestConfig returns a REST config for the Kubernetes cluster
+func getRestConfig() *rest.Config {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	o.Expect(err).NotTo(o.HaveOccurred(), "should build kubeconfig")
+	return config
+}
 
+// GetKubeClient returns a Kubernetes clientset or fails the test
+func GetKubeClient() *k8sclient.Clientset {
+	config := getRestConfig()
 	client, err := k8sclient.NewForConfig(config)
 	o.Expect(err).NotTo(o.HaveOccurred(), "should create kubernetes client")
-
 	return client
 }
 
@@ -89,6 +95,18 @@ func GetMonitoringClient() *monitoringclient.Clientset {
 
 	client, err := monitoringclient.NewForConfig(config)
 	o.Expect(err).NotTo(o.HaveOccurred(), "should create Monitoring client")
+
+	return client
+}
+
+// GetDynamicClient returns a dynamic client for accessing arbitrary resources or fails the test
+func GetDynamicClient() dynamic.Interface {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	o.Expect(err).NotTo(o.HaveOccurred(), "should build kubeconfig")
+
+	client, err := dynamic.NewForConfig(config)
+	o.Expect(err).NotTo(o.HaveOccurred(), "should create Dynamic client")
 
 	return client
 }

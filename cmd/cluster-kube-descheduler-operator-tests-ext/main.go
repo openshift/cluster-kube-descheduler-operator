@@ -65,7 +65,7 @@ func prepareOperatorTestsRegistry() (*oteextension.Registry, error) {
 	registry := oteextension.NewRegistry()
 	extension := oteextension.NewExtension("openshift", "payload", "cluster-kube-descheduler-operator")
 
-	// Add test suite for serial operator tests
+	// Add test suite for serial cluster-kube-descheduler-operator tests
 	extension.AddSuite(oteextension.Suite{
 		Name:        "openshift/cluster-kube-descheduler-operator/operator/serial",
 		Parallelism: 1,
