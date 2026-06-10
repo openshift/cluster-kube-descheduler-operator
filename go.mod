@@ -36,6 +36,10 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2
 )
 
+// the softtainter is used in conjuction with KubevirtMigrationAware plugin that
+// is registered by github.com/openshift/descheduler but not in sigs.k8s.io/descheduler
+replace sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.0.0-20260819113327-fb5e5807ca0d
+
 replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 
 require (
@@ -95,6 +99,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
+	github.com/openshift-virtualization/kubevirt-descheduler-plugins v0.0.0-20260730151137-93719a52e758 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/profile v1.7.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
