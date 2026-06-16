@@ -165,7 +165,7 @@ func operatorConfigsApplier(path string) func(context.Context, *deschclient.Clie
 // This function works with both standard Go testing and Ginkgo.
 func setupOperator(t testing.TB) (context.Context, context.CancelFunc, *k8sclient.Clientset, error) {
 	if os.Getenv("KUBECONFIG") == "" {
-		klog.Errorf("KUBECONFIG environment variable not set")
+		klog.Errorf("KUBECONFIG environment variable not set yet")
 		return nil, nil, nil, fmt.Errorf("KUBECONFIG environment variable not set")
 	}
 
