@@ -215,16 +215,40 @@ rules:
       - admissionregistration.k8s.io
     resources:
       - validatingadmissionpolicies
-      - validatingadmissionpolicybindings
+    verbs:
+      - create
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+    resourceNames:
+      - openshift-descheduler-softtainter-vap
     verbs:
       - get
       - watch
       - list
-      - create
       - update
       - patch
       - delete
-      - deletecollection
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicybindings
+    verbs:
+      - create
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicybindings
+    resourceNames:
+      - openshift-descheduler-softtainter-vap-binding
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - delete
   - apiGroups:
       - kubevirt.io
     resources:

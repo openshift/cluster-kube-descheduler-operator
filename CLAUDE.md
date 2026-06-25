@@ -57,7 +57,8 @@ Permissions (extra beyond operands):
   - `rbac.authorization.k8s.io/roles`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `prometheus-k8s`)
   - `rbac.authorization.k8s.io/rolebindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `prometheus-k8s`)
   - `coordination.k8s.io/leases`: get, watch, list, create, update, patch, delete (unrestricted, not scoped to specific resourceNames)
-  - `admissionregistration.k8s.io/validatingadmissionpolicies`, `admissionregistration.k8s.io/validatingadmissionpolicybindings`: get, watch, list, create, update, patch, delete, deletecollection
+  - `admissionregistration.k8s.io/validatingadmissionpolicies`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-softtainter-vap`)
+  - `admissionregistration.k8s.io/validatingadmissionpolicybindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-softtainter-vap-binding`)
 
 - Role: `openshift-descheduler-operator/descheduler-operator` + RoleBinding (namespace-scoped)
   - Core API resources (`services`, `configmaps`, `secrets`, `events`, `serviceaccounts`): get, watch, list, create, update, patch, delete, deletecollection
