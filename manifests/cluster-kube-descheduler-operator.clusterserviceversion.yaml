@@ -200,23 +200,6 @@ spec:
             - apiGroups:
                 - ""
               resources:
-                - services
-                - configmaps
-                - secrets
-                - events
-                - serviceaccounts
-              verbs:
-                - get
-                - watch
-                - list
-                - create
-                - update
-                - patch
-                - delete
-                - deletecollection
-            - apiGroups:
-                - ""
-              resources:
                 - namespaces
                 - pods
                 - persistentvolumeclaims
@@ -280,20 +263,6 @@ spec:
                 - get
                 - watch
                 - list
-            - apiGroups:
-                - apps
-              resources:
-                - deployments
-                - deployments/scale
-              verbs:
-                - get
-                - watch
-                - list
-                - create
-                - update
-                - patch
-                - delete
-                - deletecollection
             - apiGroups:
                 - coordination.k8s.io
               resources:
@@ -372,6 +341,40 @@ spec:
               verbs:
                 - get
                 - list
+      permissions:
+        - serviceAccountName: openshift-descheduler
+          rules:
+            - apiGroups:
+                - ""
+              resources:
+                - services
+                - configmaps
+                - secrets
+                - events
+                - serviceaccounts
+              verbs:
+                - get
+                - watch
+                - list
+                - create
+                - update
+                - patch
+                - delete
+                - deletecollection
+            - apiGroups:
+                - apps
+              resources:
+                - deployments
+                - deployments/scale
+              verbs:
+                - get
+                - watch
+                - list
+                - create
+                - update
+                - patch
+                - delete
+                - deletecollection
       deployments:
         - name: descheduler-operator
           spec:

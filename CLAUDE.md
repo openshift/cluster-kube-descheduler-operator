@@ -52,8 +52,11 @@ Permissions (extra beyond operands):
   - `operator.openshift.io/kubedeschedulers`, `operator.openshift.io/kubedeschedulers/status`: get, watch, list, create, update, patch, delete, deletecollection
   - `monitoring.coreos.com/servicemonitors`, `monitoring.coreos.com/prometheusrules`: get, watch, list, create, update, patch, delete, deletecollection
   - `monitoring.coreos.com/prometheuses/api` (resourceName: `k8s`): get, create, update
-  - Core API resources (`services`, `configmaps`, `secrets`, `events`, `serviceaccounts`): get, watch, list, create, update, patch, delete, deletecollection
   - `rbac.authorization.k8s.io` (`clusterroles`, `clusterrolebindings`, `roles`, `rolebindings`): get, watch, list, create, update, patch, delete, deletecollection
-  - `apps/deployments`, `apps/deployments/scale`: get, watch, list, create, update, patch, delete, deletecollection
   - `coordination.k8s.io/leases`: get, watch, list, create, update, patch, delete (unrestricted, not scoped to specific resourceNames)
   - `admissionregistration.k8s.io/validatingadmissionpolicies`, `admissionregistration.k8s.io/validatingadmissionpolicybindings`: get, watch, list, create, update, patch, delete, deletecollection
+
+- Role: `openshift-descheduler-operator/descheduler-operator` + RoleBinding (namespace-scoped)
+  - Core API resources (`services`, `configmaps`, `secrets`, `events`, `serviceaccounts`): get, watch, list, create, update, patch, delete, deletecollection
+  - `apps/deployments`, `apps/deployments/scale`: get, watch, list, create, update, patch, delete, deletecollection
+  - These permissions are scoped to `openshift-kube-descheduler-operator` namespace only
