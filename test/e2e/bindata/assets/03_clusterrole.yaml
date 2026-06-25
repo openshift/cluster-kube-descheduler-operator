@@ -79,18 +79,65 @@ rules:
       - rbac.authorization.k8s.io
     resources:
       - clusterroles
-      - clusterrolebindings
-      - roles
-      - rolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterroles
+    resourceNames:
+      - openshift-descheduler-operand
+      - openshift-descheduler-softtainter
     verbs:
       - get
       - watch
       - list
-      - create
       - update
       - patch
       - delete
-      - deletecollection
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+    resourceNames:
+      - openshift-descheduler-operand
+      - openshift-descheduler-softtainter
+      - cluster-monitoring-view-cr
+      - openshift-descheduler-softtainter-monitoring
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    resourceNames:
+      - prometheus-k8s
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - delete
   - apiGroups:
       - scheduling.k8s.io
     resources:

@@ -52,7 +52,10 @@ Permissions (extra beyond operands):
   - `operator.openshift.io/kubedeschedulers`, `operator.openshift.io/kubedeschedulers/status`: get, watch, list, create, update, patch, delete, deletecollection
   - `monitoring.coreos.com/servicemonitors`, `monitoring.coreos.com/prometheusrules`: get, watch, list, create, update, patch, delete, deletecollection
   - `monitoring.coreos.com/prometheuses/api` (resourceName: `k8s`): get, create, update
-  - `rbac.authorization.k8s.io` (`clusterroles`, `clusterrolebindings`, `roles`, `rolebindings`): get, watch, list, create, update, patch, delete, deletecollection
+  - `rbac.authorization.k8s.io/clusterroles`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`)
+  - `rbac.authorization.k8s.io/clusterrolebindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `cluster-monitoring-view-cr`, `openshift-descheduler-softtainter-monitoring`)
+  - `rbac.authorization.k8s.io/roles`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `prometheus-k8s`)
+  - `rbac.authorization.k8s.io/rolebindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `prometheus-k8s`)
   - `coordination.k8s.io/leases`: get, watch, list, create, update, patch, delete (unrestricted, not scoped to specific resourceNames)
   - `admissionregistration.k8s.io/validatingadmissionpolicies`, `admissionregistration.k8s.io/validatingadmissionpolicybindings`: get, watch, list, create, update, patch, delete, deletecollection
 
