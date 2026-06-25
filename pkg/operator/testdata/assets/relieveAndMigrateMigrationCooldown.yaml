@@ -35,7 +35,10 @@ profiles:
       noEvictionPolicy: Mandatory
       podProtections: {}
     name: DefaultEvictor
-  - args: {}
+  - args:
+      maxMigrationCooldown: 6h0m0s
+      migrationCooldown: 15m0s
+      migrationHistoryWindow: 48h0m0s
     name: KubevirtMigrationAware
   plugins:
     balance:

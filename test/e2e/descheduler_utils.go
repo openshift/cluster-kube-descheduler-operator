@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -312,7 +311,7 @@ func patchKubeDeschedulerNamespaceFiltering(ctx context.Context, deschClient *de
 }
 
 // waitForDeploymentReady waits for a deployment to have the expected number of ready replicas
-func waitForDeploymentReady(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name, expectedReplicas string) error {
+func waitForDeploymentReady(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name string) error {
 	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
@@ -320,18 +319,17 @@ func waitForDeploymentReady(ctx context.Context, kubeClient *k8sclient.Clientset
 			return false, nil
 		}
 
-		expectedCount, err := strconv.Atoi(expectedReplicas)
-		if err != nil {
-			return false, fmt.Errorf("invalid expected replicas: %s", expectedReplicas)
+		if deployment.Spec.Replicas == nil {
+			return false, fmt.Errorf("deployment %s/%s has nil Spec.Replicas", namespace, name)
 		}
 
-		if deployment.Status.ReadyReplicas >= int32(expectedCount) {
+		if deployment.Status.ReadyReplicas >= *deployment.Spec.Replicas {
 			klog.Infof("Deployment %s/%s is ready with %d replicas", namespace, name, deployment.Status.ReadyReplicas)
 			return true, nil
 		}
 
 		klog.Infof("Waiting for deployment %s/%s: %d/%d replicas ready",
-			namespace, name, deployment.Status.ReadyReplicas, expectedCount)
+			namespace, name, deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
 }

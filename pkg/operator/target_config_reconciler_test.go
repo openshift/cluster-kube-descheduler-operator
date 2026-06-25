@@ -533,6 +533,20 @@ func TestManageConfigMap(t *testing.T) {
 			forceDeployment: true,
 		},
 		{
+			name: "DevKubeVirtRelieveAndMigrateMigrationCooldown",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevMigrationCooldown:      &metav1.Duration{Duration: 15 * time.Minute},
+					DevMaxMigrationCooldown:   &metav1.Duration{Duration: 6 * time.Hour},
+					DevMigrationHistoryWindow: &metav1.Duration{Duration: 48 * time.Hour},
+				}
+			}),
+			want:   makeConfigMap("assets/relieveAndMigrateMigrationCooldown.yaml"),
+			routes: makePrometheusRoute(),
+			nodes:  makeKubeVirtNodes(),
+		},
+		{
 			name: "AffinityAndTaintsWithNamespaces",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{"AffinityAndTaints"}

@@ -45,6 +45,12 @@ type ProfileCustomizationsApplyConfiguration struct {
 	DevActualUtilizationProfile *deschedulerv1.ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
 	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
 	DevDeviationThresholds *deschedulerv1.DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
+	// devMigrationCooldown configures the base migration cooldown for the KubevirtMigrationAware plugin.
+	DevMigrationCooldown *metav1.Duration `json:"devMigrationCooldown,omitempty"`
+	// devMaxMigrationCooldown configures the maximum migration cooldown for the KubevirtMigrationAware plugin.
+	DevMaxMigrationCooldown *metav1.Duration `json:"devMaxMigrationCooldown,omitempty"`
+	// devMigrationHistoryWindow configures the migration history window for the KubevirtMigrationAware plugin.
+	DevMigrationHistoryWindow *metav1.Duration `json:"devMigrationHistoryWindow,omitempty"`
 }
 
 // ProfileCustomizationsApplyConfiguration constructs a declarative configuration of the ProfileCustomizations type for use with
@@ -130,5 +136,29 @@ func (b *ProfileCustomizationsApplyConfiguration) WithDevActualUtilizationProfil
 // If called multiple times, the DevDeviationThresholds field is set to the value of the last call.
 func (b *ProfileCustomizationsApplyConfiguration) WithDevDeviationThresholds(value deschedulerv1.DeviationThresholdsType) *ProfileCustomizationsApplyConfiguration {
 	b.DevDeviationThresholds = &value
+	return b
+}
+
+// WithDevMigrationCooldown sets the DevMigrationCooldown field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevMigrationCooldown field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevMigrationCooldown(value metav1.Duration) *ProfileCustomizationsApplyConfiguration {
+	b.DevMigrationCooldown = &value
+	return b
+}
+
+// WithDevMaxMigrationCooldown sets the DevMaxMigrationCooldown field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevMaxMigrationCooldown field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevMaxMigrationCooldown(value metav1.Duration) *ProfileCustomizationsApplyConfiguration {
+	b.DevMaxMigrationCooldown = &value
+	return b
+}
+
+// WithDevMigrationHistoryWindow sets the DevMigrationHistoryWindow field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DevMigrationHistoryWindow field is set to the value of the last call.
+func (b *ProfileCustomizationsApplyConfiguration) WithDevMigrationHistoryWindow(value metav1.Duration) *ProfileCustomizationsApplyConfiguration {
+	b.DevMigrationHistoryWindow = &value
 	return b
 }

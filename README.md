@@ -211,10 +211,13 @@ this asymmetry and foster a quicker convergence.
 This profile requires [PSI](https://docs.kernel.org/accounting/psi.html) metrics to be enabled (psi=1 kernel parameter)
 for all the worker nodes.
 
-The profile exposes the following customization:
+The profile exposes the following customizations:
 - `devLowNodeUtilizationThresholds`: Sets experimental thresholds for the LowNodeUtilization strategy.
 - `devActualUtilizationProfile`: Enable load-aware descheduling.
 - `devDeviationThresholds`: Have the thresholds be based on the average utilization.
+- `devMigrationCooldown`: Base cooldown after a VM migration before the same VM is eligible for re-eviction.
+- `devMaxMigrationCooldown`: Upper bound on the exponential backoff cooldown between successive migrations.
+- `devMigrationHistoryWindow`: Sliding window over which past migrations are counted for backoff calculation.
 
 By default, this profile will enable load-aware descheduling based on the `PrometheusCPUMemoryCombinedProfile` Prometheus query. That query is based on a recording rule combining the impact of CPU and memory utilization and PSI pressure.
 By default, the thresholds will be dynamic (based on the distance from the average utilization) and asymmetric (all the nodes below the average will be considered as underutilized to help rebalancing overutilized outliers) tolerating low deviations (10%).
@@ -224,6 +227,13 @@ the maximum number of evictions per node to 2 aligning with KubeVirt defaults ar
 Those two values can be customized with `evictionLimits.total` and `evictionLimits.node` parameters.
 
 This profile configures the `DefaultEvictor` plugin with a `Mandatory noEvictionPolicy`. As a result, the `descheduler.alpha.kubernetes.io/prefer-no-eviction` annotation can be dynamically applied to VM templates and/or VMIs to exclude them from the descheduler's scope.
+
+This profile also enables the `KubevirtMigrationAware` plugin as both a filter and a pre-eviction filter.
+As a filter, it hard-blocks eviction of any pod whose VMI has a live migration already in progress.
+As a pre-eviction filter, it applies an adaptive cooldown after each migration completes, using exponential
+backoff bounded by a configurable maximum, to prevent cascading re-evictions of the same VM.
+The cooldown parameters can be tuned with the `devMigrationCooldown`, `devMaxMigrationCooldown`, and
+`devMigrationHistoryWindow` profile customizations.
 
 ### EvictPodsWithPVC
 By default, the operator prevents pods with PVCs from being evicted. Enabling this
@@ -252,6 +262,9 @@ the `profileCustomizations` field:
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
 |`devActualUtilizationProfile`|`string`| Sets a profile that gets translated into a predefined prometheus query |
 | `devDeviationThresholds` | `string` | Have the thresholds be based on the average utilization. Thresholds signify the distance from the average node utilization. An AsymmetricDeviationThreshold will force all nodes below the average to be considered as underutilized to help rebalancing overutilized outliers. Supported settings: `Low`: 10%:10%, `Medium`: 20%:20%, `High`: 30%:30%, `AsymmetricLow`: 0%:10%, `AsymmetricMedium`: 0%:20%, `AsymmetricHigh`: 0%:30% |
+| `devMigrationCooldown` | `duration` | Sets the base cooldown period for the `KubevirtMigrationAware` plugin of the `KubeVirtRelieveAndMigrate` profile. After a VM migration completes, the plugin will not evict that VM again for at least this duration (subject to exponential backoff). Only applicable to the `KubeVirtRelieveAndMigrate` profile. |
+| `devMaxMigrationCooldown` | `duration` | Sets the upper bound on the exponential backoff cooldown for the `KubevirtMigrationAware` plugin of the `KubeVirtRelieveAndMigrate` profile. Regardless of how many migrations have occurred within the history window, the cooldown will not exceed this value. Only applicable to the `KubeVirtRelieveAndMigrate` profile. |
+| `devMigrationHistoryWindow` | `duration` | Sets the sliding time window used by the `KubevirtMigrationAware` plugin to count past migrations when computing the exponential backoff cooldown. Only applicable to the `KubeVirtRelieveAndMigrate` profile. |
 
 ## Prometheus query profiles
 The operator provides the following profiles:

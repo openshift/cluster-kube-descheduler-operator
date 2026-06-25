@@ -86,7 +86,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Waiting for descheduler operator deployment")
-		err = waitForDeploymentReady(ctx, kubeClient, deschedulerNamespace, "descheduler-operator", "1")
+		err = waitForDeploymentReady(ctx, kubeClient, deschedulerNamespace, "descheduler-operator")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Waiting for CSV to succeed")
@@ -141,7 +141,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = waitForDeploymentReady(ctx, kubeClient, deschedulerNamespace, "descheduler", "1")
+		err = waitForDeploymentReady(ctx, kubeClient, deschedulerNamespace, "descheduler")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		klog.Infof("Descheduler operand successfully deployed and running")
@@ -321,7 +321,7 @@ func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Waiting for all pods to be running")
-	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-deployment", "12")
+	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-deployment")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Creating PDB with minAvailable=11")
@@ -355,7 +355,7 @@ func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.
 	}()
 
 	// Wait for descheduler to restart with new mode
-	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Uncordoning second node")
@@ -421,7 +421,7 @@ func testAffinityAndTopologyProfiles(t testing.TB, ctx context.Context, kubeClie
 	}()
 
 	// Wait for descheduler to restart with new mode and profiles
-	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// Test RemovePodsViolatingNodeAffinity
@@ -485,7 +485,7 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Waiting for deployment to be ready")
-	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-podlifetime", "10")
+	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-podlifetime")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Getting descheduler pod name")
@@ -513,7 +513,7 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	}()
 
 	// Wait for descheduler to restart with new mode
-	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Getting new descheduler pod name after restart")
@@ -574,7 +574,7 @@ func testNamespaceIncludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Waiting for deployment to be ready")
-	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-deploy", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-deploy")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Configuring descheduler with namespace include filter")
@@ -583,7 +583,7 @@ func testNamespaceIncludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// Wait for descheduler deployment to rollout with new config
-	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Getting descheduler pod name")
@@ -640,7 +640,7 @@ func testNamespaceExcludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Waiting for deployment to be ready")
-	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-deploy", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-deploy")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Configuring descheduler with namespace exclude filter")
@@ -649,7 +649,7 @@ func testNamespaceExcludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// Wait for descheduler deployment to rollout with new config
-	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Getting descheduler pod name")
@@ -749,7 +749,7 @@ func testLongLifecycleProfile(t testing.TB, ctx context.Context, kubeClient *k8s
 	}()
 
 	// Wait for descheduler to restart with new profile
-	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, "openshift-kube-descheduler-operator", "descheduler")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	klog.Infof("LongLifecycle profile configured successfully")
@@ -784,7 +784,7 @@ func testLongLifecycleProfile(t testing.TB, ctx context.Context, kubeClient *k8s
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Waiting for deployment to be ready")
-	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-lifecycle", "1")
+	err = waitForDeploymentReady(ctx, kubeClient, testNS.Name, "test-lifecycle")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Verifying pods are NOT evicted with LongLifecycle profile")
