@@ -10,16 +10,16 @@ ServiceAccount: `openshift-kube-descheduler-operator/openshift-descheduler-opera
 
 Permissions:
 - ClusterRole: `openshift-descheduler-operand` + CR binding
-  - Most of the resources have read only permissions to observe cluster-scope resources so the descheduler can evaluate cluster state for eviction decisions.*. E.g. `pods`, `nodes`. The list may change over time.
+  - Most of the resources have read only permissions to observe cluster-scope resources so the descheduler can evaluate cluster state for eviction decisions. E.g. `pods`, `nodes`. The list may change over time.
   - `pods/eviction`: create
   - `events.k8s.io/events`: get, watch, list, create, update, patch, delete
-  - `coordination.k8s.io/leases`: create (any), get/patch/delete (resourceName: `descheduler`)
+- Role: `openshift-kube-descheduler-operator/openshift-descheduler-operand` + RoleBinding (namespace-scoped)
+  - `coordination.k8s.io/leases`: create, get, patch, delete
+  - Leader election leases scoped to operator namespace only
 - Extra ClusterRoleBindings:
   - `cluster-monitoring-view` ClusterRole to allow Prometheus Queries when evaluating metrics usage for KubeVirt
 - Role: `openshift-kube-descheduler-operator/prometheus-k8s`
-  - Read only for `services`, `endpoints` and `pods`. Allows `openshift-monitoring/prometheus-k8s` SA to scrape metrics (pattern used accross OpenShift)
-
-*TODO: Inspect whether `delete` permission on `events` and `coordination.k8s.io/leases` is actually needed - may be excessive. Also investigate whether lease permissions can be scoped to the descheduler namespace only (use Role instead of ClusterRole).*
+  - Read only for `services`, `endpoints` and `pods`. Allows `openshift-monitoring/prometheus-k8s` SA to scrape metrics (pattern used across OpenShift)
 
 ---
 
@@ -32,11 +32,11 @@ Permissions:
   - Read only: `operator.openshift.io/kubedeschedulers`
   - `nodes`: get, watch, list, patch, update (patch/update operations are validated by `openshift-descheduler-softtainter-vap` ValidatingAdmissionPolicy which checks SA and restricts modifications to descheduler-specific taints only; correct functionality validated by `test/e2e` testSoftTainterControllerWithVAP test)
   - `events.k8s.io/events`: get, watch, list, create, update, patch, delete
-  - `coordination.k8s.io/leases`: create (any), get/patch/update/delete (resourceName: `soft-tainter-lock`)
+- Role: `openshift-kube-descheduler-operator/openshift-descheduler-softtainter` + RoleBinding (namespace-scoped)
+  - `coordination.k8s.io/leases`: create, get, patch, update, delete
+  - Leader election leases scoped to operator namespace only
 - Extra ClusterRoleBindings:
   - `cluster-monitoring-view` ClusterRole to allow querying Prometheus metrics
-
-*TODO: Inspect whether `delete` permission on `events` and `coordination.k8s.io/leases` is actually needed - may be excessive. Also investigate whether lease permissions can be scoped to the descheduler namespace only (use Role instead of ClusterRole).*
 
 ---
 
@@ -56,11 +56,11 @@ Permissions (extra beyond operands):
   - `rbac.authorization.k8s.io/clusterrolebindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `cluster-monitoring-view-cr`, `openshift-descheduler-softtainter-monitoring`)
   - `rbac.authorization.k8s.io/roles`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `prometheus-k8s`)
   - `rbac.authorization.k8s.io/rolebindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-operand`, `openshift-descheduler-softtainter`, `prometheus-k8s`)
-  - `coordination.k8s.io/leases`: get, watch, list, create, update, patch, delete (unrestricted, not scoped to specific resourceNames)
   - `admissionregistration.k8s.io/validatingadmissionpolicies`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-softtainter-vap`)
   - `admissionregistration.k8s.io/validatingadmissionpolicybindings`: create (unrestricted); get, watch, list, update, patch, delete (resourceNames: `openshift-descheduler-softtainter-vap-binding`)
 
 - Role: `openshift-descheduler-operator/descheduler-operator` + RoleBinding (namespace-scoped)
   - Core API resources (`services`, `configmaps`, `secrets`, `events`, `serviceaccounts`): get, watch, list, create, update, patch, delete, deletecollection
   - `apps/deployments`, `apps/deployments/scale`: get, watch, list, create, update, patch, delete, deletecollection
+  - `coordination.k8s.io/leases`: get, watch, list, create, update, patch, delete
   - These permissions are scoped to `openshift-kube-descheduler-operator` namespace only

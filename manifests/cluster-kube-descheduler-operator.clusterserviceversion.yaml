@@ -278,6 +278,8 @@ spec:
                 - roles
                 - rolebindings
               resourceNames:
+                - openshift-descheduler-operand
+                - openshift-descheduler-softtainter
                 - prometheus-k8s
               verbs:
                 - get
@@ -310,18 +312,6 @@ spec:
                 - get
                 - watch
                 - list
-            - apiGroups:
-                - coordination.k8s.io
-              resources:
-                - leases
-              verbs:
-                - get
-                - watch
-                - list
-                - create
-                - update
-                - patch
-                - delete
             - apiGroups:
                 - events.k8s.io
               resources:
@@ -446,6 +436,18 @@ spec:
                 - patch
                 - delete
                 - deletecollection
+            - apiGroups:
+                - coordination.k8s.io
+              resources:
+                - leases
+              verbs:
+                - get
+                - watch
+                - list
+                - create
+                - update
+                - patch
+                - delete
       deployments:
         - name: descheduler-operator
           spec:

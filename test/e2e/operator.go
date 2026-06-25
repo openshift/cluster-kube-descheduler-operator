@@ -46,10 +46,17 @@ const (
 	kubeVirtLabelValue                                 = "true"
 	workersLabelSelector                               = "node-role.kubernetes.io/worker="
 	EXPERIMENTAL_DISABLE_PSI_CHECK                     = "EXPERIMENTAL_DISABLE_PSI_CHECK"
+	deschedulerOperandServiceAccountName               = "openshift-descheduler-operand"
+	deschedulerOperandClusterRoleName                  = "openshift-descheduler-operand"
+	deschedulerOperandClusterRoleBindingName           = "openshift-descheduler-operand"
+	deschedulerOperandRoleName                         = "openshift-descheduler-operand"
+	deschedulerOperandRoleBindingName                  = "openshift-descheduler-operand"
 	softTainterDeploymentName                          = "softtainter"
 	softTainterServiceAccountName                      = "openshift-descheduler-softtainter"
 	softTainterClusterRoleName                         = "openshift-descheduler-softtainter"
 	softTainterClusterRoleBindingName                  = "openshift-descheduler-softtainter"
+	softTainterRoleName                                = "openshift-descheduler-softtainter"
+	softTainterRoleBindingName                         = "openshift-descheduler-softtainter"
 	softTainterClusterMonitoringViewClusterRoleBinding = "openshift-descheduler-softtainter-monitoring"
 	softTainterValidatingAdmissionPolicyName           = "openshift-descheduler-softtainter-vap"
 	softTainterValidatingAdmissionPolicyBindingName    = "openshift-descheduler-softtainter-vap-binding"
@@ -236,6 +243,20 @@ func setupOperator(t testing.TB) (context.Context, context.CancelFunc, *k8sclien
 			},
 		},
 		{
+			path: "assets/03_role.yaml",
+			readerAndApply: func(objBytes []byte) error {
+				_, _, err := resourceapply.ApplyRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleV1OrDie(objBytes))
+				return err
+			},
+		},
+		{
+			path: "assets/03_rolebinding.yaml",
+			readerAndApply: func(objBytes []byte) error {
+				_, _, err := resourceapply.ApplyRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleBindingV1OrDie(objBytes))
+				return err
+			},
+		},
+		{
 			path: "assets/05_deployment.yaml",
 			readerAndApply: func(objBytes []byte) error {
 				required := resourceread.ReadDeploymentV1OrDie(objBytes)
@@ -319,6 +340,13 @@ func setupOperator(t testing.TB) (context.Context, context.CancelFunc, *k8sclien
 		return ctx, cancelFnc, nil, fmt.Errorf("Unable to wait for the Descheduler pod to run")
 	}
 	klog.Infof("Descheduler (operand) pod running in %v", deschPod.Name)
+
+	// ensure that all the descheduler operand objects are there
+	if err = checkDeschedulerOperandObjects(ctx, kubeClient, operatorclient.OperatorNamespace, true); err != nil {
+		klog.Errorf("Missing expected descheduler operand object: %v", err)
+		return ctx, cancelFnc, nil, fmt.Errorf("Missing expected descheduler operand object: %v", err)
+	}
+	klog.Infof("All the descheduler operand objects got properly created")
 
 	return ctx, cancelFnc, kubeClient, nil
 }
@@ -752,11 +780,48 @@ func checkSoftTainterObjects(ctx context.Context, kubeClient *k8sclient.Clientse
 	if cerr := checkExpected(expected, obj, err); cerr != nil {
 		return cerr
 	}
+	obj, err = kubeClient.RbacV1().Roles(namespace).Get(ctx, softTainterRoleName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+	obj, err = kubeClient.RbacV1().RoleBindings(namespace).Get(ctx, softTainterRoleBindingName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
 	obj, err = kubeClient.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, softTainterValidatingAdmissionPolicyName, metav1.GetOptions{})
 	if cerr := checkExpected(expected, obj, err); cerr != nil {
 		return cerr
 	}
 	obj, err = kubeClient.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Get(ctx, softTainterValidatingAdmissionPolicyBindingName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+
+	return nil
+
+}
+
+func checkDeschedulerOperandObjects(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string, expected bool) error {
+	var obj runtime.Object
+	var err error
+
+	obj, err = kubeClient.CoreV1().ServiceAccounts(namespace).Get(ctx, deschedulerOperandServiceAccountName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+	obj, err = kubeClient.RbacV1().ClusterRoles().Get(ctx, deschedulerOperandClusterRoleName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+	obj, err = kubeClient.RbacV1().ClusterRoleBindings().Get(ctx, deschedulerOperandClusterRoleBindingName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+	obj, err = kubeClient.RbacV1().Roles(namespace).Get(ctx, deschedulerOperandRoleName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+	obj, err = kubeClient.RbacV1().RoleBindings(namespace).Get(ctx, deschedulerOperandRoleBindingName, metav1.GetOptions{})
 	if cerr := checkExpected(expected, obj, err); cerr != nil {
 		return cerr
 	}

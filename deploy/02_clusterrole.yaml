@@ -130,6 +130,8 @@ rules:
       - roles
       - rolebindings
     resourceNames:
+      - openshift-descheduler-operand
+      - openshift-descheduler-softtainter
       - prometheus-k8s
     verbs:
       - get
@@ -162,18 +164,6 @@ rules:
       - get
       - watch
       - list
-  - apiGroups:
-      - coordination.k8s.io
-    resources:
-      - leases
-    verbs:
-      - get
-      - watch
-      - list
-      - create
-      - update
-      - patch
-      - delete
   - apiGroups:
       - events.k8s.io
     resources:

@@ -301,6 +301,26 @@ func (c TargetConfigReconciler) sync() error {
 		specAnnotations["clusterrolebindings/openshift-descheduler-softtainter"] = resourceVersion
 	}
 
+	if stRole, _, err := c.manageSoftTainterRole(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stRole != nil {
+			resourceVersion = stRole.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["roles/openshift-descheduler-softtainter"] = resourceVersion
+	}
+
+	if stRoleBinding, _, err := c.manageSoftTainterRoleBinding(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stRoleBinding != nil {
+			resourceVersion = stRoleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["rolebindings/openshift-descheduler-softtainter"] = resourceVersion
+	}
+
 	if prometheusRule, _, err := c.managePrometheusRule(descheduler); err != nil {
 		return err
 	} else {
@@ -379,6 +399,26 @@ func (c TargetConfigReconciler) sync() error {
 			resourceVersion = roleBinding.ObjectMeta.ResourceVersion
 		}
 		specAnnotations["rolebindings/prometheus-k8s"] = resourceVersion
+	}
+
+	if operandRole, _, err := c.manageOperandRole(descheduler); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if operandRole != nil {
+			resourceVersion = operandRole.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["roles/openshift-descheduler-operand"] = resourceVersion
+	}
+
+	if operandRoleBinding, _, err := c.manageOperandRoleBinding(descheduler); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if operandRoleBinding != nil {
+			resourceVersion = operandRoleBinding.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["rolebindings/openshift-descheduler-operand"] = resourceVersion
 	}
 
 	if _, err := c.manageServiceMonitor(descheduler); err != nil {
@@ -614,6 +654,80 @@ func (c *TargetConfigReconciler) manageRoleBinding(descheduler *deschedulerv1.Ku
 	controller.EnsureOwnerRef(required, ownerReference)
 
 	return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageOperandRole(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.Role, bool, error) {
+	required := resourceread.ReadRoleV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandrole.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	return resourceapply.ApplyRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageOperandRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
+	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandrolebinding.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterRole(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.Role, bool, error) {
+	required := resourceread.ReadRoleV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterrole.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	if stEnabled {
+		return resourceapply.ApplyRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageSoftTainterRoleBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.RoleBinding, bool, error) {
+	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterrolebinding.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	if stEnabled {
+		return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+	}
+	return resourceapply.DeleteRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageServiceAccount(descheduler *deschedulerv1.KubeDescheduler) (*v1.ServiceAccount, bool, error) {

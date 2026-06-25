@@ -35,3 +35,15 @@ rules:
       - patch
       - delete
       - deletecollection
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - patch
+      - delete
