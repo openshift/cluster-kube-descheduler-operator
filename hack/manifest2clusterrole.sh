@@ -19,7 +19,9 @@ set -o nounset
 set -o pipefail
 
 CURRENT_DIR=$(dirname "${BASH_SOURCE}")
+CSV_FILE="${CURRENT_DIR}/../manifests/cluster-kube-descheduler-operator.clusterserviceversion.yaml"
 
+# Generate ClusterRole from clusterPermissions
 cat << EOF > deploy/02_clusterrole.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -28,7 +30,20 @@ metadata:
 rules:
 EOF
 
-cat ${CURRENT_DIR}/../manifests/cluster-kube-descheduler-operator.clusterserviceversion.yaml | yq -M '.spec.install.spec.clusterPermissions[0].rules' >> deploy/02_clusterrole.yaml
-
+cat ${CSV_FILE} | yq -M '.spec.install.spec.clusterPermissions[0].rules' >> deploy/02_clusterrole.yaml
 yq -i -P deploy/02_clusterrole.yaml
 cp deploy/02_clusterrole.yaml test/e2e/bindata/assets/03_clusterrole.yaml
+
+# Generate Role from permissions (namespace-scoped)
+cat << EOF > deploy/02_role.yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: descheduler-operator
+  namespace: openshift-kube-descheduler-operator
+rules:
+EOF
+
+cat ${CSV_FILE} | yq -M '.spec.install.spec.permissions[0].rules' >> deploy/02_role.yaml
+yq -i -P deploy/02_role.yaml
+cp deploy/02_role.yaml test/e2e/bindata/assets/03_role.yaml

@@ -52,23 +52,6 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - services
-      - configmaps
-      - secrets
-      - events
-      - serviceaccounts
-    verbs:
-      - get
-      - watch
-      - list
-      - create
-      - update
-      - patch
-      - delete
-      - deletecollection
-  - apiGroups:
-      - ""
-    resources:
       - namespaces
       - pods
       - persistentvolumeclaims
@@ -96,18 +79,67 @@ rules:
       - rbac.authorization.k8s.io
     resources:
       - clusterroles
-      - clusterrolebindings
-      - roles
-      - rolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterroles
+    resourceNames:
+      - openshift-descheduler-operand
+      - openshift-descheduler-softtainter
     verbs:
       - get
       - watch
       - list
-      - create
       - update
       - patch
       - delete
-      - deletecollection
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+    resourceNames:
+      - openshift-descheduler-operand
+      - openshift-descheduler-softtainter
+      - cluster-monitoring-view-cr
+      - openshift-descheduler-softtainter-monitoring
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    resourceNames:
+      - openshift-descheduler-operand
+      - openshift-descheduler-softtainter
+      - prometheus-k8s
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - delete
   - apiGroups:
       - scheduling.k8s.io
     resources:
@@ -132,32 +164,6 @@ rules:
       - get
       - watch
       - list
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-      - deployments/scale
-    verbs:
-      - get
-      - watch
-      - list
-      - create
-      - update
-      - patch
-      - delete
-      - deletecollection
-  - apiGroups:
-      - coordination.k8s.io
-    resources:
-      - leases
-    verbs:
-      - get
-      - watch
-      - list
-      - create
-      - update
-      - patch
-      - delete
   - apiGroups:
       - events.k8s.io
     resources:
@@ -199,16 +205,40 @@ rules:
       - admissionregistration.k8s.io
     resources:
       - validatingadmissionpolicies
-      - validatingadmissionpolicybindings
+    verbs:
+      - create
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+    resourceNames:
+      - openshift-descheduler-softtainter-vap
     verbs:
       - get
       - watch
       - list
-      - create
       - update
       - patch
       - delete
-      - deletecollection
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicybindings
+    verbs:
+      - create
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicybindings
+    resourceNames:
+      - openshift-descheduler-softtainter-vap-binding
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - delete
   - apiGroups:
       - kubevirt.io
     resources:
