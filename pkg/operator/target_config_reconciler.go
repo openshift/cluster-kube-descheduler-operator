@@ -93,7 +93,6 @@ type TargetConfigReconciler struct {
 	dynamicClient            dynamic.Interface
 	eventRecorder            events.Recorder
 	queue                    workqueue.RateLimitingInterface
-	protectedNamespaces      []string
 	configSchedulerLister    configlistersv1.SchedulerLister
 	routeRouteLister         routelistersv1.RouteLister
 	namespaceLister          corev1listers.NamespaceLister
@@ -116,19 +115,6 @@ func NewTargetConfigReconciler(
 	coreInformers coreinformers.SharedInformerFactory,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
-	// make sure our list of excluded system namespaces is up to date
-	allNamespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		klog.ErrorS(err, "error listing namespaces")
-		return nil
-	}
-	protectedNamespaces := []string{"kube-system", "hypershift", "openshift"}
-	for _, ns := range allNamespaces.Items {
-		if strings.HasPrefix(ns.Name, "openshift-") {
-			protectedNamespaces = append(protectedNamespaces, ns.Name)
-		}
-	}
-
 	c := &TargetConfigReconciler{
 		ctx:                      ctx,
 		operatorClient:           operatorConfigClient,
@@ -137,7 +123,6 @@ func NewTargetConfigReconciler(
 		dynamicClient:            dynamicClient,
 		eventRecorder:            eventRecorder,
 		queue:                    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
-		protectedNamespaces:      protectedNamespaces,
 		deschedulerImagePullSpec: deschedulerImagePullSpec,
 		softtainterImagePullSpec: softTainterImagePullSpec,
 		configSchedulerLister:    configInformer.Config().V1().Schedulers().Lister(),
@@ -154,6 +139,21 @@ func NewTargetConfigReconciler(
 	coreInformers.Core().V1().Nodes().Informer().AddEventHandler(c.eventHandler())
 	coreInformers.Core().V1().Namespaces().Informer().AddEventHandler(c.eventHandler())
 	return c
+}
+
+func (c *TargetConfigReconciler) getProtectedNamespaces() ([]string, error) {
+	allNamespaces, err := c.namespaceLister.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list namespaces: %w", err)
+	}
+	protectedNamespaces := []string{"kube-system", "hypershift", "openshift"}
+	for _, ns := range allNamespaces {
+		if strings.HasPrefix(ns.Name, "openshift-") {
+			protectedNamespaces = append(protectedNamespaces, ns.Name)
+		}
+	}
+	slices.Sort(protectedNamespaces)
+	return protectedNamespaces, nil
 }
 
 func (c TargetConfigReconciler) scaleDownDeployment(scaleDownError error) error {
@@ -1430,8 +1430,12 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 	}
 
 	// override the included/excluded namespace
-	excludedNamespaces := c.protectedNamespaces
-	protectedNamespacesSet := sets.NewString(c.protectedNamespaces...)
+	protectedNamespaces, err := c.getProtectedNamespaces()
+	if err != nil {
+		return nil, false, err
+	}
+	excludedNamespaces := protectedNamespaces
+	protectedNamespacesSet := sets.NewString(protectedNamespaces...)
 	includedNamespaces := []string{}
 	if descheduler.Spec.ProfileCustomizations != nil {
 		if len(descheduler.Spec.ProfileCustomizations.Namespaces.Excluded) > 0 && len(descheduler.Spec.ProfileCustomizations.Namespaces.Included) > 0 {
@@ -1440,7 +1444,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		if len(descheduler.Spec.ProfileCustomizations.Namespaces.Included) > 0 {
 			for _, ns := range descheduler.Spec.ProfileCustomizations.Namespaces.Included {
 				if protectedNamespacesSet.Has(ns) {
-					return nil, false, fmt.Errorf("Protected namespace %v included. It is forbidden to include any of the protected namespaces from %v", ns, c.protectedNamespaces)
+					return nil, false, fmt.Errorf("Protected namespace %v included. It is forbidden to include any of the protected namespaces from %v", ns, protectedNamespaces)
 				}
 				includedNamespaces = append(includedNamespaces, ns)
 			}
@@ -1516,11 +1520,11 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		case deschedulerv1.SoftTopologyAndDuplicates:
 			profile, err = softTopologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.LifecycleAndUtilization:
-			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.EvictPodsWithLocalStorage, deschedulerv1.EvictPodsWithPVC:
 			continue
 		case deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LongLifecycle:
-			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.CompactAndScale:
 			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
 		case deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate:
@@ -1540,7 +1544,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 			}
 			kubeVirtShedulable := kubeVirtShedulableLabelSelector
 			policy.NodeSelector = &kubeVirtShedulable
-			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
+			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces)
 		default:
 			err = fmt.Errorf("Profile %q not recognized", profileName)
 		}

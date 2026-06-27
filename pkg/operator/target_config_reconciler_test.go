@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
@@ -715,6 +716,78 @@ func TestManageConfigMap(t *testing.T) {
 				t.Errorf("manageConfigMap diff \n\n %+v", cmp.Diff(tt.want.Data, got.Data))
 			}
 		})
+	}
+}
+
+func TestGetProtectedNamespacesRefresh(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	defer cancelFunc()
+
+	initialObjects := []runtime.Object{
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "openshift-kube-scheduler",
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "kube-system",
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   operatorclient.OperatorNamespace,
+				Labels: map[string]string{operatorclient.OpenshiftClusterMonitoringLabelKey: operatorclient.OpenshiftClusterMonitoringLabelValue},
+			},
+		},
+	}
+
+	fakeKubeClient := fake.NewSimpleClientset(initialObjects...)
+	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+
+	reconciler := &TargetConfigReconciler{
+		namespaceLister: coreInformers.Core().V1().Namespaces().Lister(),
+	}
+
+	coreInformers.Start(ctx.Done())
+	coreInformers.WaitForCacheSync(ctx.Done())
+
+	// Before creating the new namespace, openshift-cnv should not be protected
+	before, err := reconciler.getProtectedNamespaces()
+	if err != nil {
+		t.Fatalf("Failed to get protected namespaces: %v", err)
+	}
+	for _, ns := range before {
+		if ns == "openshift-cnv" {
+			t.Fatal("openshift-cnv should not be in protected namespaces before creation")
+		}
+	}
+
+	// Simulate late namespace creation (e.g. CNV installed after descheduler)
+	_, err = fakeKubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "openshift-cnv",
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create namespace: %v", err)
+	}
+
+	// Wait for informer to pick up the new namespace
+	err = wait.PollUntilContextTimeout(ctx, 10*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		nsList, err := reconciler.getProtectedNamespaces()
+		if err != nil {
+			return false, err
+		}
+		for _, ns := range nsList {
+			if ns == "openshift-cnv" {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Fatalf("openshift-cnv was not picked up by getProtectedNamespaces after creation: %v", err)
 	}
 }
 
