@@ -1,11 +1,15 @@
 reviewers:
   - ingvagabund
-  - ricardomaraschini
-  - xingxingxia
-  - zhouying7780 
+  - bertinatto 
+  - ricardomaraschini 
+  - gangwgr 
+  - sandeepknd 
+  - ropatil010 
 approvers:
   - ingvagabund
-  - ricardomaraschini
-  - xingxingxia
-  - zhouying7780 
+  - bertinatto 
+  - ricardomaraschini 
+  - gangwgr 
+  - sandeepknd 
+  - ropatil010 
 component: "descheduler"
