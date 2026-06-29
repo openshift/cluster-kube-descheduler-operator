@@ -345,33 +345,17 @@ The Descheduler operator exposes the following parameters in its CRD:
 
 ## Tests
 
-This repository is compatible with the [OpenShift Tests Extension (OTE)](https://github.com/openshift-eng/openshift-tests-extension) framework.
-
-### Building the test binary
-
 ```bash
+# Build and run tests
 make build
-```
-
-### Running test suites and tests
-
-```bash
-# Run a specific test suite or test
 ./cluster-kube-descheduler-operator-tests-ext run-suite openshift/cluster-kube-descheduler-operator/all
-./cluster-kube-descheduler-operator-tests-ext run-test "test-name"
-
-# Run with JUnit output
-./cluster-kube-descheduler-operator-tests-ext run-suite openshift/cluster-kube-descheduler-operator/all --junit-path /tmp/junit.xml
 ```
 
-### Listing available tests and suites
+See [TESTING.md](./TESTING.md) for complete testing guide.
 
-```bash
-# List all test suites
-./cluster-kube-descheduler-operator-tests-ext list suites
+## Additional Documentation
 
-# List tests in a suite
-./cluster-kube-descheduler-operator-tests-ext list tests --suite=openshift/cluster-kube-descheduler-operator/all
-```
-
-For more information about the OTE framework, see the [openshift-tests-extension documentation](https://github.com/openshift-eng/openshift-tests-extension).
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - How to contribute to this project
+- **[TESTING.md](./TESTING.md)** - Comprehensive testing guide
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and design decisions
+- **[AGENTS.md](./AGENTS.md)** - AI agent and automation reference
