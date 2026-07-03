@@ -1,4 +1,4 @@
-cluster-kube-descheduler-operator
+/cluster-kube-descheduler-operator
 
 # Binaries for programs and plugins
 *.exe

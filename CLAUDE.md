@@ -1,5 +1,30 @@
 # Kube Descheduler Operator
 
+## Repository Structure
+
+Listing notable files only.
+
+- **Bundle**
+  - `bundle.Dockerfile` - OLM bundle image (used by Konflux)
+  - `manifests/` - OLM manifests (ClusterServiceVersion, CRD)
+- **Operator**
+  - `Dockerfile` - Main operator image build (used by Konflux)
+  - `bindata/` - Embedded asset manifests (RBAC, deployments, etc.) reconciled by the operator
+  - `cmd/` - operator, soft-tainter (deployed only with KubeVirt profile), tests (OTE framework)
+  - `pkg/apis/` - API definitions
+  - `pkg/operator/` - Operator controller logic
+  - `pkg/softtainter/` - Soft tainter controller logic
+  - `pkg/cmd/` - Command line handling
+  - `test/` - E2E tests compatible with OpenShift Tests Extension (OTE) framework
+- **Konflux**
+  - `.tekton/` - Pipeline configuration (updated regularly via automated updates)
+- **Auxiliary**
+  - `.ci-operator.yaml` - OpenShift CI configuration (needed for automatic updates of Dockerfile.rhel7)
+  - `Dockerfile.rhel7` - RHEL7-based operator image (used by CI, but not in production)
+  - `deploy/` - Deployment manifests for quick development installation
+
+---
+
 ## RBAC Configuration
 
 RBAC manifests: `bindata/assets/kube-descheduler/`
