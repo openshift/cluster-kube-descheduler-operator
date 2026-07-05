@@ -23,6 +23,19 @@ Listing notable files only.
   - `Dockerfile.rhel7` - RHEL7-based operator image (used by CI, but not in production)
   - `deploy/` - Deployment manifests for quick development installation
 
+## Build and Test
+
+```bash
+make generate                    # Generate CRD manifests and clients
+make update                      # Run gofmt
+make verify                      # Run gofmt, go vet, and verify version consistency
+make build                       # Build operator and test binaries
+make test-unit                   # Run unit tests
+make test-e2e                    # Run end-to-end tests
+```
+
+Go version: see `go.mod`.
+
 ---
 
 ## RBAC Configuration

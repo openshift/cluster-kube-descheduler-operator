@@ -60,7 +60,7 @@ regen-crd:
 	cp manifests/kube-descheduler-operator.crd.yaml test/e2e/bindata/assets/00_kube-descheduler-operator-crd.yaml
 	yq '.spec.versions[] | select(.served == true) | .schema.openAPIV3Schema' manifests/kube-descheduler-operator.crd.yaml > bindata/assets/kube-descheduler/crdschema.yaml
 
-generate: update-codegen-crds generate-clients
+generate: regen-crd generate-clients
 .PHONY: generate
 
 generate-clients:
