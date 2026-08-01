@@ -38,7 +38,12 @@ func createOperatorGroup(ctx context.Context, dynamicClient dynamic.Interface, o
 		return fmt.Errorf("failed to convert OperatorGroup to unstructured: %w", err)
 	}
 
-	err = olmlib.CreateOperatorGroup(ctx, dynamicClient, &unstructured.Unstructured{Object: unstructuredOG})
+	// Set TypeMeta fields required by Kubernetes API
+	u := &unstructured.Unstructured{Object: unstructuredOG}
+	u.SetAPIVersion("operators.coreos.com/v1")
+	u.SetKind("OperatorGroup")
+
+	err = olmlib.CreateOperatorGroup(ctx, dynamicClient, u)
 	if err != nil {
 		return fmt.Errorf("failed to create OperatorGroup %s: %w", og.Name, err)
 	}
@@ -57,7 +62,12 @@ func deleteOperatorGroup(ctx context.Context, dynamicClient dynamic.Interface, o
 		return fmt.Errorf("failed to convert OperatorGroup to unstructured: %w", err)
 	}
 
-	err = olmlib.DeleteOperatorGroup(ctx, dynamicClient, &unstructured.Unstructured{Object: unstructuredOG})
+	// Set TypeMeta fields required by Kubernetes API
+	u := &unstructured.Unstructured{Object: unstructuredOG}
+	u.SetAPIVersion("operators.coreos.com/v1")
+	u.SetKind("OperatorGroup")
+
+	err = olmlib.DeleteOperatorGroup(ctx, dynamicClient, u)
 	if err != nil {
 		return fmt.Errorf("failed to delete OperatorGroup %s: %w", og.Name, err)
 	}
@@ -76,7 +86,12 @@ func createSubscription(ctx context.Context, dynamicClient dynamic.Interface, su
 		return fmt.Errorf("failed to convert Subscription to unstructured: %w", err)
 	}
 
-	err = olmlib.CreateSubscription(ctx, dynamicClient, &unstructured.Unstructured{Object: unstructuredSub})
+	// Set TypeMeta fields required by Kubernetes API
+	u := &unstructured.Unstructured{Object: unstructuredSub}
+	u.SetAPIVersion("operators.coreos.com/v1alpha1")
+	u.SetKind("Subscription")
+
+	err = olmlib.CreateSubscription(ctx, dynamicClient, u)
 	if err != nil {
 		return fmt.Errorf("failed to create Subscription %s: %w", sub.Name, err)
 	}
@@ -95,7 +110,12 @@ func deleteSubscription(ctx context.Context, dynamicClient dynamic.Interface, su
 		return fmt.Errorf("failed to convert Subscription to unstructured: %w", err)
 	}
 
-	err = olmlib.DeleteSubscription(ctx, dynamicClient, &unstructured.Unstructured{Object: unstructuredSub})
+	// Set TypeMeta fields required by Kubernetes API
+	u := &unstructured.Unstructured{Object: unstructuredSub}
+	u.SetAPIVersion("operators.coreos.com/v1alpha1")
+	u.SetKind("Subscription")
+
+	err = olmlib.DeleteSubscription(ctx, dynamicClient, u)
 	if err != nil {
 		return fmt.Errorf("failed to delete Subscription %s: %w", sub.Name, err)
 	}
