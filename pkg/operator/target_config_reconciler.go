@@ -77,6 +77,7 @@ const psiPath = "/proc/pressure/"
 const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
 const defaultKVParallelMigrationsPerCluster = 5
 const defaultKVParallelOutboundMigrationsPerNode = 2
+const kubevirtMigrationAwarePluginName = "KubevirtMigrationAware"
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -1097,6 +1098,12 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 			Filter: v1alpha2.PluginSet{
 				Enabled: []string{
 					defaultevictor.PluginName,
+					kubevirtMigrationAwarePluginName,
+				},
+			},
+			PreEvictionFilter: v1alpha2.PluginSet{
+				Enabled: []string{
+					kubevirtMigrationAwarePluginName,
 				},
 			},
 			Balance: v1alpha2.PluginSet{
@@ -1117,6 +1124,9 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 	// profile defaults
 	const defaultActualUtilizationProfile = deschedulerv1.PrometheusCPUMemoryCombinedProfile
 	args.UseDeviationThresholds = true
+	args.EvictionLimits = &deschedulerapi.EvictionLimits{
+		Node: utilptr.To[uint](uint(defaultKVParallelOutboundMigrationsPerNode)),
+	}
 	query, err := utilizationProfileToPrometheusQuery(defaultActualUtilizationProfile)
 	if err != nil {
 		return nil, err
@@ -1157,6 +1167,25 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[1]); err != nil {
 			return nil, err
 		}
+	}
+
+	{
+		var parts []string
+		if profileCustomizations != nil {
+			if profileCustomizations.DevMigrationCooldown != nil {
+				parts = append(parts, fmt.Sprintf(`"migrationCooldown":%q`, profileCustomizations.DevMigrationCooldown.Duration.String()))
+			}
+			if profileCustomizations.DevMaxMigrationCooldown != nil {
+				parts = append(parts, fmt.Sprintf(`"maxMigrationCooldown":%q`, profileCustomizations.DevMaxMigrationCooldown.Duration.String()))
+			}
+			if profileCustomizations.DevMigrationHistoryWindow != nil {
+				parts = append(parts, fmt.Sprintf(`"migrationHistoryWindow":%q`, profileCustomizations.DevMigrationHistoryWindow.Duration.String()))
+			}
+		}
+		profile.PluginConfigs = append(profile.PluginConfigs, v1alpha2.PluginConfig{
+			Name: kubevirtMigrationAwarePluginName,
+			Args: runtime.RawExtension{Raw: []byte("{" + strings.Join(parts, ",") + "}")},
+		})
 	}
 
 	lowThreshold, highThreshold, err := getKubeVirtRelieveAndMigrateThresholds(profileCustomizations, args.UseDeviationThresholds)
@@ -1321,8 +1350,6 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		Profiles: []v1alpha2.DeschedulerProfile{},
 	}
 
-	c.setEvictionsLimits(descheduler, policy)
-
 	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {
 		// detect the prometheus server url
 		route, err := c.routeRouteLister.Routes("openshift-monitoring").Get("prometheus-k8s")
@@ -1408,6 +1435,8 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		}
 		policy.Profiles = append(policy.Profiles, *profile)
 	}
+
+	c.setEvictionsLimits(descheduler, policy)
 
 	// Check for conflicting kube-scheduler config
 	if scheduler.Spec.Profile == configv1.HighNodeUtilization &&
@@ -1818,6 +1847,17 @@ func (c *TargetConfigReconciler) setEvictionsLimits(descheduler *deschedulerv1.K
 		}
 		if descheduler.Spec.EvictionLimits.Node != nil {
 			policy.MaxNoOfPodsToEvictPerNode = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
+			for i := range policy.Profiles {
+				for j := range policy.Profiles[i].PluginConfigs {
+					if policy.Profiles[i].PluginConfigs[j].Name == nodeutilization.LowNodeUtilizationPluginName {
+						args := policy.Profiles[i].PluginConfigs[j].Args.Object.(*nodeutilization.LowNodeUtilizationArgs)
+						if args.EvictionLimits == nil {
+							args.EvictionLimits = &deschedulerapi.EvictionLimits{}
+						}
+						args.EvictionLimits.Node = utilptr.To[uint](uint(*descheduler.Spec.EvictionLimits.Node))
+					}
+				}
+			}
 		}
 	}
 }

@@ -369,6 +369,41 @@ func TestReconcile(t *testing.T) {
 			testfilename: "policyNoRelieveAndMigrate.yaml",
 		},
 		{
+			description: "3 nodes, production-like policy with KubevirtMigrationAware plugin configured",
+			nodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, false, false, false),
+				buildTestNodeWithTaints("node2", true, false, false, false),
+				buildTestNodeWithTaints("node3", true, false, false, false),
+			},
+			expectednodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, false, false, false),
+				buildTestNodeWithTaints("node2", true, true, false, false),
+				buildTestNodeWithTaints("node3", true, true, true, false),
+			},
+			nodeUtilization: MockNodeUtilization{
+				mockResults: map[string]map[corev1.ResourceName]*resource.Quantity{
+					"node1": {"MetricResource": resource.NewQuantity(10, resource.BinarySI)},
+					"node2": {"MetricResource": resource.NewQuantity(50, resource.BinarySI)},
+					"node3": {"MetricResource": resource.NewQuantity(90, resource.BinarySI)},
+				},
+				mockErrors: nil,
+			},
+			kubedescheduler: deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: operatorclient.OperatorNamespace,
+					Name:      operatorclient.OperatorConfigName,
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: pointer.Int32(30),
+					Mode:                        deschedulerv1.Automatic,
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
+					},
+				},
+			},
+			testfilename: "policyWithKubevirtMigrationAware.yaml",
+		},
+		{
 			description: "zeroed out descheduling interval",
 			nodes:       []*corev1.Node{},
 			expectedErr: "descheduler should have an interval set and it should be greater than 0",

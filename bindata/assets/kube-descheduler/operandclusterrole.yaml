@@ -21,6 +21,7 @@ rules:
   - "pods"
   - "nodes"
   - "namespaces"
+  - "persistentvolumeclaims"
   verbs:
   - "get"
   - "watch"
@@ -63,3 +64,18 @@ rules:
   - "get"
   - "patch"
   - "delete"
+- apiGroups:
+  - "kubevirt.io"
+  resources:
+  - "virtualmachineinstances"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "kubevirt.io"
+  resources:
+  - "virtualmachineinstancemigrations"
+  verbs:
+  - "get"
+  - "list"

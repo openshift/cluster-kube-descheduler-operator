@@ -71,6 +71,7 @@ rules:
     resources:
       - namespaces
       - pods
+      - persistentvolumeclaims
     verbs:
       - get
       - watch
@@ -208,3 +209,18 @@ rules:
       - patch
       - delete
       - deletecollection
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstances
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list

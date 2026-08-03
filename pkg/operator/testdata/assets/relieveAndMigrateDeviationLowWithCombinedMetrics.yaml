@@ -18,6 +18,8 @@ profiles:
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
+      evictionLimits:
+        node: 2
       metricsUtilization:
         prometheus:
           query: descheduler:combined_utilization_and_pressure:avg1m
@@ -33,6 +35,8 @@ profiles:
       noEvictionPolicy: Mandatory
       podProtections: {}
     name: DefaultEvictor
+  - args: {}
+    name: KubevirtMigrationAware
   plugins:
     balance:
       disabled: null
@@ -45,9 +49,11 @@ profiles:
       disabled: null
       enabled:
       - DefaultEvictor
+      - KubevirtMigrationAware
     preevictionfilter:
       disabled: null
-      enabled: null
+      enabled:
+      - KubevirtMigrationAware
     presort:
       disabled: null
       enabled: null

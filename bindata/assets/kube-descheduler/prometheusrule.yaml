@@ -33,6 +33,10 @@ spec:
           # return cpu pressure as zero to (partially) filter out false
           # positives pressure spikes due to CPU limited pods.
           # See: https://github.com/kubernetes/enhancements/issues/5062
+          # Ideally, PSI pressure per container (see:
+          # https://github.com/kubernetes/kubernetes/pull/130701 ) combined
+          # with a quantile aggregation would better filter out outlier pods
+          # driving pressure spikes, but per-container PSI is not yet available.
           expr: |-
             (
               avg by (instance) (rate(node_pressure_cpu_waiting_seconds_total[1m]))
@@ -46,10 +50,21 @@ spec:
           expr: avg(descheduler:nodepressure:cpu:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
 
         - record: descheduler:nodepressure:memory:avg1m
+          # return the memory pressure if the memory usage is over 70% otherwise
+          # return memory pressure as zero to (partially) filter out false
+          # positives pressure spikes due to memory limited pods.
+          # Ideally, PSI pressure per container (see:
+          # https://github.com/kubernetes/kubernetes/pull/130701 ) combined
+          # with a quantile aggregation would better filter out outlier pods
+          # driving pressure spikes, but per-container PSI is not yet available.
           expr: |-
-            avg by (instance) (
-              rate(node_pressure_memory_waiting_seconds_total[1m])
+            (
+              avg by (instance) (rate(node_pressure_memory_waiting_seconds_total[1m]))
+              and
+              descheduler:nodeutilization:memory:avg1m > 0.7
             )
+            or
+            (avg by (instance) (rate(node_pressure_memory_waiting_seconds_total[1m])) * 0)
 
         - record: descheduler:averageworkerspressure:memory:avg1m
           expr: avg(descheduler:nodepressure:memory:avg1m * on(instance) group_left(node) label_replace(kube_node_role{role="worker"}, 'instance', "$1", 'node', '(.+)'))
@@ -112,3 +127,65 @@ spec:
               3 * descheduler:node:ideal_point_positive_distance:avg1m,
               1.0
             )
+
+        # Stable per-dimension deviations: p66 over 5m
+        # quantile_over_time applied per-dimension BEFORE the Euclidean distance so that
+        # the squaring step does not amplify transient single-dimension spikes.
+        # Asynchronous per-dimension noise (CPU spike in minute 1, memory spike in minute 3)
+        # is filtered independently; applying the quantile only to the final distance would
+        # leave such spikes partially visible after squaring.
+        - record: descheduler:nodeutilization:cpu:p66_5m:positivedeviation
+          expr: quantile_over_time(0.66, descheduler:nodeutilization:cpu:avg1m:positivedeviation[5m])
+
+        - record: descheduler:nodepressure:cpu:p66_5m:positivedeviation
+          expr: quantile_over_time(0.66, descheduler:nodepressure:cpu:avg1m:positivedeviation[5m])
+
+        - record: descheduler:nodeutilization:memory:p66_5m:positivedeviation
+          expr: quantile_over_time(0.66, descheduler:nodeutilization:memory:avg1m:positivedeviation[5m])
+
+        - record: descheduler:nodepressure:memory:p66_5m:positivedeviation
+          expr: quantile_over_time(0.66, descheduler:nodepressure:memory:avg1m:positivedeviation[5m])
+
+        # Stable Euclidean distance using noise-filtered per-dimension deviations
+        - record: descheduler:node:ideal_point_positive_distance:p66_5m
+          expr: |-
+            sqrt(
+              descheduler:nodeutilization:cpu:p66_5m:positivedeviation ^ 2 +
+              descheduler:nodepressure:cpu:p66_5m:positivedeviation ^ 2 +
+              descheduler:nodeutilization:memory:p66_5m:positivedeviation ^ 2 +
+              descheduler:nodepressure:memory:p66_5m:positivedeviation ^ 2
+            )
+
+        # Stable Linear Amplified Ideal Point Positive Distance (k=3.0)
+        - record: descheduler:node:linear_amplified_ideal_point_positive_distance:k3:p66_5m
+          expr: |-
+            clamp_max(
+              3 * descheduler:node:ideal_point_positive_distance:p66_5m,
+              1.0
+            )
+
+        # Track successful eviction by LowNodeUtilization strategy count per node in the last 10 minutes
+        - record: descheduler:node:eviction_count:10m
+          expr: |-
+            label_replace(
+              sum by (node) (increase(descheduler_pods_evicted_total{strategy="LowNodeUtilization", result="success"}[10m])),
+              'instance', "$1", 'node', '(.+)'
+            ) or on (instance)
+            descheduler:nodeutilization:cpu:avg1m * 0
+
+        # Calculate the Dampening Factor (Multiplier)
+        # We use a linear decay: each eviction reduces the score by 10%.
+        # 10 evictions in 10m will effectively "mute" the node (multiplier close to 0).
+        - record: descheduler:node:cooldown_multiplier:10m
+          expr: |-
+            clamp_min(
+              1 - (descheduler:node:eviction_count:10m * 0.10),
+              0.01
+            )
+
+        # Actuation Priority: Stable Distance x Cooldown
+        # If the node was recently touched, the distance is suppressed.
+        - record: descheduler:node:actuation_priority:p66_5m
+          expr: |-
+            descheduler:node:linear_amplified_ideal_point_positive_distance:k3:p66_5m
+            * on(instance) descheduler:node:cooldown_multiplier:10m
