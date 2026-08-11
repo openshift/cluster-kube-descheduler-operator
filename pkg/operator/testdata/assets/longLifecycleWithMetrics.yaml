@@ -11,8 +11,8 @@ profiles:
       includingInitContainers: true
       namespaces:
         exclude:
-        - kube-system
         - hypershift
+        - kube-system
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
@@ -21,8 +21,8 @@ profiles:
   - args:
       evictableNamespaces:
         exclude:
-        - kube-system
         - hypershift
+        - kube-system
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
