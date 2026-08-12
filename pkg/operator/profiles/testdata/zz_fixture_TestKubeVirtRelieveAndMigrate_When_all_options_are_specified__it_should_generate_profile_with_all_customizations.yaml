@@ -1,0 +1,70 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+maxNoOfPodsToEvictPerNode: 3
+maxNoOfPodsToEvictTotal: 10
+metricsProviders:
+- prometheus:
+    url: https://prometheus-k8s.openshift-monitoring.svc:9091
+  source: Prometheus
+nodeSelector: kubevirt.io/schedulable=true
+profiles:
+- name: KubeVirtRelieveAndMigrate
+  pluginConfig:
+  - args:
+      evictableNamespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+        - kube-system
+        - openshift-*
+      evictionLimits:
+        node: 3
+      metricsUtilization:
+        prometheus:
+          query: descheduler:combined_utilization_and_pressure:avg1m
+        source: Prometheus
+      targetThresholds:
+        MetricResource: 10
+      thresholds:
+        MetricResource: 10
+      useDeviationThresholds: true
+    name: LowNodeUtilization
+  - args:
+      evictLocalStoragePods: true
+      noEvictionPolicy: Mandatory
+      podProtections: {}
+      priorityThreshold:
+        name: ""
+        value: 500
+    name: DefaultEvictor
+  - args:
+      maxMigrationCooldown: 15m0s
+      migrationCooldown: 5m0s
+      migrationHistoryWindow: 30m0s
+    name: KubevirtMigrationAware
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - LowNodeUtilization
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+      - KubevirtMigrationAware
+    preevictionfilter:
+      disabled: null
+      enabled:
+      - KubevirtMigrationAware
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

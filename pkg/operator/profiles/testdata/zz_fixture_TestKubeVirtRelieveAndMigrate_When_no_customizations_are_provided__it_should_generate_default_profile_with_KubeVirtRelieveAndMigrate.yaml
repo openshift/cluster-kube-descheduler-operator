@@ -4,7 +4,7 @@ maxNoOfPodsToEvictPerNode: 2
 maxNoOfPodsToEvictTotal: 5
 metricsProviders:
 - prometheus:
-    url: https://prometheus-k8s-openshift-monitoring.apps.example.com
+    url: https://prometheus-k8s.openshift-monitoring.svc:9091
   source: Prometheus
 nodeSelector: kubevirt.io/schedulable=true
 profiles:
@@ -25,9 +25,10 @@ profiles:
           query: descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m
         source: Prometheus
       targetThresholds:
-        MetricResource: 50
+        MetricResource: 10
       thresholds:
-        MetricResource: 20
+        MetricResource: 0
+      useDeviationThresholds: true
     name: LowNodeUtilization
   - args:
       evictLocalStoragePods: true
