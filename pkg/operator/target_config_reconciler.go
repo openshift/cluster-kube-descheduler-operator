@@ -1409,6 +1409,74 @@ func compactAndScaleProfile(profileCustomizations *deschedulerv1.ProfileCustomiz
 	return profile, nil
 }
 
+func buildDeschedulingPolicy(descheduler *deschedulerv1.KubeDescheduler, includedNamespaces, excludedNamespaces, protectedNamespaces []string, prometheusHost string) (*v1alpha2.DeschedulerPolicy, error) {
+	policy := &v1alpha2.DeschedulerPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DeschedulerPolicy",
+			APIVersion: "descheduler/v1alpha2",
+		},
+		Profiles: []v1alpha2.DeschedulerProfile{},
+	}
+
+	if len(prometheusHost) > 0 {
+		policy.MetricsProviders = []v1alpha2.MetricsProvider{{
+			Source: v1alpha2.PrometheusMetrics,
+			Prometheus: &v1alpha2.Prometheus{
+				URL: "https://" + prometheusHost,
+			}},
+		}
+	}
+
+	// ignore PVC pods by default
+	ignorePVCPods := true
+	evictLocalStoragePods := false
+	for _, profileName := range descheduler.Spec.Profiles {
+		if profileName == deschedulerv1.EvictPodsWithPVC {
+			ignorePVCPods = false
+			continue
+		}
+		if profileName == deschedulerv1.EvictPodsWithLocalStorage {
+			evictLocalStoragePods = true
+			continue
+		}
+	}
+
+	for _, profileName := range descheduler.Spec.Profiles {
+		var profile *v1alpha2.DeschedulerProfile
+		var err error
+		switch profileName {
+		case deschedulerv1.AffinityAndTaints:
+			profile, err = affinityAndTaintsProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.TopologyAndDuplicates:
+			profile, err = topologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.SoftTopologyAndDuplicates:
+			profile, err = softTopologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.LifecycleAndUtilization:
+			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.EvictPodsWithLocalStorage, deschedulerv1.EvictPodsWithPVC:
+			continue
+		case deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LongLifecycle:
+			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.CompactAndScale:
+			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
+		case deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate:
+			kubeVirtShedulable := kubeVirtShedulableLabelSelector
+			policy.NodeSelector = &kubeVirtShedulable
+			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, protectedNamespaces)
+		default:
+			err = fmt.Errorf("Profile %q not recognized", profileName)
+		}
+		if err != nil {
+			return nil, err
+		}
+		policy.Profiles = append(policy.Profiles, *profile)
+	}
+
+	setEvictionsLimits(descheduler, policy)
+
+	return policy, nil
+}
+
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
 	required := resourceread.ReadConfigMapV1OrDie(bindata.MustAsset("assets/kube-descheduler/configmap.yaml"))
 	required.Name = descheduler.Name
@@ -1456,14 +1524,42 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		return nil, false, fmt.Errorf("descheduler should have at least 1 profile enabled")
 	}
 
-	policy := &v1alpha2.DeschedulerPolicy{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "DeschedulerPolicy",
-			APIVersion: "descheduler/v1alpha2",
-		},
-		Profiles: []v1alpha2.DeschedulerProfile{},
+	profiles := sets.NewString()
+	for _, profileName := range descheduler.Spec.Profiles {
+		profiles.Insert(string(profileName))
+		switch profileName {
+		case deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate:
+			kvDeployed, kverr := c.isKubeVirtDeployed()
+			if kverr != nil {
+				return nil, false, kverr
+			}
+			if !kvDeployed {
+				return nil, true, fmt.Errorf("profile %v can only be used when KubeVirt is properly deployed", profileName)
+			}
+			psiEnabled, psierr := c.isPSIenabled()
+			if psierr != nil {
+				return nil, false, psierr
+			}
+			if !psiEnabled {
+				return nil, true, fmt.Errorf("profile %v can only be used when PSI metrics are enabled for the worker nodes", profileName)
+			}
+		}
 	}
 
+	// Check for conflicting kube-scheduler config
+	if scheduler.Spec.Profile == configv1.HighNodeUtilization &&
+		(profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) || profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) || profiles.Has(string(deschedulerv1.LongLifecycle))) {
+		// force a new deployment so we can scale it to 0
+		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
+	}
+
+	if scheduler.Spec.Profile == configv1.LowNodeUtilization &&
+		profiles.Has(string(deschedulerv1.CompactAndScale)) {
+		// force a new deployment so we can scale it to 0
+		return nil, true, fmt.Errorf("enabling Descheduler CompactAndScale with Scheduler LowNodeUtilization may cause an eviction/scheduling hot loop")
+	}
+
+	var prometheusHost string
 	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {
 		// detect the prometheus server url
 		route, err := c.routeRouteLister.Routes("openshift-monitoring").Get("prometheus-k8s")
@@ -1480,89 +1576,13 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		if err != nil {
 			return nil, false, err
 		}
-		klog.InfoS("Detecting prometheus server url", "url", route.Status.Ingress[0].Host)
-		policy.MetricsProviders = []v1alpha2.MetricsProvider{{
-			Source: v1alpha2.PrometheusMetrics,
-			Prometheus: &v1alpha2.Prometheus{
-				URL: "https://" + route.Status.Ingress[0].Host,
-			}},
-		}
+		prometheusHost = route.Status.Ingress[0].Host
+		klog.InfoS("Detecting prometheus server url", "url", prometheusHost)
 	}
 
-	// ignore PVC pods by default
-	ignorePVCPods := true
-	evictLocalStoragePods := false
-	for _, profileName := range descheduler.Spec.Profiles {
-		if profileName == deschedulerv1.EvictPodsWithPVC {
-			ignorePVCPods = false
-			continue
-		}
-		if profileName == deschedulerv1.EvictPodsWithLocalStorage {
-			evictLocalStoragePods = true
-			continue
-		}
-	}
-
-	profiles := sets.NewString()
-	for _, profileName := range descheduler.Spec.Profiles {
-		profiles.Insert(string(profileName))
-		var profile *v1alpha2.DeschedulerProfile
-		var err error
-		switch profileName {
-		case deschedulerv1.AffinityAndTaints:
-			profile, err = affinityAndTaintsProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.TopologyAndDuplicates:
-			profile, err = topologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.SoftTopologyAndDuplicates:
-			profile, err = softTopologyAndDuplicatesProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.LifecycleAndUtilization:
-			profile, err = lifecycleAndUtilizationProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.EvictPodsWithLocalStorage, deschedulerv1.EvictPodsWithPVC:
-			continue
-		case deschedulerv1.DevPreviewLongLifecycle, deschedulerv1.LongLifecycle:
-			profile, err = longLifecycleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.CompactAndScale:
-			profile, err = compactAndScaleProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, ignorePVCPods, evictLocalStoragePods)
-		case deschedulerv1.KubeVirtRelieveAndMigrate, deschedulerv1.DevKubeVirtRelieveAndMigrate:
-			kvDeployed, kverr := c.isKubeVirtDeployed()
-			if kverr != nil {
-				return nil, false, kverr
-			}
-			if !kvDeployed {
-				return nil, true, fmt.Errorf("profile %v can only be used when KubeVirt is properly deployed", profileName)
-			}
-			psiEnabled, psierr := c.isPSIenabled()
-			if psierr != nil {
-				return nil, false, psierr
-			}
-			if !psiEnabled {
-				return nil, true, fmt.Errorf("profile %v can only be used when PSI metrics are enabled for the worker nodes", profileName)
-			}
-			kubeVirtShedulable := kubeVirtShedulableLabelSelector
-			policy.NodeSelector = &kubeVirtShedulable
-			profile, err = kubeVirtRelieveAndMigrateProfile(descheduler.Spec.ProfileCustomizations, includedNamespaces, excludedNamespaces, c.protectedNamespaces)
-		default:
-			err = fmt.Errorf("Profile %q not recognized", profileName)
-		}
-		if err != nil {
-			return nil, false, err
-		}
-		policy.Profiles = append(policy.Profiles, *profile)
-	}
-
-	c.setEvictionsLimits(descheduler, policy)
-
-	// Check for conflicting kube-scheduler config
-	if scheduler.Spec.Profile == configv1.HighNodeUtilization &&
-		(profiles.Has(string(deschedulerv1.LifecycleAndUtilization)) || profiles.Has(string(deschedulerv1.DevPreviewLongLifecycle)) || profiles.Has(string(deschedulerv1.LongLifecycle))) {
-		// force a new deployment so we can scale it to 0
-		return nil, true, fmt.Errorf("enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop")
-	}
-
-	if scheduler.Spec.Profile == configv1.LowNodeUtilization &&
-		profiles.Has(string(deschedulerv1.CompactAndScale)) {
-		// force a new deployment so we can scale it to 0
-		return nil, true, fmt.Errorf("enabling Descheduler CompactAndScale with Scheduler LowNodeUtilization may cause an eviction/scheduling hot loop")
+	policy, err := buildDeschedulingPolicy(descheduler, includedNamespaces, excludedNamespaces, c.protectedNamespaces, prometheusHost)
+	if err != nil {
+		return nil, false, err
 	}
 
 	policyBytes, err := yaml.Marshal(policy)
@@ -1945,7 +1965,7 @@ func (c *TargetConfigReconciler) isPrometheusAsMetricsProviderForProfiles(desche
 	return false
 }
 
-func (c *TargetConfigReconciler) setEvictionsLimits(descheduler *deschedulerv1.KubeDescheduler, policy *v1alpha2.DeschedulerPolicy) {
+func setEvictionsLimits(descheduler *deschedulerv1.KubeDescheduler, policy *v1alpha2.DeschedulerPolicy) {
 	if descheduler == nil || policy == nil {
 		return
 	}
