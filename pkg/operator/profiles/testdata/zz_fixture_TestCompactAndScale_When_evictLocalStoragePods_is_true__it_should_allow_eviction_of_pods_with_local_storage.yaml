@@ -1,21 +1,8 @@
 apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
 profiles:
-- name: LifecycleAndUtilization
+- name: CompactAndScale
   pluginConfig:
-  - args:
-      maxPodLifeTimeSeconds: 86400
-      namespaces:
-        include:
-        - includedNamespace
-    name: PodLifeTime
-  - args:
-      includingInitContainers: true
-      namespaces:
-        include:
-        - includedNamespace
-      podRestartThreshold: 100
-    name: RemovePodsHavingTooManyRestarts
   - args:
       evictableNamespaces:
         exclude:
@@ -24,16 +11,13 @@ profiles:
         - openshift
         - openshift-kube-descheduler-operator
         - openshift-kube-scheduler
-      targetThresholds:
-        cpu: 30
-        memory: 30
-        pods: 30
       thresholds:
-        cpu: 10
-        memory: 10
-        pods: 10
-    name: LowNodeUtilization
+        cpu: 20
+        memory: 20
+        pods: 20
+    name: HighNodeUtilization
   - args:
+      evictLocalStoragePods: true
       ignorePvcPods: true
       podProtections: {}
     name: DefaultEvictor
@@ -41,12 +25,10 @@ profiles:
     balance:
       disabled: null
       enabled:
-      - LowNodeUtilization
+      - HighNodeUtilization
     deschedule:
       disabled: null
-      enabled:
-      - PodLifeTime
-      - RemovePodsHavingTooManyRestarts
+      enabled: null
     filter:
       disabled: null
       enabled:
