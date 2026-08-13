@@ -358,6 +358,18 @@ spec:
                 - patch
                 - delete
                 - deletecollection
+            - apiGroups:
+                - networking.k8s.io
+              resources:
+                - networkpolicies
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
       deployments:
         - name: descheduler-operator
           spec:
