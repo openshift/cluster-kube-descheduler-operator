@@ -4,7 +4,7 @@ COPY . .
 RUN make build --warn-undefined-variables \
     && gzip cluster-kube-descheduler-operator-tests-ext
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:34880b64c07f28f64d95737f82f891516de9a3b43583f39970f7bf8e4cfa48b7
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:7c372902c8d211db2d25c8277ba534a73b92742a334874dced829a63b0f21221
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator-tests-ext.gz /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/soft-tainter /usr/bin/
@@ -17,8 +17,8 @@ LABEL io.k8s.display-name="Kube Descheduler Operator based on RHEL 9" \
       com.redhat.component="kube-descheduler-operator-container" \
       name="kube-descheduler-operator/kube-descheduler-rhel9-operator" \
       cpe="cpe:/a:redhat:kube_descheduler_operator:5.4::el9" \
-      release="5.4.0" \
-      version="5.4.0" \
+      release="5.4.2" \
+      version="5.4.2" \
       url="https://github.com/openshift/cluster-kube-descheduler-operator" \
       vendor="Red Hat, Inc." \
       summary="kube-descheduler-operator" \
