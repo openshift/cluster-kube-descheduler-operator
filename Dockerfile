@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 RUN make build --warn-undefined-variables
 
-FROM registry.redhat.io/rhel9-4-els/rhel-minimal:9.4
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:7c372902c8d211db2d25c8277ba534a73b92742a334874dced829a63b0f21221
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/soft-tainter /usr/bin/
 RUN mkdir /licenses
@@ -15,8 +15,8 @@ LABEL io.k8s.display-name="Kube Descheduler Operator based on RHEL 9" \
       com.redhat.component="kube-descheduler-operator-container" \
       cpe="cpe:/a:redhat:kube_descheduler_operator:5.1::el9" \
       name="kube-descheduler-operator/kube-descheduler-rhel9-operator" \
-      release="5.1.5" \
-      version="5.1.5" \
+      release="5.1.6" \
+      version="5.1.6" \
       url="https://github.com/openshift/cluster-kube-descheduler-operator" \
       vendor="Red Hat, Inc." \
       summary="kube-descheduler-operator" \
