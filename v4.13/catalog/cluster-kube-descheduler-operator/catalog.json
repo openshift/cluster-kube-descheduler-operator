@@ -1938,12 +1938,12 @@
             "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:7bdb18a55f011d5057f7edf954db916ed590c3e8302b45b4c1dbd6e61c4c74bc"
         },
         {
-            "name": "descheduler-operator",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:ea0f9b9005e03d8ac0cf25c62787f0afc0b34b40bc1d72fe5fa4b87a9810c12c"
-        },
-        {
             "name": "",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:7673ba7d14a9e5e391032a480cb573c3d0d8dccc50d7e54d928cb616ac5d54b2"
+        },
+        {
+            "name": "descheduler-operator",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:ea0f9b9005e03d8ac0cf25c62787f0afc0b34b40bc1d72fe5fa4b87a9810c12c"
         }
     ]
 }

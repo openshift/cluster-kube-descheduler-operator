@@ -1,18 +1,26 @@
 name: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
 csvname: clusterkubedescheduleroperator
 bundles:
+  - release: 5.4.1
+    sha256: 1f1edbc5d84ccb578188a335fbcc3870593a2f44f0ebbbb2114a8440183b1f78
   - release: 5.4.0
     sha256: c825960061a77552cbda6908475604447880ad030332f12c89c6e1f98827cf5a
+  - release: 5.3.3
+    sha256: 75290dbd0efdcd9a70a56e81c215b7f2a21901ff11b5ce4f9dd7c1623013e10b
   - release: 5.3.2
     sha256: 6c28742a874b5fa3e5d2d8fc8ef78151230aa316d9517edb802d028e6c9d6600
   - release: 5.3.1
     sha256: c0ebb8c7fbaa325fef3d530da8bee7ea8773aa082c9b16f174c41ca4465ced24
   - release: 5.3.0
     sha256: d6566b37989b6c5d45ce948e6f0165aecf37e3bd324c1c3623c98c4d757a749c
+  - release: 5.2.2
+    sha256: 0f3273783afb7e57128d338e5fd5f4c5d8b3a235c785f628c278c9eef864171b
   - release: 5.2.1
     sha256: 12f78c7d13537b104f7641dcbb394a8e151252d28f87d7a72332bfea8d8f2f6e
   - release: 5.2.0
     sha256: 020eeb41c7c24c3caf77a3a3f6f598076d5e22bf793b85d3c3e89eb705896c0e
+  - release: 5.1.5
+    sha256: c70cfd36c61bae6623f41900529832edea87ca6d218a9ab8eaf85ee6b53b4dd2
   - release: 5.1.4
     sha256: a8b80a453bb67cba00d970a8a2e7e4191668af5edb429af5cea3e8b5d6483c2e
   - release: 5.1.3
@@ -23,6 +31,8 @@ bundles:
     sha256: 618345991268504019c4fac34d09f3ea7225ffcee2aec48479f9f7e9189b16fc
   - release: 5.1.0
     sha256: d8ccfec899fbd543a076c28bce386e9ec764bada413350ae53132863ebddaa71
+  - release: 5.0.5
+    sha256: 1553c286f9ef2677a7558e6415ff4509e0192592e6c8193b595114318382a005
   - release: 5.0.4
     sha256: ae6e1f2c5224817a9af88404eb84e9a30e9c3ec865db95b88daeb98bf9c7730b
   - release: 5.0.3
@@ -31,6 +41,8 @@ bundles:
     sha256: 72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7
   - release: 5.0.1
     sha256: b26e5ebec8ffcfaf18c8c4acb8c25a71318ea7d3b372c9e3e170b6026a681a89
+  - release: 4.14.3
+    sha256: 0a360ee90e479f8a17d4292cbf21d9f930751078811c68f6cb1a3556b6de1e72
   - release: 4.14.2
     sha256: 44e944c78a641dc2fec2281276d5382f6193f0c34340963fd465a34a54d60c96
   - release: 4.14.1
