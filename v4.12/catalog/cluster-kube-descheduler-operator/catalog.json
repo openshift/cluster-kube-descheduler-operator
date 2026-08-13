@@ -2644,12 +2644,12 @@
             "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:82dd56cbf9418bab65ebc87f967304152e7b86f6e08150b0c38a48dc6787f193"
         },
         {
-            "name": "descheduler-operator",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:9151c50b4c83cdd70e72dcfa731bbaf646e1ea661c71aab939dafa2fc6d8295b"
-        },
-        {
             "name": "",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c1999b71015affba0d132a9704d14f7a17db1b0d03231a5ecaa5dd6f70e9d540"
+        },
+        {
+            "name": "descheduler-operator",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:9151c50b4c83cdd70e72dcfa731bbaf646e1ea661c71aab939dafa2fc6d8295b"
         }
     ]
 }

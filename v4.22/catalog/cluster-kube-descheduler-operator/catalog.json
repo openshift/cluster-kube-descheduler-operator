@@ -23,6 +23,11 @@
             "skipRange": ">=5.1.0 <5.2.1"
         },
         {
+            "name": "clusterkubedescheduleroperator.v5.2.2",
+            "replaces": "clusterkubedescheduleroperator.v5.1.0",
+            "skipRange": ">=5.1.0 <5.2.2"
+        },
+        {
             "name": "clusterkubedescheduleroperator.v5.3.0",
             "replaces": "clusterkubedescheduleroperator.v5.2.0",
             "skipRange": ">=5.2.0 <5.3.0"
@@ -38,7 +43,17 @@
             "skipRange": ">=5.2.0 <5.3.2"
         },
         {
+            "name": "clusterkubedescheduleroperator.v5.3.3",
+            "replaces": "clusterkubedescheduleroperator.v5.2.0",
+            "skipRange": ">=5.2.0 <5.3.3"
+        },
+        {
             "name": "clusterkubedescheduleroperator.v5.4.0",
+            "replaces": "clusterkubedescheduleroperator.v5.3.0",
+            "skipRange": ">=5.3.0 <5.4.0"
+        },
+        {
+            "name": "clusterkubedescheduleroperator.v5.4.1",
             "replaces": "clusterkubedescheduleroperator.v5.3.0",
             "skips": [
                 "clusterkubedescheduleroperator.v5.2.0",
@@ -54,9 +69,10 @@
                 "clusterkubedescheduleroperator.v5.3.3",
                 "clusterkubedescheduleroperator.v5.3.4",
                 "clusterkubedescheduleroperator.v5.3.5",
-                "clusterkubedescheduleroperator.v5.3.6"
+                "clusterkubedescheduleroperator.v5.3.6",
+                "clusterkubedescheduleroperator.v5.4.0"
             ],
-            "skipRange": ">=5.3.0 <5.4.0"
+            "skipRange": ">=5.3.0 <5.4.1"
         }
     ]
 }
@@ -313,6 +329,134 @@
         {
             "name": "descheduler-operator",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:4dd24bb92011122f4e050c0e16eced6b8f990e68707e14ab9631f4ade5e424cd"
+        }
+    ]
+}
+{
+    "schema": "olm.bundle",
+    "name": "clusterkubedescheduleroperator.v5.2.2",
+    "package": "cluster-kube-descheduler-operator",
+    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:0f3273783afb7e57128d338e5fd5f4c5d8b3a235c785f628c278c9eef864171b",
+    "properties": [
+        {
+            "type": "olm.gvk",
+            "value": {
+                "group": "operator.openshift.io",
+                "kind": "KubeDescheduler",
+                "version": "v1"
+            }
+        },
+        {
+            "type": "olm.package",
+            "value": {
+                "packageName": "cluster-kube-descheduler-operator",
+                "version": "5.2.2"
+            }
+        },
+        {
+            "type": "olm.csv.metadata",
+            "value": {
+                "annotations": {
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"operator.openshift.io/v1\",\n    \"kind\": \"KubeDescheduler\",\n    \"metadata\": {\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kube-descheduler-operator\"\n    },\n    \"spec\": {\n      \"deschedulingIntervalSeconds\": 3600,\n      \"managementState\": \"Managed\",\n      \"mode\": \"Predictive\",\n      \"profiles\": [\"AffinityAndTaints\"]\n    }\n  }\n]\n",
+                    "capabilities": "Basic Install",
+                    "categories": "OpenShift Optional",
+                    "certified": "false",
+                    "console.openshift.io/operator-monitoring-default": "true",
+                    "containerImage": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:bbeb4dc1656ec22929eaa75a5e1e6b266c947855611ff7449b834931d7250f11",
+                    "createdAt": "2026/08/13",
+                    "description": "An operator to run descheduler in Openshift cluster.",
+                    "features.operators.openshift.io/cnf": "false",
+                    "features.operators.openshift.io/cni": "false",
+                    "features.operators.openshift.io/csi": "false",
+                    "features.operators.openshift.io/disconnected": "true",
+                    "features.operators.openshift.io/fips-compliant": "true",
+                    "features.operators.openshift.io/proxy-aware": "false",
+                    "features.operators.openshift.io/tls-profiles": "false",
+                    "features.operators.openshift.io/token-auth-aws": "false",
+                    "features.operators.openshift.io/token-auth-azure": "false",
+                    "features.operators.openshift.io/token-auth-gcp": "false",
+                    "olm.skipRange": ">=5.1.0 <5.2.2",
+                    "operatorframework.io/cluster-monitoring": "true",
+                    "operatorframework.io/suggested-namespace": "openshift-kube-descheduler-operator",
+                    "operators.openshift.io/valid-subscription": "[\"OpenShift Kubernetes Engine\", \"OpenShift Container Platform\", \"OpenShift Platform Plus\"]",
+                    "repository": "https://github.com/openshift/cluster-kube-descheduler-operator",
+                    "support": "Red Hat, Inc."
+                },
+                "apiServiceDefinitions": {},
+                "crdDescriptions": {
+                    "owned": [
+                        {
+                            "name": "kubedeschedulers.operator.openshift.io",
+                            "version": "v1",
+                            "kind": "KubeDescheduler",
+                            "displayName": "Kube Descheduler",
+                            "description": "KubeDescheduler is the Schema for the deschedulers API"
+                        }
+                    ]
+                },
+                "description": "The Kube Descheduler Operator provides the ability to evict a running pod so that the pod can be rescheduled onto a more suitable node.\n\nThere are several situations where descheduling can benefit your cluster:\n\n* Nodes are underutilized or overutilized.\n* Pod and node affinity requirements, such as taints or labels, have changed and the original scheduling decisions are no longer appropriate for certain nodes.\n* Node failure requires pods to be moved.\n* New nodes are added to clusters.\n\n## Descheduler Profiles\n\nOnce the operator is installed, you can configure one or more profiles to identify pods to evict. The scheduler will schedule the replacement of the evicted pods.\n\nThe following profiles are available:\n\n* AffinityAndTaints\n* TopologyAndDuplicates\n* SoftTopologyAndDuplicates\n* LifecycleAndUtilization\n* LongLifecycle\n* CompactAndScale\n* EvictPodsWithPVC\n* EvictPodsWithLocalStorage\n\nThese profiles are documented in detail in the [descheduler operator README](https://github.com/openshift/cluster-kube-descheduler-operator#profiles).\n\n## Additional Parameters\n\nIn addition to the profiles, the following parameters can be configured:\n\n* `deschedulingIntervalSeconds` - Set the number of seconds between descheduler runs. A value of `0` in this field runs the descheduler once and exits.\n* `mode` - Configures the descheduler to either evict pods or to simulate the eviction.\n* `profileCustomizations` - Allows certain profile parameters to be tweaked, such as `podLifetime` (see [README](https://github.com/openshift/cluster-kube-descheduler-operator#profile-customizations) for more info).\n* `evictionLimits` - Restricts the number of evictions during each descheduling run.\n",
+                "displayName": "Kube Descheduler Operator",
+                "installModes": [
+                    {
+                        "type": "OwnNamespace",
+                        "supported": true
+                    },
+                    {
+                        "type": "SingleNamespace",
+                        "supported": true
+                    },
+                    {
+                        "type": "MultiNamespace",
+                        "supported": false
+                    },
+                    {
+                        "type": "AllNamespaces",
+                        "supported": false
+                    }
+                ],
+                "keywords": [
+                    "scheduling",
+                    "descheduler",
+                    "workload"
+                ],
+                "labels": {
+                    "operatorframework.io/arch.amd64": "supported",
+                    "operatorframework.io/arch.arm64": "supported",
+                    "operatorframework.io/arch.ppc64le": "supported",
+                    "operatorframework.io/arch.s390x": "supported"
+                },
+                "links": [
+                    {
+                        "name": "Source Code",
+                        "url": "https://github.com/openshift/cluster-kube-descheduler-operator"
+                    }
+                ],
+                "maintainers": [
+                    {
+                        "name": "Red Hat",
+                        "email": "support@redhat.com"
+                    }
+                ],
+                "maturity": "beta",
+                "minKubeVersion": "1.32.0",
+                "provider": {
+                    "name": "Red Hat, Inc."
+                }
+            }
+        }
+    ],
+    "relatedImages": [
+        {
+            "name": "descheduler-operand",
+            "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:5304f4f11a40c84eeaf18f41c080f0760ed8cab73f8c5b8b95c62b0e132f8fb4"
+        },
+        {
+            "name": "descheduler-operator",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:bbeb4dc1656ec22929eaa75a5e1e6b266c947855611ff7449b834931d7250f11"
+        },
+        {
+            "name": "",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:0f3273783afb7e57128d338e5fd5f4c5d8b3a235c785f628c278c9eef864171b"
         }
     ]
 }
@@ -702,6 +846,134 @@
 }
 {
     "schema": "olm.bundle",
+    "name": "clusterkubedescheduleroperator.v5.3.3",
+    "package": "cluster-kube-descheduler-operator",
+    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:75290dbd0efdcd9a70a56e81c215b7f2a21901ff11b5ce4f9dd7c1623013e10b",
+    "properties": [
+        {
+            "type": "olm.gvk",
+            "value": {
+                "group": "operator.openshift.io",
+                "kind": "KubeDescheduler",
+                "version": "v1"
+            }
+        },
+        {
+            "type": "olm.package",
+            "value": {
+                "packageName": "cluster-kube-descheduler-operator",
+                "version": "5.3.3"
+            }
+        },
+        {
+            "type": "olm.csv.metadata",
+            "value": {
+                "annotations": {
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"operator.openshift.io/v1\",\n    \"kind\": \"KubeDescheduler\",\n    \"metadata\": {\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kube-descheduler-operator\"\n    },\n    \"spec\": {\n      \"deschedulingIntervalSeconds\": 3600,\n      \"managementState\": \"Managed\",\n      \"mode\": \"Predictive\",\n      \"profiles\": [\"AffinityAndTaints\"]\n    }\n  }\n]\n",
+                    "capabilities": "Basic Install",
+                    "categories": "OpenShift Optional",
+                    "certified": "false",
+                    "console.openshift.io/operator-monitoring-default": "true",
+                    "containerImage": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:676bd6c52c48775232c2c8e8d4002b841677cf433412505e3ca689773e1e371e",
+                    "createdAt": "2026/08/13",
+                    "description": "An operator to run descheduler in Openshift cluster.",
+                    "features.operators.openshift.io/cnf": "false",
+                    "features.operators.openshift.io/cni": "false",
+                    "features.operators.openshift.io/csi": "false",
+                    "features.operators.openshift.io/disconnected": "true",
+                    "features.operators.openshift.io/fips-compliant": "true",
+                    "features.operators.openshift.io/proxy-aware": "false",
+                    "features.operators.openshift.io/tls-profiles": "false",
+                    "features.operators.openshift.io/token-auth-aws": "false",
+                    "features.operators.openshift.io/token-auth-azure": "false",
+                    "features.operators.openshift.io/token-auth-gcp": "false",
+                    "olm.skipRange": ">=5.2.0 <5.3.3",
+                    "operatorframework.io/cluster-monitoring": "true",
+                    "operatorframework.io/suggested-namespace": "openshift-kube-descheduler-operator",
+                    "operators.openshift.io/valid-subscription": "[\"OpenShift Kubernetes Engine\", \"OpenShift Container Platform\", \"OpenShift Platform Plus\"]",
+                    "repository": "https://github.com/openshift/cluster-kube-descheduler-operator",
+                    "support": "Red Hat, Inc."
+                },
+                "apiServiceDefinitions": {},
+                "crdDescriptions": {
+                    "owned": [
+                        {
+                            "name": "kubedeschedulers.operator.openshift.io",
+                            "version": "v1",
+                            "kind": "KubeDescheduler",
+                            "displayName": "Kube Descheduler",
+                            "description": "KubeDescheduler is the Schema for the deschedulers API"
+                        }
+                    ]
+                },
+                "description": "The Kube Descheduler Operator provides the ability to evict a running pod so that the pod can be rescheduled onto a more suitable node.\n\nThere are several situations where descheduling can benefit your cluster:\n\n* Nodes are underutilized or overutilized.\n* Pod and node affinity requirements, such as taints or labels, have changed and the original scheduling decisions are no longer appropriate for certain nodes.\n* Node failure requires pods to be moved.\n* New nodes are added to clusters.\n\n## Descheduler Profiles\n\nOnce the operator is installed, you can configure one or more profiles to identify pods to evict. The scheduler will schedule the replacement of the evicted pods.\n\nThe following profiles are available:\n\n* AffinityAndTaints\n* TopologyAndDuplicates\n* SoftTopologyAndDuplicates\n* LifecycleAndUtilization\n* LongLifecycle\n* CompactAndScale\n* EvictPodsWithPVC\n* EvictPodsWithLocalStorage\n\nThese profiles are documented in detail in the [descheduler operator README](https://github.com/openshift/cluster-kube-descheduler-operator#profiles).\n\n## Additional Parameters\n\nIn addition to the profiles, the following parameters can be configured:\n\n* `deschedulingIntervalSeconds` - Set the number of seconds between descheduler runs. A value of `0` in this field runs the descheduler once and exits.\n* `mode` - Configures the descheduler to either evict pods or to simulate the eviction.\n* `profileCustomizations` - Allows certain profile parameters to be tweaked, such as `podLifetime` (see [README](https://github.com/openshift/cluster-kube-descheduler-operator#profile-customizations) for more info).\n* `evictionLimits` - Restricts the number of evictions during each descheduling run.\n",
+                "displayName": "Kube Descheduler Operator",
+                "installModes": [
+                    {
+                        "type": "OwnNamespace",
+                        "supported": true
+                    },
+                    {
+                        "type": "SingleNamespace",
+                        "supported": true
+                    },
+                    {
+                        "type": "MultiNamespace",
+                        "supported": false
+                    },
+                    {
+                        "type": "AllNamespaces",
+                        "supported": false
+                    }
+                ],
+                "keywords": [
+                    "scheduling",
+                    "descheduler",
+                    "workload"
+                ],
+                "labels": {
+                    "operatorframework.io/arch.amd64": "supported",
+                    "operatorframework.io/arch.arm64": "supported",
+                    "operatorframework.io/arch.ppc64le": "supported",
+                    "operatorframework.io/arch.s390x": "supported"
+                },
+                "links": [
+                    {
+                        "name": "Source Code",
+                        "url": "https://github.com/openshift/cluster-kube-descheduler-operator"
+                    }
+                ],
+                "maintainers": [
+                    {
+                        "name": "Red Hat",
+                        "email": "support@redhat.com"
+                    }
+                ],
+                "maturity": "beta",
+                "minKubeVersion": "1.33.0",
+                "provider": {
+                    "name": "Red Hat, Inc."
+                }
+            }
+        }
+    ],
+    "relatedImages": [
+        {
+            "name": "descheduler-operand",
+            "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:b68d89922cee6de05de950d5672195ba871509721fcd8fd9132b1b1b68bc4a6b"
+        },
+        {
+            "name": "descheduler-operator",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:676bd6c52c48775232c2c8e8d4002b841677cf433412505e3ca689773e1e371e"
+        },
+        {
+            "name": "",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:75290dbd0efdcd9a70a56e81c215b7f2a21901ff11b5ce4f9dd7c1623013e10b"
+        }
+    ]
+}
+{
+    "schema": "olm.bundle",
     "name": "clusterkubedescheduleroperator.v5.4.0",
     "package": "cluster-kube-descheduler-operator",
     "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c825960061a77552cbda6908475604447880ad030332f12c89c6e1f98827cf5a",
@@ -819,12 +1091,140 @@
             "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:4f77abb1261f42d79b51ec390839f62ec4275d6c77bc6be1e57d7e625bbfb80b"
         },
         {
+            "name": "",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c825960061a77552cbda6908475604447880ad030332f12c89c6e1f98827cf5a"
+        },
+        {
+            "name": "descheduler-operator",
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:d8b97450fa89ce6cebc05ecfda560009a73dc3e947305e4b686f295955179e01"
+        }
+    ]
+}
+{
+    "schema": "olm.bundle",
+    "name": "clusterkubedescheduleroperator.v5.4.1",
+    "package": "cluster-kube-descheduler-operator",
+    "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:1f1edbc5d84ccb578188a335fbcc3870593a2f44f0ebbbb2114a8440183b1f78",
+    "properties": [
+        {
+            "type": "olm.gvk",
+            "value": {
+                "group": "operator.openshift.io",
+                "kind": "KubeDescheduler",
+                "version": "v1"
+            }
+        },
+        {
+            "type": "olm.package",
+            "value": {
+                "packageName": "cluster-kube-descheduler-operator",
+                "version": "5.4.1"
+            }
+        },
+        {
+            "type": "olm.csv.metadata",
+            "value": {
+                "annotations": {
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"operator.openshift.io/v1\",\n    \"kind\": \"KubeDescheduler\",\n    \"metadata\": {\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kube-descheduler-operator\"\n    },\n    \"spec\": {\n      \"deschedulingIntervalSeconds\": 3600,\n      \"managementState\": \"Managed\",\n      \"mode\": \"Predictive\",\n      \"profiles\": [\"AffinityAndTaints\"]\n    }\n  }\n]\n",
+                    "capabilities": "Basic Install",
+                    "categories": "OpenShift Optional",
+                    "certified": "false",
+                    "console.openshift.io/operator-monitoring-default": "true",
+                    "containerImage": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:d8b97450fa89ce6cebc05ecfda560009a73dc3e947305e4b686f295955179e01",
+                    "createdAt": "2026-08-13",
+                    "description": "An operator to run descheduler in Openshift cluster.",
+                    "features.operators.openshift.io/cnf": "false",
+                    "features.operators.openshift.io/cni": "false",
+                    "features.operators.openshift.io/csi": "false",
+                    "features.operators.openshift.io/disconnected": "true",
+                    "features.operators.openshift.io/fips-compliant": "true",
+                    "features.operators.openshift.io/proxy-aware": "false",
+                    "features.operators.openshift.io/tls-profiles": "false",
+                    "features.operators.openshift.io/token-auth-aws": "false",
+                    "features.operators.openshift.io/token-auth-azure": "false",
+                    "features.operators.openshift.io/token-auth-gcp": "false",
+                    "olm.skipRange": ">=5.3.0 <5.4.1",
+                    "operatorframework.io/cluster-monitoring": "true",
+                    "operatorframework.io/suggested-namespace": "openshift-kube-descheduler-operator",
+                    "operators.openshift.io/valid-subscription": "[\"OpenShift Kubernetes Engine\", \"OpenShift Container Platform\", \"OpenShift Platform Plus\"]",
+                    "repository": "https://github.com/openshift/cluster-kube-descheduler-operator",
+                    "support": "Red Hat, Inc."
+                },
+                "apiServiceDefinitions": {},
+                "crdDescriptions": {
+                    "owned": [
+                        {
+                            "name": "kubedeschedulers.operator.openshift.io",
+                            "version": "v1",
+                            "kind": "KubeDescheduler",
+                            "displayName": "Kube Descheduler",
+                            "description": "KubeDescheduler is the Schema for the deschedulers API"
+                        }
+                    ]
+                },
+                "description": "The Kube Descheduler Operator provides the ability to evict a running pod so that the pod can be rescheduled onto a more suitable node.\n\nThere are several situations where descheduling can benefit your cluster:\n\n* Nodes are underutilized or overutilized.\n* Pod and node affinity requirements, such as taints or labels, have changed and the original scheduling decisions are no longer appropriate for certain nodes.\n* Node failure requires pods to be moved.\n* New nodes are added to clusters.\n\n## Descheduler Profiles\n\nOnce the operator is installed, you can configure one or more profiles to identify pods to evict. The scheduler will schedule the replacement of the evicted pods.\n\nThe following profiles are available:\n\n* AffinityAndTaints\n* TopologyAndDuplicates\n* SoftTopologyAndDuplicates\n* LifecycleAndUtilization\n* LongLifecycle\n* CompactAndScale\n* EvictPodsWithPVC\n* EvictPodsWithLocalStorage\n\nThese profiles are documented in detail in the [descheduler operator README](https://github.com/openshift/cluster-kube-descheduler-operator#profiles).\n\n## Additional Parameters\n\nIn addition to the profiles, the following parameters can be configured:\n\n* `deschedulingIntervalSeconds` - Set the number of seconds between descheduler runs. A value of `0` in this field runs the descheduler once and exits.\n* `mode` - Configures the descheduler to either evict pods or to simulate the eviction.\n* `profileCustomizations` - Allows certain profile parameters to be tweaked, such as `podLifetime` (see [README](https://github.com/openshift/cluster-kube-descheduler-operator#profile-customizations) for more info).\n* `evictionLimits` - Restricts the number of evictions during each descheduling run.\n",
+                "displayName": "Kube Descheduler Operator",
+                "installModes": [
+                    {
+                        "type": "OwnNamespace",
+                        "supported": true
+                    },
+                    {
+                        "type": "SingleNamespace",
+                        "supported": true
+                    },
+                    {
+                        "type": "MultiNamespace",
+                        "supported": false
+                    },
+                    {
+                        "type": "AllNamespaces",
+                        "supported": false
+                    }
+                ],
+                "keywords": [
+                    "scheduling",
+                    "descheduler",
+                    "workload"
+                ],
+                "labels": {
+                    "operatorframework.io/arch.amd64": "supported",
+                    "operatorframework.io/arch.arm64": "supported",
+                    "operatorframework.io/arch.ppc64le": "supported",
+                    "operatorframework.io/arch.s390x": "supported"
+                },
+                "links": [
+                    {
+                        "name": "Source Code",
+                        "url": "https://github.com/openshift/cluster-kube-descheduler-operator"
+                    }
+                ],
+                "maintainers": [
+                    {
+                        "name": "Red Hat",
+                        "email": "support@redhat.com"
+                    }
+                ],
+                "maturity": "beta",
+                "minKubeVersion": "1.35.0",
+                "provider": {
+                    "name": "Red Hat, Inc."
+                }
+            }
+        }
+    ],
+    "relatedImages": [
+        {
+            "name": "descheduler-operand",
+            "image": "registry.redhat.io/kube-descheduler-operator/descheduler-rhel9@sha256:4f77abb1261f42d79b51ec390839f62ec4275d6c77bc6be1e57d7e625bbfb80b"
+        },
+        {
             "name": "descheduler-operator",
             "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:d8b97450fa89ce6cebc05ecfda560009a73dc3e947305e4b686f295955179e01"
         },
         {
             "name": "",
-            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c825960061a77552cbda6908475604447880ad030332f12c89c6e1f98827cf5a"
+            "image": "registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:1f1edbc5d84ccb578188a335fbcc3870593a2f44f0ebbbb2114a8440183b1f78"
         }
     ]
 }
