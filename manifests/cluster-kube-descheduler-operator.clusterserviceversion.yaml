@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   # The version value is substituted by the ART pipeline
-  name: clusterkubedescheduleroperator.v5.3.3
+  name: clusterkubedescheduleroperator.v5.3.4
   namespace: openshift-kube-descheduler-operator
   labels:
     operatorframework.io/arch.amd64: supported
@@ -40,7 +40,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=5.2.0 <5.3.3"
+    olm.skipRange: ">=5.2.0 <5.3.4"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -73,6 +73,7 @@ spec:
     - clusterkubedescheduleroperator.v5.3.0
     - clusterkubedescheduleroperator.v5.3.1
     - clusterkubedescheduleroperator.v5.3.2
+    - clusterkubedescheduleroperator.v5.3.3
   customresourcedefinitions:
     owned:
       - displayName: Kube Descheduler
@@ -121,7 +122,7 @@ spec:
   provider:
     name: Red Hat, Inc.
   maturity: beta
-  version: 5.3.3
+  version: 5.3.4
   relatedImages:
     - name: descheduler-operand
       image: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
@@ -139,7 +140,7 @@ spec:
   minKubeVersion: 1.33.0
   labels:
     olm-owner-enterprise-app: cluster-kube-descheduler-operator
-    olm-status-descriptors: cluster-kube-descheduler-operator.v5.3.3
+    olm-status-descriptors: cluster-kube-descheduler-operator.v5.3.4
   installModes:
     - supported: true
       type: OwnNamespace
@@ -425,7 +426,7 @@ spec:
                       - name: RELATED_IMAGE_SOFTTAINTER_IMAGE
                         value: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
                       - name: OPERAND_VERSION
-                        value: 5.3.3
+                        value: 5.3.4
                     volumeMounts:
                       - name: tmp
                         mountPath: "/tmp"
