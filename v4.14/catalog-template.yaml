@@ -93,6 +93,8 @@ entries:
     skipRange: '>=4.11.0 <4.14.2'
   - name: clusterkubedescheduleroperator.v4.14.3
     skipRange: '>=4.11.0 <4.14.3'
+  - name: clusterkubedescheduleroperator.v4.14.4
+    skipRange: '>=4.11.0 <4.14.4'
     skips:
     - clusterkubedescheduleroperator.4.14.0-202405222237
     - clusterkubedescheduleroperator.4.14.0-202311021650
@@ -146,6 +148,7 @@ entries:
     - clusterkubedescheduleroperator.4.14.0-202503310335
     - clusterkubedescheduleroperator.v4.14.1
     - clusterkubedescheduleroperator.v4.14.2
+    - clusterkubedescheduleroperator.v4.14.3
   name: stable
   package: cluster-kube-descheduler-operator
   schema: olm.channel
@@ -241,5 +244,8 @@ entries:
   schema: olm.bundle
 # Bundle version: 4.14.3
 - image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:0a360ee90e479f8a17d4292cbf21d9f930751078811c68f6cb1a3556b6de1e72
+  schema: olm.bundle
+# Bundle version: 4.14.4
+- image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c9f13e9078f20f1ea5f9bf94cb0042ce16301dd44d50c7ca8bdaf0250b550d21
   schema: olm.bundle
 schema: olm.template.basic

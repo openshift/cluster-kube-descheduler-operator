@@ -93,6 +93,8 @@ entries:
     skipRange: '>=4.11.0 <4.14.2'
   - name: clusterkubedescheduleroperator.v4.14.3
     skipRange: '>=4.11.0 <4.14.3'
+  - name: clusterkubedescheduleroperator.v4.14.4
+    skipRange: '>=4.11.0 <4.14.4'
   - name: clusterkubedescheduleroperator.v5.0.2
     replaces: clusterkubedescheduleroperator.4.14.0-202311021650
     skipRange: '>=4.12.0 <5.0.2'
@@ -102,6 +104,8 @@ entries:
     skipRange: '>=4.12.0 <5.0.4'
   - name: clusterkubedescheduleroperator.v5.0.5
     skipRange: '>=4.12.0 <5.0.5'
+  - name: clusterkubedescheduleroperator.v5.0.6
+    skipRange: '>=4.12.0 <5.0.6'
     skips:
     - clusterkubedescheduleroperator.4.14.0-202304241531
     - clusterkubedescheduleroperator.4.14.0-202305180141
@@ -165,10 +169,12 @@ entries:
     - clusterkubedescheduleroperator.v4.14.1
     - clusterkubedescheduleroperator.v4.14.2
     - clusterkubedescheduleroperator.v4.14.3
+    - clusterkubedescheduleroperator.v4.14.4
     - clusterkubedescheduleroperator.v5.0.1
     - clusterkubedescheduleroperator.v5.0.2
     - clusterkubedescheduleroperator.v5.0.3
     - clusterkubedescheduleroperator.v5.0.4
+    - clusterkubedescheduleroperator.v5.0.5
   name: stable
   package: cluster-kube-descheduler-operator
   schema: olm.channel
@@ -265,6 +271,9 @@ entries:
 # Bundle version: 4.14.3
 - image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:0a360ee90e479f8a17d4292cbf21d9f930751078811c68f6cb1a3556b6de1e72
   schema: olm.bundle
+# Bundle version: 4.14.4
+- image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:c9f13e9078f20f1ea5f9bf94cb0042ce16301dd44d50c7ca8bdaf0250b550d21
+  schema: olm.bundle
 # Bundle version: 5.0.2
 - image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:72c2aeb630281a636cad334fbbf0e67b70afba26c61a1b25a2b93277765e5ac7
   schema: olm.bundle
@@ -276,5 +285,8 @@ entries:
   schema: olm.bundle
 # Bundle version: 5.0.5
 - image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:1553c286f9ef2677a7558e6415ff4509e0192592e6c8193b595114318382a005
+  schema: olm.bundle
+# Bundle version: 5.0.6
+- image: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle@sha256:2e0f417c77dfa3ac80aa34c164b57ef5022af66f89dec9c8b13b7b55ea2787a6
   schema: olm.bundle
 schema: olm.template.basic
