@@ -1,4 +1,4 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_golang_1.26 as builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 
@@ -24,7 +24,7 @@ RUN hack/replace-image.sh manifests ${REPLACED_OPERATOR_IMG} ${OPERATOR_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_OPERAND_IMG} ${OPERAND_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_SOFTTAINER_IMG} ${SOFTTAINER_IMAGE}
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:7c372902c8d211db2d25c8277ba534a73b92742a334874dced829a63b0f21221
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:692953368d8e630f40a3c0a6135163f8824fdafc26e0400b9a6c8d7fac850366
 
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
@@ -44,9 +44,9 @@ LABEL com.redhat.component="kube-descheduler-operator-bundle-container"
 LABEL description="Descheduler support for OpenShift based on RHEL 9"
 LABEL distribution-scope="public"
 LABEL name="kube-descheduler-operator/kube-descheduler-operator-bundle"
-LABEL cpe="cpe:/a:redhat:kube_descheduler_operator:5.3::el9"
-LABEL release="5.4.0"
-LABEL version="5.4.0"
+LABEL cpe="cpe:/a:redhat:kube_descheduler_operator:5.4::el9"
+LABEL release="5.4.3"
+LABEL version="5.4.3"
 LABEL url="https://github.com/openshift/cluster-kube-descheduler-operator"
 LABEL vendor="Red Hat, Inc."
 LABEL summary="Descheduler support for OpenShift"
@@ -55,7 +55,7 @@ LABEL io.k8s.display-name="kube-descheduler-operator based on RHEL 9"
 LABEL io.k8s.description="Descheduler support for OpenShift based on RHEL 9"
 LABEL io.openshift.tags="openshift,kube-descheduler-operator"
 LABEL com.redhat.delivery.operator.bundle=true
-LABEL com.redhat.openshift.versions="v4.20"
+LABEL com.redhat.openshift.versions="v4.22"
 LABEL com.redhat.delivery.appregistry=true
 LABEL distribution-scope=public
 LABEL maintainer="AOS workloads team, <aos-workloads-staff@redhat.com>"

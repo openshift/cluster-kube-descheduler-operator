@@ -15,10 +15,12 @@ import (
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	operatorsv1 "github.com/operator-framework/api/pkg/operators/v1"
+	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -29,7 +31,6 @@ import (
 
 	descv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	deschclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
-	olmlib "github.com/openshift/library-go/test/library/olm"
 )
 
 const (
@@ -1193,13 +1194,21 @@ func testOLMMustGatherData(t testing.TB, ctx context.Context, kubeClient *k8scli
 	klog.Infof("Found CSV: %s", csvName)
 
 	g.By("Verifying Subscription exists")
-	subList, err := dynamicClient.Resource(olmlib.SubscriptionGVR()).Namespace(deschedulerNamespace).List(ctx, metav1.ListOptions{})
+	subList, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1alpha1.GroupName,
+		Version:  operatorsv1alpha1.GroupVersion,
+		Resource: "subscriptions",
+	}).Namespace(deschedulerNamespace).List(ctx, metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(len(subList.Items)).To(o.BeNumerically(">", 0))
 	klog.Infof("Found %d Subscription(s)", len(subList.Items))
 
 	g.By("Verifying OperatorGroup exists")
-	ogList, err := dynamicClient.Resource(olmlib.OperatorGroupGVR()).Namespace(deschedulerNamespace).List(ctx, metav1.ListOptions{})
+	ogList, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1.GroupVersion.Group,
+		Version:  operatorsv1.GroupVersion.Version,
+		Resource: "operatorgroups",
+	}).Namespace(deschedulerNamespace).List(ctx, metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(len(ogList.Items)).To(o.BeNumerically(">", 0))
 	klog.Infof("Found %d OperatorGroup(s)", len(ogList.Items))

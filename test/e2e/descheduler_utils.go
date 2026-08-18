@@ -23,7 +23,7 @@ import (
 
 	descv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	deschclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
-	olmlib "github.com/openshift/library-go/test/library/olm"
+	olmlib "github.com/openshift/cluster-kube-descheduler-operator/test/e2e/olm"
 )
 
 // Helper functions for resource creation and management
