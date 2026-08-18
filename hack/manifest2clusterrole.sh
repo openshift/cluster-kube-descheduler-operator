@@ -32,7 +32,6 @@ EOF
 
 cat ${CSV_FILE} | yq -M '.spec.install.spec.clusterPermissions[0].rules' >> deploy/02_clusterrole.yaml
 yq -i -P deploy/02_clusterrole.yaml
-cp deploy/02_clusterrole.yaml test/e2e/bindata/assets/03_clusterrole.yaml
 
 # Generate Role from permissions (namespace-scoped)
 cat << EOF > deploy/02_role.yaml
@@ -46,4 +45,3 @@ EOF
 
 cat ${CSV_FILE} | yq -M '.spec.install.spec.permissions[0].rules' >> deploy/02_role.yaml
 yq -i -P deploy/02_role.yaml
-cp deploy/02_role.yaml test/e2e/bindata/assets/03_role.yaml

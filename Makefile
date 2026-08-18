@@ -57,7 +57,9 @@ regen-crd:
 	sed -i '1{/^---$$/d;}' manifests/kube-descheduler-operator.crd.yaml
 	# Remove .annotations to drop controller-gen.kubebuilder.io/version as the only key set
 	yq eval 'del(.metadata.annotations)' -i manifests/kube-descheduler-operator.crd.yaml
-	cp manifests/kube-descheduler-operator.crd.yaml test/e2e/bindata/assets/00_kube-descheduler-operator-crd.yaml
+	# Keep deploy/ CRD in sync. It used to be a symlink, but go:embed cannot follow
+	# symlinks and e2e now embeds deploy/*.yaml into the OTE test binary.
+	cp manifests/kube-descheduler-operator.crd.yaml deploy/0000_00_kube-descheduler-operator.crd.yaml
 	yq '.spec.versions[] | select(.served == true) | .schema.openAPIV3Schema' manifests/kube-descheduler-operator.crd.yaml > bindata/assets/kube-descheduler/crdschema.yaml
 
 generate: regen-crd generate-clients
