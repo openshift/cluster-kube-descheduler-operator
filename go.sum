@@ -174,6 +174,8 @@ github.com/openshift/build-machinery-go v0.0.0-20251023084048-5d77c1a5e5af h1:Ui
 github.com/openshift/build-machinery-go v0.0.0-20251023084048-5d77c1a5e5af/go.mod h1:8jcm8UPtg2mCAsxfqKil1xrmRMI3a+XU2TZ9fF8A7TE=
 github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 h1:9JBeIXmnHlpXTQPi7LPmu1jdxznBhAE7bb1K+3D8gxY=
 github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235/go.mod h1:L49W6pfrZkfOE5iC1PqEkuLkXG4W0BX4w8b+L2Bv7fM=
+github.com/openshift/descheduler v0.0.0-20260819082048-43b39792d6ab h1:SRaUAhdhPj7fCebzAi12c+SL/6j9X7LZZoZNqBHcKbM=
+github.com/openshift/descheduler v0.0.0-20260819082048-43b39792d6ab/go.mod h1:rul3Lw3/DQiJEA1tE8TFppBM5w1MWw58v7f4GhXNbnc=
 github.com/openshift/library-go v0.0.0-20251021141706-f489e811f030 h1:dbv8ZYDWIl22A5WBjQJTKeENM08f8HwMBuv8glDXO/0=
 github.com/openshift/library-go v0.0.0-20251021141706-f489e811f030/go.mod h1:OlFFws1AO51uzfc48MsStGE4SFMWlMZD0+f5a/zCtKI=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
@@ -222,8 +224,6 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/tiraboschi/descheduler v0.0.0-20260730151803-6e8c772fd028 h1:a/ZYHOI/sObsnDn4SqwmxyLU2D/T2x2uTa7rjlNMsas=
-github.com/tiraboschi/descheduler v0.0.0-20260730151803-6e8c772fd028/go.mod h1:rul3Lw3/DQiJEA1tE8TFppBM5w1MWw58v7f4GhXNbnc=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 h1:6fotK7otjonDflCTK0BCfls4SPy3NcCVb5dqqmbRknE=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75/go.mod h1:KO6IkyS8Y3j8OdNO85qEYBsRPuteD+YciPomcXdrMnk=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
