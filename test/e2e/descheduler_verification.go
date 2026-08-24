@@ -41,7 +41,7 @@ const (
 )
 
 func isOperatorOLMInstallationEnabled() bool {
-	return os.Getenv("OPERATOR_IMAGE") == "" || os.Getenv("OPERAND_IMAGE") == ""
+	return os.Getenv("NO_OLM") == "" && os.Getenv("OPERATOR_IMAGE") == "" && os.Getenv("OPERAND_IMAGE") == ""
 }
 
 // Ginkgo test specs for migrated OTP tests

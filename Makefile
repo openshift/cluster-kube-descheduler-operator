@@ -36,6 +36,7 @@ $(call add-crd-gen,descheduler,./pkg/apis/descheduler/v1,./manifests,./manifests
 
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 test-e2e: GO_TEST_ARGS :=-v -timeout 0
+test-e2e: export NO_OLM = "true"
 test-e2e: test-unit
 .PHONY: test-e2e
 
