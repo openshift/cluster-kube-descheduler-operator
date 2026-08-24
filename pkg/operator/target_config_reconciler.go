@@ -77,6 +77,7 @@ const psiPath = "/proc/pressure/"
 const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
 const defaultKVParallelMigrationsPerCluster = 5
 const defaultKVParallelOutboundMigrationsPerNode = 2
+const kubevirtMigrationAwarePluginName = "KubevirtMigrationAware"
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
@@ -1097,6 +1098,12 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 			Filter: v1alpha2.PluginSet{
 				Enabled: []string{
 					defaultevictor.PluginName,
+					kubevirtMigrationAwarePluginName,
+				},
+			},
+			PreEvictionFilter: v1alpha2.PluginSet{
+				Enabled: []string{
+					kubevirtMigrationAwarePluginName,
 				},
 			},
 			Balance: v1alpha2.PluginSet{
@@ -1160,6 +1167,25 @@ func kubeVirtRelieveAndMigrateProfile(profileCustomizations *deschedulerv1.Profi
 		if err := defaultEvictorOverrides(profileCustomizations, &profile.PluginConfigs[1]); err != nil {
 			return nil, err
 		}
+	}
+
+	{
+		var parts []string
+		if profileCustomizations != nil {
+			if profileCustomizations.DevMigrationCooldown != nil {
+				parts = append(parts, fmt.Sprintf(`"migrationCooldown":%q`, profileCustomizations.DevMigrationCooldown.Duration.String()))
+			}
+			if profileCustomizations.DevMaxMigrationCooldown != nil {
+				parts = append(parts, fmt.Sprintf(`"maxMigrationCooldown":%q`, profileCustomizations.DevMaxMigrationCooldown.Duration.String()))
+			}
+			if profileCustomizations.DevMigrationHistoryWindow != nil {
+				parts = append(parts, fmt.Sprintf(`"migrationHistoryWindow":%q`, profileCustomizations.DevMigrationHistoryWindow.Duration.String()))
+			}
+		}
+		profile.PluginConfigs = append(profile.PluginConfigs, v1alpha2.PluginConfig{
+			Name: kubevirtMigrationAwarePluginName,
+			Args: runtime.RawExtension{Raw: []byte("{" + strings.Join(parts, ",") + "}")},
+		})
 	}
 
 	lowThreshold, highThreshold, err := getKubeVirtRelieveAndMigrateThresholds(profileCustomizations, args.UseDeviationThresholds)
