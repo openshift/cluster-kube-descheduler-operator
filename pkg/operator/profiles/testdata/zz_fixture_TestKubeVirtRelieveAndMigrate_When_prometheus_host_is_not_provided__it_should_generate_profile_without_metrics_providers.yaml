@@ -2,10 +2,6 @@ apiVersion: descheduler/v1alpha2
 kind: DeschedulerPolicy
 maxNoOfPodsToEvictPerNode: 2
 maxNoOfPodsToEvictTotal: 5
-metricsProviders:
-- prometheus:
-    url: https://prometheus-k8s-openshift-monitoring.apps.example.com
-  source: Prometheus
 nodeSelector: kubevirt.io/schedulable=true
 profiles:
 - name: KubeVirtRelieveAndMigrate
@@ -35,10 +31,7 @@ profiles:
       noEvictionPolicy: Mandatory
       podProtections: {}
     name: DefaultEvictor
-  - args:
-      maxMigrationCooldown: 6h0m0s
-      migrationCooldown: 15m0s
-      migrationHistoryWindow: 48h0m0s
+  - args: {}
     name: KubevirtMigrationAware
   plugins:
     balance:

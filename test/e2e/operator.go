@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/softtainter"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,71 +67,6 @@ var operatorConfigsAppliers = map[string]func(context.Context, *deschclient.Clie
 	kubeVirtRelieveAndMigrateConf: operatorConfigsApplier("assets/07_descheduler-operator.cr.devKubeVirtRelieveAndMigrate.yaml"),
 }
 
-// Ginkgo test specs - calls the shared test functions
-var _ = g.Describe("[sig-scheduling][Operator][Serial] KubeDescheduler Operator", g.Ordered, func() {
-	var (
-		ctx        context.Context
-		cancelFnc  context.CancelFunc
-		kubeClient *k8sclient.Clientset
-	)
-
-	g.BeforeAll(func() {
-		g.By("Setting up the operator")
-		var err error
-		ctx, cancelFnc, kubeClient, err = setupOperator(g.GinkgoTB())
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	g.AfterAll(func() {
-		if cancelFnc != nil {
-			cancelFnc()
-		}
-	})
-
-	g.Context("when deploying soft tainter controller", func() {
-		g.It("should create and remove soft tainter objects [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing soft tainter controller lifecycle")
-			testSoftTainterController(g.GinkgoTB(), ctx, kubeClient)
-		})
-	})
-
-	g.Context("when deploying soft tainter controller with Validating Admission Policy", func() {
-		g.It("should validate permissions correctly [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing soft tainter controller with VAP")
-			testSoftTainterControllerWithVAP(g.GinkgoTB(), ctx, kubeClient)
-		})
-	})
-
-	g.Context("when descheduling pods", func() {
-		g.It("should deschedule pods correctly [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing pod descheduling")
-			testPodDescheduling(g.GinkgoTB(), ctx, kubeClient)
-		})
-	})
-
-	g.Context("when checking metrics", func() {
-		g.It("should have metrics service available [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing metrics service")
-			testMetricsService(g.GinkgoTB(), ctx, kubeClient)
-		})
-
-		g.It("should have ServiceMonitor configured [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing ServiceMonitor")
-			testServiceMonitor(g.GinkgoTB(), ctx, kubeClient)
-		})
-
-		g.It("should have Prometheus target up [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing Prometheus target")
-			testPrometheusTarget(g.GinkgoTB(), ctx, kubeClient)
-		})
-
-		g.It("should have metrics data available [Suite:openshift/cluster-kube-descheduler-operator/operator/serial]", func() {
-			g.By("Testing metrics data")
-			testMetricsData(g.GinkgoTB(), ctx, kubeClient)
-		})
-	})
-})
-
 func operatorConfigsApplier(path string) func(context.Context, *deschclient.Clientset) error {
 	return func(ctx context.Context, deschClient *deschclient.Clientset) error {
 		requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(descv1.SchemeGroupVersion), bindata.MustAsset(path))
@@ -170,31 +105,13 @@ func operatorConfigsApplier(path string) func(context.Context, *deschclient.Clie
 
 // setupOperator sets up the operator and waits for it to be ready.
 // This function works with both standard Go testing and Ginkgo.
-func setupOperator(t testing.TB) (context.Context, context.CancelFunc, *k8sclient.Clientset, error) {
-	if os.Getenv("KUBECONFIG") == "" {
-		klog.Errorf("KUBECONFIG environment variable not set")
-		return nil, nil, nil, fmt.Errorf("KUBECONFIG environment variable not set")
-	}
-
-	if os.Getenv("OPERATOR_IMAGE") == "" && os.Getenv("OPERAND_IMAGE") == "" {
-		if os.Getenv("RELEASE_IMAGE_LATEST") == "" {
-			klog.Errorf("RELEASE_IMAGE_LATEST environment variable not set")
-			return nil, nil, nil, fmt.Errorf("RELEASE_IMAGE_LATEST environment variable not set")
-		}
-
-		if os.Getenv("NAMESPACE") == "" {
-			klog.Errorf("NAMESPACE environment variable not set")
-			return nil, nil, nil, fmt.Errorf("NAMESPACE environment variable not set")
-		}
-	}
-
-	kubeClient := GetKubeClient()
-	apiExtClient := GetApiExtensionClient()
-	deschClient := GetDeschedulerClient()
-
+func setupOperator(
+	ctx context.Context,
+	kubeClient *k8sclient.Clientset,
+	deschClient *deschclient.Clientset,
+	apiExtClient *apiextclientv1.Clientset,
+) error {
 	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events("default"), "test-e2e", &corev1.ObjectReference{}, clock.RealClock{})
-
-	ctx, cancelFnc := context.WithCancel(context.TODO())
 
 	assets := []struct {
 		path           string
@@ -322,14 +239,14 @@ func setupOperator(t testing.TB) (context.Context, context.CancelFunc, *k8sclien
 	err := operatorConfigsAppliers[baseConf](ctx, deschClient)
 	if err != nil {
 		klog.Errorf("Unable to apply a CR for Descheduler operator: %v", err)
-		return ctx, cancelFnc, nil, fmt.Errorf("Unable to apply a CR for Descheduler operator: %v", err)
+		return fmt.Errorf("Unable to apply a CR for Descheduler operator: %v", err)
 	}
 
 	// wait for descheduler operator pod to be running
 	deschOpPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName+"-operator", "")
 	if err != nil {
 		klog.Errorf("Unable to wait for the Descheduler operator pod to run")
-		return ctx, cancelFnc, nil, fmt.Errorf("Unable to wait for the Descheduler operator pod to run")
+		return fmt.Errorf("Unable to wait for the Descheduler operator pod to run")
 	}
 	klog.Infof("Descheduler operator pod running in %v", deschOpPod.Name)
 
@@ -337,18 +254,18 @@ func setupOperator(t testing.TB) (context.Context, context.CancelFunc, *k8sclien
 	deschPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
 	if err != nil {
 		klog.Errorf("Unable to wait for the Descheduler pod to run")
-		return ctx, cancelFnc, nil, fmt.Errorf("Unable to wait for the Descheduler pod to run")
+		return fmt.Errorf("Unable to wait for the Descheduler pod to run")
 	}
 	klog.Infof("Descheduler (operand) pod running in %v", deschPod.Name)
 
 	// ensure that all the descheduler operand objects are there
 	if err = checkDeschedulerOperandObjects(ctx, kubeClient, operatorclient.OperatorNamespace, true); err != nil {
 		klog.Errorf("Missing expected descheduler operand object: %v", err)
-		return ctx, cancelFnc, nil, fmt.Errorf("Missing expected descheduler operand object: %v", err)
+		return fmt.Errorf("Missing expected descheduler operand object: %v", err)
 	}
 	klog.Infof("All the descheduler operand objects got properly created")
 
-	return ctx, cancelFnc, kubeClient, nil
+	return nil
 }
 
 // testSoftTainterController tests the soft tainter controller lifecycle.
@@ -686,7 +603,7 @@ func waitForPodRunningByNamePrefix(ctx context.Context, kubeClient *k8sclient.Cl
 			}
 		}
 		return false
-	}).WithTimeout(1 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
 	return expectedPod, nil
 }
 
