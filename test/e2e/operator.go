@@ -33,7 +33,6 @@ import (
 	deschclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	ssscheme "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/scheme"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
-	"github.com/openshift/cluster-kube-descheduler-operator/test/e2e/bindata"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
@@ -63,13 +62,13 @@ const (
 )
 
 var operatorConfigsAppliers = map[string]func(context.Context, *deschclient.Clientset) error{
-	baseConf:                      operatorConfigsApplier("assets/07_descheduler-operator.cr.yaml"),
-	kubeVirtRelieveAndMigrateConf: operatorConfigsApplier("assets/07_descheduler-operator.cr.devKubeVirtRelieveAndMigrate.yaml"),
+	baseConf:                      operatorConfigsApplier("testdata/07_descheduler-operator.cr.yaml"),
+	kubeVirtRelieveAndMigrateConf: operatorConfigsApplier("testdata/07_descheduler-operator.cr.devKubeVirtRelieveAndMigrate.yaml"),
 }
 
 func operatorConfigsApplier(path string) func(context.Context, *deschclient.Clientset) error {
 	return func(ctx context.Context, deschClient *deschclient.Clientset) error {
-		requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(descv1.SchemeGroupVersion), bindata.MustAsset(path))
+		requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(descv1.SchemeGroupVersion), mustTestAsset(path))
 		if err != nil {
 			klog.Errorf("Unable to decode %v: %v", path, err)
 			return err
@@ -115,66 +114,76 @@ func setupOperator(
 
 	assets := []struct {
 		path           string
+		read           func(string) []byte
 		readerAndApply func(objBytes []byte) error
 	}{
 		{
-			path: "assets/00_kube-descheduler-operator-crd.yaml",
+			path: "0000_00_kube-descheduler-operator.crd.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(ctx, apiExtClient.ApiextensionsV1(), eventRecorder, resourceread.ReadCustomResourceDefinitionV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/01_namespace.yaml",
+			path: "01_namespace.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyNamespace(ctx, kubeClient.CoreV1(), eventRecorder, resourceread.ReadNamespaceV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/02_serviceaccount.yaml",
+			path: "04_serviceaccount.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyServiceAccount(ctx, kubeClient.CoreV1(), eventRecorder, resourceread.ReadServiceAccountV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/03_clusterrole.yaml",
+			path: "02_clusterrole.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyClusterRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/04_clusterrolebinding.yaml",
+			path: "03_clusterrolebinding.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyClusterRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleBindingV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/04_prometheus-cluster-role-binding.yaml",
+			path: "testdata/04_prometheus-cluster-role-binding.yaml",
+			read: mustTestAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyClusterRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleBindingV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/03_role.yaml",
+			path: "02_role.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/03_rolebinding.yaml",
+			path: "03_rolebinding.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleBindingV1OrDie(objBytes))
 				return err
 			},
 		},
 		{
-			path: "assets/05_deployment.yaml",
+			path: "05_deployment.yaml",
+			read: mustDeployAsset,
 			readerAndApply: func(objBytes []byte) error {
 				required := resourceread.ReadDeploymentV1OrDie(objBytes)
 				// override the operator image with the one built in the CI
@@ -215,7 +224,8 @@ func setupOperator(
 			},
 		},
 		{
-			path: "assets/06_configmap.yaml",
+			path: "testdata/06_configmap.yaml",
+			read: mustTestAsset,
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyConfigMap(ctx, kubeClient.CoreV1(), eventRecorder, resourceread.ReadConfigMapV1OrDie(objBytes))
 				return err
@@ -227,7 +237,7 @@ func setupOperator(
 	o.Eventually(func() bool {
 		for _, asset := range assets {
 			klog.Infof("Creating %v", asset.path)
-			if err := asset.readerAndApply(bindata.MustAsset(asset.path)); err != nil {
+			if err := asset.readerAndApply(asset.read(asset.path)); err != nil {
 				klog.Errorf("Unable to create %v: %v", asset.path, err)
 				return false
 			}
