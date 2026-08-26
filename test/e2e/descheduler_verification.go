@@ -73,36 +73,44 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	g.AfterAll(func() {
-		if cancelFnc != nil {
-			cancelFnc()
-		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cleanupCancel()
 
 		if isOperatorOLMInstallationEnabled() {
-			// Cleanup OLM resources
 			g.By("Cleaning up operator installation")
+
 			og := &operatorsv1.OperatorGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "descheduler-og",
 					Namespace: operatorclient.OperatorNamespace,
 				},
 			}
-			sub, _ := packagemanifestKDO(ctx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
+			sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
+			if err != nil {
+				klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
+			}
 
-			deleteKubeDescheduler(ctx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
-			deleteSubscription(ctx, dynamicClient, sub)
-			deleteOperatorGroup(ctx, dynamicClient, og)
+			if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+				klog.Warningf("Failed to delete KubeDescheduler: %v", err)
+			}
+			if sub != nil {
+				if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
+					klog.Warningf("Failed to delete Subscription: %v", err)
+				}
+			}
+			if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
+				klog.Warningf("Failed to delete OperatorGroup: %v", err)
+			}
 		}
 
-		// Delete the namespace
 		g.By("Deleting operator namespace")
-		err := kubeClient.CoreV1().Namespaces().Delete(ctx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
+		err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
 		if err != nil {
 			klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
 		}
 
-		// Wait for namespace to be fully deleted before completing AfterAll
 		g.By("Ensuring namespace is fully deleted")
-		err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
 			if err != nil {
 				if strings.Contains(err.Error(), "not found") {
@@ -117,6 +125,10 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		})
 		if err != nil {
 			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
+		}
+
+		if cancelFnc != nil {
+			cancelFnc()
 		}
 	})
 

@@ -718,6 +718,14 @@ func packagemanifestKDO(ctx context.Context, dynamicClient dynamic.Interface, pa
 		return nil, fmt.Errorf("failed to convert Subscription from unstructured: %w", err)
 	}
 
+	// The unstructured Subscription uses "package" for the package name field,
+	// but the typed Subscription struct maps Package to JSON tag "name".
+	// FromUnstructured looks for "name" in spec and finds nothing, leaving
+	// Spec.Package empty. Set it explicitly from the known packageName.
+	if sub.Spec.Package == "" {
+		sub.Spec.Package = packageName
+	}
+
 	klog.Infof("Found package manifest: channel=%s, source=%s, startingCSV=%s",
 		sub.Spec.Channel, sub.Spec.CatalogSource, sub.Spec.StartingCSV)
 
