@@ -46,10 +46,55 @@ func TestExtended(t *testing.T) {
 	o.RegisterTestingT(t)
 
 	t.Run("Descheduler Operator", func(t *testing.T) {
-		// Setup operator and wait for it to be ready
-		ctx, cancelFnc, kubeClient, err := setupOperator(t)
-		if err != nil {
-			t.Fatalf("Failed to setup operator: %v", err)
+		var ctx context.Context
+		var cancelFnc context.CancelFunc
+		var kubeClient *k8sclient.Clientset
+		var err error
+
+		if os.Getenv("SKIP_OPERATOR_INSTALL") == "true" {
+			klog.Infof("SKIP_OPERATOR_INSTALL=true: skipping operator installation, verifying existing operator")
+			kubeClient = GetKubeClient()
+			ctx, cancelFnc = context.WithCancel(context.TODO())
+
+			klog.Infof("Verifying deployments in %s namespace are running...", operatorclient.OperatorNamespace)
+			o.Eventually(func() bool {
+				deployments, listErr := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
+				if listErr != nil {
+					klog.Errorf("Unable to list deployments: %v", listErr)
+					return false
+				}
+				if len(deployments.Items) == 0 {
+					klog.Infof("No deployments found yet in %s", operatorclient.OperatorNamespace)
+					return false
+				}
+				for _, dep := range deployments.Items {
+					if dep.Spec.Replicas != nil && dep.Status.ReadyReplicas < *dep.Spec.Replicas {
+						klog.Infof("Deployment %s not ready: %d/%d replicas", dep.Name, dep.Status.ReadyReplicas, *dep.Spec.Replicas)
+						return false
+					}
+				}
+				return true
+			}).WithTimeout(5*time.Minute).WithPolling(10*time.Second).Should(o.BeTrue(), "Deployments in operator namespace not ready")
+			klog.Infof("All deployments in %s namespace are running", operatorclient.OperatorNamespace)
+
+			deschClient := GetDeschedulerClient()
+			klog.Infof("Ensuring base KubeDescheduler CR exists...")
+			if crErr := operatorConfigsAppliers[baseConf](ctx, deschClient); crErr != nil {
+				t.Fatalf("Failed to apply base KubeDescheduler CR: %v", crErr)
+			}
+			klog.Infof("Base KubeDescheduler CR applied")
+
+			klog.Infof("Waiting for operand deployment to be ready...")
+			_, err = waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+			if err != nil {
+				t.Fatalf("Operand not running: %v", err)
+			}
+			klog.Infof("Operand deployment verified")
+		} else {
+			ctx, cancelFnc, kubeClient, err = setupOperator(t)
+			if err != nil {
+				t.Fatalf("Failed to setup operator: %v", err)
+			}
 		}
 		defer cancelFnc()
 
