@@ -1,0 +1,55 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: AffinityAndTaints
+  pluginConfig:
+  - args:
+      namespaces:
+        include:
+        - ns1
+        - ns2
+    name: RemovePodsViolatingInterPodAntiAffinity
+  - args:
+      namespaces:
+        include:
+        - ns1
+        - ns2
+    name: RemovePodsViolatingNodeTaints
+  - args:
+      namespaces:
+        include:
+        - ns1
+        - ns2
+      nodeAffinityType:
+      - requiredDuringSchedulingIgnoredDuringExecution
+    name: RemovePodsViolatingNodeAffinity
+  - args:
+      evictLocalStoragePods: true
+      podProtections: {}
+      priorityThreshold:
+        name: ""
+        value: 500
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled: null
+    deschedule:
+      disabled: null
+      enabled:
+      - RemovePodsViolatingInterPodAntiAffinity
+      - RemovePodsViolatingNodeTaints
+      - RemovePodsViolatingNodeAffinity
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

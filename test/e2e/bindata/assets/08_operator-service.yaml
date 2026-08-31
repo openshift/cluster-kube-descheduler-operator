@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: descheduler-operator-metrics
+  namespace: openshift-kube-descheduler-operator
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: descheduler-operator-serving-cert
+  labels:
+    name: descheduler-operator
+spec:
+  selector:
+    name: descheduler-operator
+  ports:
+    - name: https
+      port: 8443
+      targetPort: 8443
+      protocol: TCP

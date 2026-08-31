@@ -12,6 +12,8 @@ spec:
       name: descheduler-operator
   template:
     metadata:
+      annotations:
+        openshift.io/required-scc: restricted-v2
       labels:
         name: descheduler-operator
     spec:
@@ -27,13 +29,28 @@ spec:
             capabilities:
               drop: ["ALL"]
           image: # set in e2e
+          terminationMessagePolicy: FallbackToLogsOnError
           resources:
             requests:
               memory: 50Mi
               cpu: 10m
           ports:
-          - containerPort: 60000
-            name: metrics
+          - containerPort: 8443
+            name: https
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              port: 8443
+              path: /healthz
+            initialDelaySeconds: 45
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              port: 8443
+              path: /healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 10
           command:
           - cluster-kube-descheduler-operator
           args:
@@ -53,7 +70,14 @@ spec:
           volumeMounts:
           - name: tmp
             mountPath: "/tmp"
+          - name: serving-cert
+            mountPath: /var/run/secrets/serving-cert
+            readOnly: true
       serviceAccountName: openshift-descheduler
       volumes:
       - name: tmp
         emptyDir: {}
+      - name: serving-cert
+        secret:
+          secretName: descheduler-operator-serving-cert
+          optional: true

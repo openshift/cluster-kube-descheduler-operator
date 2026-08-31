@@ -14,6 +14,7 @@ spec:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: openshift-descheduler
+        openshift.io/required-scc: restricted-v2
       labels:
         app: "descheduler"
     spec:
@@ -38,6 +39,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           image: ${OPERAND_IMAGE}
+          terminationMessagePolicy: FallbackToLogsOnError
           resources:
             requests:
               cpu: "100m"

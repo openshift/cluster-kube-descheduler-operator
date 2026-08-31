@@ -2,7 +2,6 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   # The version value is substituted by the ART pipeline
-  name: clusterkubedescheduleroperator.v5.4.2
   namespace: openshift-kube-descheduler-operator
   labels:
     operatorframework.io/arch.amd64: supported
@@ -29,7 +28,7 @@ metadata:
       ]
     certified: "false"
     containerImage: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
-    createdAt: "2026-08-13"
+    createdAt: "2026-08-31"
     features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
@@ -40,7 +39,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=5.3.0 <5.4.2"
+    olm.skipRange: ">=5.3.0 <5.4.0"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -50,6 +49,7 @@ metadata:
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: "openshift-kube-descheduler-operator"
     console.openshift.io/operator-monitoring-default: "true"
+  name: clusterkubedescheduleroperator.v5.4.0
 spec:
   replaces: clusterkubedescheduleroperator.v5.3.0
   # buffering up to 6 5.0.z releases to allow to include these in all supported bundle index images
@@ -70,8 +70,6 @@ spec:
     - clusterkubedescheduleroperator.v5.3.4
     - clusterkubedescheduleroperator.v5.3.5
     - clusterkubedescheduleroperator.v5.3.6
-    - clusterkubedescheduleroperator.v5.4.0
-    - clusterkubedescheduleroperator.v5.4.1
   customresourcedefinitions:
     owned:
       - displayName: Kube Descheduler
@@ -120,7 +118,7 @@ spec:
   provider:
     name: Red Hat, Inc.
   maturity: beta
-  version: 5.4.2
+  version: 5.4.0
   relatedImages:
     - name: descheduler-operand
       image: registry-proxy.engineering.redhat.com/rh-osbs/descheduler-rhel-9:latest
@@ -138,7 +136,7 @@ spec:
   minKubeVersion: 1.35.0
   labels:
     olm-owner-enterprise-app: cluster-kube-descheduler-operator
-    olm-status-descriptors: cluster-kube-descheduler-operator.v5.4.2
+    olm-status-descriptors: cluster-kube-descheduler-operator.v5.4.0
   installModes:
     - supported: true
       type: OwnNamespace
@@ -202,23 +200,6 @@ spec:
             - apiGroups:
                 - ""
               resources:
-                - services
-                - configmaps
-                - secrets
-                - events
-                - serviceaccounts
-              verbs:
-                - get
-                - watch
-                - list
-                - create
-                - update
-                - patch
-                - delete
-                - deletecollection
-            - apiGroups:
-                - ""
-              resources:
                 - namespaces
                 - pods
                 - persistentvolumeclaims
@@ -246,18 +227,67 @@ spec:
                 - rbac.authorization.k8s.io
               resources:
                 - clusterroles
-                - clusterrolebindings
-                - roles
-                - rolebindings
+              verbs:
+                - create
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterroles
+              resourceNames:
+                - openshift-descheduler-operand
+                - openshift-descheduler-softtainter
               verbs:
                 - get
                 - watch
                 - list
-                - create
                 - update
                 - patch
                 - delete
-                - deletecollection
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterrolebindings
+              verbs:
+                - create
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterrolebindings
+              resourceNames:
+                - openshift-descheduler-operand
+                - openshift-descheduler-softtainter
+                - cluster-monitoring-view-cr
+                - openshift-descheduler-softtainter-monitoring
+              verbs:
+                - get
+                - watch
+                - list
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - roles
+                - rolebindings
+              verbs:
+                - create
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - roles
+                - rolebindings
+              resourceNames:
+                - openshift-descheduler-operand
+                - openshift-descheduler-softtainter
+                - prometheus-k8s
+              verbs:
+                - get
+                - watch
+                - list
+                - update
+                - patch
+                - delete
             - apiGroups:
                 - scheduling.k8s.io
               resources:
@@ -282,32 +312,6 @@ spec:
                 - get
                 - watch
                 - list
-            - apiGroups:
-                - apps
-              resources:
-                - deployments
-                - deployments/scale
-              verbs:
-                - get
-                - watch
-                - list
-                - create
-                - update
-                - patch
-                - delete
-                - deletecollection
-            - apiGroups:
-                - coordination.k8s.io
-              resources:
-                - leases
-              verbs:
-                - get
-                - watch
-                - list
-                - create
-                - update
-                - patch
-                - delete
             - apiGroups:
                 - events.k8s.io
               resources:
@@ -349,28 +353,40 @@ spec:
                 - admissionregistration.k8s.io
               resources:
                 - validatingadmissionpolicies
+              verbs:
+                - create
+            - apiGroups:
+                - admissionregistration.k8s.io
+              resources:
+                - validatingadmissionpolicies
+              resourceNames:
+                - openshift-descheduler-softtainter-vap
+              verbs:
+                - get
+                - watch
+                - list
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - admissionregistration.k8s.io
+              resources:
                 - validatingadmissionpolicybindings
               verbs:
-                - get
-                - watch
-                - list
                 - create
-                - update
-                - patch
-                - delete
-                - deletecollection
             - apiGroups:
-                - networking.k8s.io
+                - admissionregistration.k8s.io
               resources:
-                - networkpolicies
+                - validatingadmissionpolicybindings
+              resourceNames:
+                - openshift-descheduler-softtainter-vap-binding
               verbs:
-                - create
-                - delete
                 - get
-                - list
-                - patch
-                - update
                 - watch
+                - list
+                - update
+                - patch
+                - delete
             - apiGroups:
                 - kubevirt.io
               resources:
@@ -386,6 +402,64 @@ spec:
               verbs:
                 - get
                 - list
+            - apiGroups:
+                - networking.k8s.io
+              resources:
+                - networkpolicies
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+      permissions:
+        - serviceAccountName: openshift-descheduler
+          rules:
+            - apiGroups:
+                - ""
+              resources:
+                - services
+                - configmaps
+                - secrets
+                - events
+                - serviceaccounts
+              verbs:
+                - get
+                - watch
+                - list
+                - create
+                - update
+                - patch
+                - delete
+                - deletecollection
+            - apiGroups:
+                - apps
+              resources:
+                - deployments
+                - deployments/scale
+              verbs:
+                - get
+                - watch
+                - list
+                - create
+                - update
+                - patch
+                - delete
+                - deletecollection
+            - apiGroups:
+                - coordination.k8s.io
+              resources:
+                - leases
+              verbs:
+                - get
+                - watch
+                - list
+                - create
+                - update
+                - patch
+                - delete
       deployments:
         - name: descheduler-operator
           spec:
@@ -395,6 +469,8 @@ spec:
                 name: descheduler-operator
             template:
               metadata:
+                annotations:
+                  openshift.io/required-scc: restricted-v2
                 labels:
                   name: descheduler-operator
               spec:
@@ -410,13 +486,28 @@ spec:
                       capabilities:
                         drop: ["ALL"]
                     image: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
+                    terminationMessagePolicy: FallbackToLogsOnError
                     resources:
                       requests:
                         memory: 50Mi
                         cpu: 10m
                     ports:
-                      - containerPort: 60000
-                        name: metrics
+                      - containerPort: 8443
+                        name: https
+                    livenessProbe:
+                      httpGet:
+                        scheme: HTTPS
+                        port: 8443
+                        path: /healthz
+                      initialDelaySeconds: 45
+                      timeoutSeconds: 10
+                    readinessProbe:
+                      httpGet:
+                        scheme: HTTPS
+                        port: 8443
+                        path: /healthz
+                      initialDelaySeconds: 10
+                      timeoutSeconds: 10
                     command:
                       - cluster-kube-descheduler-operator
                     args:
@@ -436,12 +527,19 @@ spec:
                       - name: RELATED_IMAGE_SOFTTAINTER_IMAGE
                         value: registry-proxy.engineering.redhat.com/rh-osbs/kube-descheduler-operator-rhel-9:latest
                       - name: OPERAND_VERSION
-                        value: 5.4.2
+                        value: 5.4.0
                     volumeMounts:
                       - name: tmp
                         mountPath: "/tmp"
+                      - name: serving-cert
+                        mountPath: /var/run/secrets/serving-cert
+                        readOnly: true
                 serviceAccountName: openshift-descheduler
                 volumes:
                   - name: tmp
                     emptyDir: {}
+                  - name: serving-cert
+                    secret:
+                      secretName: descheduler-operator-serving-cert
+                      optional: true
     strategy: deployment
