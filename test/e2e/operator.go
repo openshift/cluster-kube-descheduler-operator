@@ -174,6 +174,15 @@ func setupOperator(
 			},
 		},
 		{
+			// Apply the Service before the Deployment so service-ca can mint
+			// descheduler-operator-serving-cert used by the HTTPS health probes.
+			path: "assets/08_operator-service.yaml",
+			readerAndApply: func(objBytes []byte) error {
+				_, _, err := resourceapply.ApplyService(ctx, kubeClient.CoreV1(), eventRecorder, resourceread.ReadServiceV1OrDie(objBytes))
+				return err
+			},
+		},
+		{
 			path: "assets/05_deployment.yaml",
 			readerAndApply: func(objBytes []byte) error {
 				required := resourceread.ReadDeploymentV1OrDie(objBytes)
@@ -234,6 +243,17 @@ func setupOperator(
 		}
 		return true
 	}).WithTimeout(10*time.Second).WithPolling(1*time.Second).Should(o.BeTrue(), "Unable to create Descheduler operator resources")
+
+	// Wait for service-ca to create the serving cert triggered by 08_operator-service.yaml
+	// before considering the operator ready for HTTPS probes.
+	o.Eventually(func() bool {
+		_, err := kubeClient.CoreV1().Secrets(operatorclient.OperatorNamespace).Get(ctx, "descheduler-operator-serving-cert", metav1.GetOptions{})
+		if err != nil {
+			klog.Infof("Waiting for descheduler-operator-serving-cert: %v", err)
+			return false
+		}
+		return true
+	}).WithTimeout(time.Minute).WithPolling(2*time.Second).Should(o.BeTrue(), "service-ca did not create descheduler-operator-serving-cert")
 
 	// apply base CR for the operator
 	err := operatorConfigsAppliers[baseConf](ctx, deschClient)
@@ -582,9 +602,29 @@ func cleanupTestNamespace(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	}, time.Minute, 1*time.Second).Should(o.BeTrue(), "namespace not deleted after timeout")
 }
 
+func isPodReady(pod *corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func podHasEnv(pod *corev1.Pod, name, value string) bool {
+	for _, container := range pod.Spec.Containers {
+		for _, env := range container.Env {
+			if env.Name == name && env.Value == value {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func waitForPodRunningByNamePrefix(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, nameprefix, excludedprefix string) (*v1.Pod, error) {
 	var expectedPod *corev1.Pod
-	// Wait until the expected pod is running
+	// Wait until the expected pod is running and Ready
 	o.Eventually(func() bool {
 		klog.Infof("Listing pods...")
 		podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
@@ -596,14 +636,45 @@ func waitForPodRunningByNamePrefix(ctx context.Context, kubeClient *k8sclient.Cl
 			if !strings.HasPrefix(pod.Name, nameprefix) || (excludedprefix != "" && strings.HasPrefix(pod.Name, excludedprefix)) {
 				continue
 			}
-			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
+			ready := isPodReady(&pod)
+			klog.Infof("Checking pod: %v, phase: %v, ready: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, ready, pod.GetDeletionTimestamp())
+			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && ready {
 				expectedPod = pod.DeepCopy()
 				return true
 			}
 		}
 		return false
-	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
+	}).WithTimeout(2*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(), "pod with prefix %q did not become Ready", nameprefix)
+	return expectedPod, nil
+}
+
+// waitForOperatorPodReadyWithEnv waits for a Ready descheduler-operator pod that has the given env var.
+// This is used after mockPSIEnv so we do not proceed against the previous operator replica.
+func waitForOperatorPodReadyWithEnv(ctx context.Context, kubeClient *k8sclient.Clientset, envName, envValue string) (*v1.Pod, error) {
+	var expectedPod *corev1.Pod
+	o.Eventually(func() bool {
+		klog.Infof("Listing pods...")
+		podItems, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			klog.Errorf("Unable to list pods: %v", err)
+			return false
+		}
+		for _, pod := range podItems.Items {
+			if !strings.HasPrefix(pod.Name, operatorclient.OperandName+"-operator") {
+				continue
+			}
+			hasEnv := podHasEnv(&pod, envName, envValue)
+			ready := isPodReady(&pod)
+			klog.Infof("Checking operator pod: %v, phase: %v, ready: %v, %s=%v, deletionTS: %v\n",
+				pod.Name, pod.Status.Phase, ready, envName, hasEnv, pod.GetDeletionTimestamp())
+			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && ready && hasEnv {
+				expectedPod = pod.DeepCopy()
+				return true
+			}
+		}
+		return false
+	}).WithTimeout(2*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(),
+		"operator pod with %s=%s did not become Ready", envName, envValue)
 	return expectedPod, nil
 }
 
@@ -1023,13 +1094,15 @@ func setupSoftTainterController(ctx context.Context, t testing.TB, kubeClient *k
 		}
 	})
 
-	// wait for descheduler operator pod to be running
-	deschOpPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	// Wait for the operator to restart with EXPERIMENTAL_DISABLE_PSI_CHECK=true and become Ready.
+	// Matching the operand prefix here would succeed immediately on the already-running descheduler
+	// pod and let the CR be processed by the previous operator replica (without the PSI bypass).
+	deschOpPod, err := waitForOperatorPodReadyWithEnv(ctx, kubeClient, EXPERIMENTAL_DISABLE_PSI_CHECK, "true")
 	if err != nil {
 		runCleanups()
 		t.Fatalf("Unable to wait for the Descheduler operator pod to run")
 	}
-	klog.Infof("Descheduler pod running in %v", deschOpPod.Name)
+	klog.Infof("Descheduler operator pod running in %v", deschOpPod.Name)
 
 	// apply devKubeVirtRelieveAndMigrate CR for the operator
 	if err := operatorConfigsAppliers[kubeVirtRelieveAndMigrateConf](ctx, deschClient); err != nil {
