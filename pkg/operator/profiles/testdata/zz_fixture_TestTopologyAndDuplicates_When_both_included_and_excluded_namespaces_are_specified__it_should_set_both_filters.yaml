@@ -1,0 +1,47 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: TopologyAndDuplicates
+  pluginConfig:
+  - args:
+      constraints:
+      - DoNotSchedule
+      namespaces:
+        exclude:
+        - excludedNamespace
+        include:
+        - includedNamespace
+    name: RemovePodsViolatingTopologySpreadConstraint
+  - args:
+      namespaces:
+        exclude:
+        - excludedNamespace
+        include:
+        - includedNamespace
+    name: RemoveDuplicates
+  - args:
+      ignorePvcPods: true
+      podProtections: {}
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - RemovePodsViolatingTopologySpreadConstraint
+      - RemoveDuplicates
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

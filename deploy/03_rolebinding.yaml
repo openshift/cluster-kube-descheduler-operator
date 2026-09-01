@@ -1,0 +1,13 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: descheduler-operator-rolebinding
+  namespace: openshift-kube-descheduler-operator
+subjects:
+- kind: ServiceAccount
+  name: openshift-descheduler
+  namespace: openshift-kube-descheduler-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: descheduler-operator
