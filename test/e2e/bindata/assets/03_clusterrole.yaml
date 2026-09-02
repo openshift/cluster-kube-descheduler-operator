@@ -177,6 +177,16 @@ rules:
       - patch
       - delete
   - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
       - config.openshift.io
     resources:
       - infrastructures
