@@ -128,6 +128,17 @@ The following profiles are currently provided:
 
 Each of these enables cluster-wide descheduling (excluding openshift and kube-system namespaces) based on certain goals.
 
+### Node selection
+
+The `KubeDescheduler` CR is a cluster singleton (`metadata.name: cluster`). It does not expose a field to limit descheduling to a subset of nodes (for example control-plane/master nodes only).
+
+- `LongLifecycle`, `LifecycleAndUtilization`, and the other non-KubeVirt profiles consider all nodes.
+- `profileCustomizations.namespaces` filters namespaces, not nodes. The `LowNodeUtilization` strategy does not apply namespace exclusion.
+- `evictionLimits.node` caps how many pods can be evicted from each node in a run. It does not select which nodes are evaluated.
+- The only policy-level `nodeSelector` the operator sets is `kubevirt.io/schedulable=true`, and only when [`KubeVirtRelieveAndMigrate`](#kubevirtrelieveandmigrate) is enabled. That selector is not configurable through the CR. It includes every KubeVirt-schedulable node, including compact control-plane nodes that also have the worker role.
+
+`LowNodeUtilization` only treats a node as a destination when it is underutilized among the nodes in the same considered set. Nodes omitted from that set cannot be destinations.
+
 ### AffinityAndTaints
 This is the most basic descheduling profile and it removes running pods which violate node and pod affinity, and node
 taints.
@@ -159,6 +170,7 @@ may be made available through the operator for these strategies based on user fe
 ### LongLifecycle
 This profile provides cluster resource balancing similar to [LifecycleAndUtilization](#LifecycleAndUtilization) for longer-running
 clusters. It does not evict pods based on the 24 hour lifetime used by LifecycleAndUtilization.
+It does not set a nodeSelector; eviction candidates are evaluated cluster-wide.
 
 ### CompactAndScale
 This profile seeks to evict pods to enable the same workload to run on a smaller set of nodes.
@@ -185,6 +197,7 @@ In the future, additional configurations may be introduced through the operator 
 
 This profile sets a nodeSelector (`kubevirt.io/schedulable=true`)
 in the Descheduler policy to limit its action to nodes that are considered schedulable for `KubeVirt`.
+That selector is hardcoded by the operator and cannot be changed or narrowed (for example to master nodes only) through the `KubeDescheduler` CR.
 That nodeSelector is a top level configuration option affecting all the active descheduler profiles:
 this profile is not expected to be combined with other profiles
 unless all profiles are expected to operate over the same set of nodes.
@@ -243,7 +256,7 @@ the `profileCustomizations` field:
 |`podLifetime`|`time.Duration`|Sets the lifetime value for pods evicted by the `LifecycleAndUtilization` profile|
 |`thresholdPriorityClassName`|`string`|Sets the priority class threshold by name for all strategies|
 |`thresholdPriority`|`string`|Sets the priority class threshold by value for all strategies|
-|`namespaces.included`, `namespaces.excluded`|`[]string`| Sets the included/excluded namespaces for all strategies (included namespaces are not allowed to include protected namespaces which consist of `kube-system`, `hypershift` and all `openshift-` prefixed namespaces)|
+|`namespaces.included`, `namespaces.excluded`|`[]string`| Sets the included/excluded namespaces for all strategies (included namespaces are not allowed to include protected namespaces which consist of `kube-system`, `hypershift` and all `openshift-` prefixed namespaces). This filters namespaces, not nodes. `LowNodeUtilization` does not apply namespace exclusion.|
 | `devLowNodeUtilizationThresholds` | `string` | Sets experimental thresholds for the [LowNodeUtilization](https://github.com/kubernetes-sigs/descheduler#lownodeutilization) strategy of the `LifecycleAndUtilization` profile in the following ratios: `Low` for 10%:30%, `Medium` for 20%:50%, `High` for 40%:70%|
 |`devEnableEvictionsInBackground`|`bool`| Enables descheduler's EvictionsInBackground alpha feature. The EvictionsInBackground alpha feature is a subject to change. Currently provided as an experimental feature.|
 | `devHighNodeUtilizationThresholds` | `string` | Sets thresholds for the [HighNodeUtilization](https://github.com/kubernetes-sigs/descheduler#highnodeutilization) strategy of the `CompactAndScale` profile in the following ratios: `Minimal` for 10%, `Modest` for 20%, `Moderate` for 30%. Currently provided as an experimental feature.|
@@ -328,7 +341,9 @@ The Descheduler operator exposes the following parameters in its CRD:
 |`mode`|`string`|Configures the descheduler to either evict pods or to simulate the eviction|
 |`evictionLimits`|`map`|Restrict the number of evictions during each descheduling run. Available fields are: `total`|
 |`evictionLimits.total`|`int32`|Restricts the maximum number of overall evictions|
-|`evictionLimits.node`|`int32`|Restricts the maximum number of of evictions per node|
+|`evictionLimits.node`|`int32`|Restricts the maximum number of of evictions per node. This is a per-run cap, not a filter for which nodes the descheduler evaluates.|
+
+The CRD does not include a `nodeSelector` (or equivalent) to restrict descheduling to a subset of nodes. See [Node selection](#node-selection).
 
 ## Tests
 
