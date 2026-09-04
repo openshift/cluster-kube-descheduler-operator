@@ -15,6 +15,7 @@ import (
 	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
 	routev1client "github.com/openshift/client-go/route/clientset/versioned"
 	routev1informers "github.com/openshift/client-go/route/informers/externalversions"
+	"github.com/openshift/cluster-kube-descheduler-operator/bindata"
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation/configobservercontroller"
@@ -22,6 +23,8 @@ import (
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/resourcesynccontroller"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/staticresourcecontroller"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 )
 
@@ -108,6 +111,20 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	logLevelController := loglevel.NewClusterOperatorLoggingController(deschedulerClient, cc.EventRecorder)
 
+	networkPolicyController := staticresourcecontroller.NewStaticResourceController(
+		"NetworkPolicyController",
+		bindata.Asset,
+		[]string{
+			"assets/kube-descheduler/networkpolicy-allow-operator.yaml",
+			"assets/kube-descheduler/networkpolicy-allow-operand.yaml",
+			"assets/kube-descheduler/networkpolicy-allow-softtainter.yaml",
+			"assets/kube-descheduler/networkpolicy-default-deny.yaml",
+		},
+		resourceapply.NewKubeClientHolder(kubeClient),
+		deschedulerClient,
+		cc.EventRecorder,
+	).AddKubeInformers(kubeInformersForNamespaces)
+
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	configInformers.Start(ctx.Done())
@@ -117,6 +134,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)
+	klog.Infof("Starting NetworkPolicy static resource controller")
+	go networkPolicyController.Run(ctx, 1)
 	klog.Infof("Starting target config reconciler")
 	go targetConfigReconciler.Run(1, ctx.Done())
 

@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: descheduler-default-deny
+  namespace: openshift-kube-descheduler-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
