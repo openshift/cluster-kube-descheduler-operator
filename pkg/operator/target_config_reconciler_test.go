@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -100,6 +101,7 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	deschedulerClient := &operatorclient.DeschedulerClient{
 		Ctx:            ctx,
+		Namespace:      operatorclient.OperatorNamespace,
 		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
 		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
 	}
@@ -574,7 +576,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
 			Namespace:       "openshift-kube-descheduler-operator",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "ef97d3d0f3b5175d75facaefb8102ae00469a9d38676a3b6b4a96ef67b52b1b5"},
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "dbc8d6adc396d87de0c49f7c57ac381d417cd96919167c85f6e22d21dfd24f3c"},
 			Labels:          map[string]string{"app": "softtainer"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler", Name: "cluster"}},
 		},
@@ -615,6 +617,16 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
 								FailureThreshold:    1,
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "OPERATOR_POD_NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -1295,6 +1307,7 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 
 	deschedulerClient := &operatorclient.DeschedulerClient{
 		Ctx:            ctx,
+		Namespace:      operatorclient.OperatorNamespace,
 		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
 		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
 	}
@@ -1332,6 +1345,7 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 		configInformers,
 		resourceSyncController,
 		eventRecorder,
+		operatorclient.OperatorNamespace,
 	)
 
 	// Create target config reconciler - this registers event handlers with informers
@@ -1674,5 +1688,53 @@ func TestCheckProfileConflicts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSetServiceMonitorServerName(t *testing.T) {
+	sm := &unstructured.Unstructured{Object: map[string]interface{}{
+		"spec": map[string]interface{}{
+			"endpoints": []interface{}{
+				map[string]interface{}{
+					"tlsConfig": map[string]interface{}{
+						"caFile":     "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt",
+						"serverName": "metrics.openshift-kube-descheduler-operator.svc",
+					},
+				},
+			},
+		},
+	}}
+
+	want := "metrics.custom-ns.svc"
+	if err := setServiceMonitorServerName(sm, want); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	endpoints, found, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+	if err != nil || !found || len(endpoints) == 0 {
+		t.Fatalf("failed to read endpoints: found=%v err=%v", found, err)
+	}
+	ep, ok := endpoints[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("endpoints[0] is not an object")
+	}
+	tlsConfig, ok := ep["tlsConfig"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("tlsConfig is not an object")
+	}
+	got, ok := tlsConfig["serverName"].(string)
+	if !ok || got != want {
+		t.Fatalf("serverName = %q, want %q", got, want)
+	}
+
+	missingTLS := &unstructured.Unstructured{Object: map[string]interface{}{
+		"spec": map[string]interface{}{
+			"endpoints": []interface{}{
+				map[string]interface{}{},
+			},
+		},
+	}}
+	if err := setServiceMonitorServerName(missingTLS, want); err == nil {
+		t.Fatal("expected error when tlsConfig is missing")
 	}
 }

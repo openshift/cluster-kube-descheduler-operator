@@ -69,6 +69,7 @@ type softTainter struct {
 	client                            client.Client
 	resyncPeriod                      time.Duration
 	policyConfigFile                  string
+	namespace                         string
 	nodeUtilizationFactory            func(promapi.Client, string) NodeUtilization
 }
 
@@ -99,7 +100,7 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 	}
 
 	err = st.client.Get(ctx, client.ObjectKey{
-		Namespace: operatorclient.OperatorNamespace,
+		Namespace: st.namespace,
 		Name:      operatorclient.OperatorConfigName,
 	}, &des)
 	if err != nil {
@@ -558,10 +559,10 @@ func TickLimitedControllerRateLimiter[T comparable](tickLimit time.Duration) wor
 }
 
 // RegisterReconciler creates a new Reconciler and registers it into manager.
-func RegisterReconciler(mgr manager.Manager, policyConfigFile string) error {
+func RegisterReconciler(mgr manager.Manager, policyConfigFile string, namespace string) error {
 	des := desv1.KubeDescheduler{}
 	err := mgr.GetAPIReader().Get(context.Background(), client.ObjectKey{
-		Namespace: operatorclient.OperatorNamespace,
+		Namespace: namespace,
 		Name:      operatorclient.OperatorConfigName,
 	}, &des)
 	if err != nil {
@@ -584,6 +585,7 @@ func RegisterReconciler(mgr manager.Manager, policyConfigFile string) error {
 				client:                 mgr.GetClient(),
 				resyncPeriod:           resyncPeriod,
 				policyConfigFile:       policyConfigFile,
+				namespace:              namespace,
 				nodeUtilizationFactory: newNodeUtilizationFactory,
 			},
 		},

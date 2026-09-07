@@ -142,13 +142,14 @@ func NewTargetConfigReconciler(
 }
 
 func (c TargetConfigReconciler) scaleDownDeployment(scaleDownError error) error {
-	_, err := c.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).UpdateScale(
+	operatorNamespace := c.deschedulerClient.GetNamespace()
+	_, err := c.kubeClient.AppsV1().Deployments(operatorNamespace).UpdateScale(
 		c.ctx,
 		operatorclient.OperandName,
 		&autoscalingv1.Scale{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      operatorclient.OperandName,
-				Namespace: operatorclient.OperatorNamespace,
+				Namespace: operatorNamespace,
 			},
 			Spec: autoscalingv1.ScaleSpec{
 				Replicas: 0,
@@ -168,9 +169,10 @@ func (c TargetConfigReconciler) scaleDownDeployment(scaleDownError error) error 
 }
 
 func (c TargetConfigReconciler) sync() error {
-	descheduler, err := c.operatorClient.KubeDeschedulers(operatorclient.OperatorNamespace).Get(c.ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	operatorNamespace := c.deschedulerClient.GetNamespace()
+	descheduler, err := c.operatorClient.KubeDeschedulers(operatorNamespace).Get(c.ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
-		klog.ErrorS(err, "unable to get operator configuration", "namespace", operatorclient.OperatorNamespace, "kubedescheduler", operatorclient.OperatorConfigName)
+		klog.ErrorS(err, "unable to get operator configuration", "namespace", operatorNamespace, "kubedescheduler", operatorclient.OperatorConfigName)
 		return err
 	}
 
@@ -479,6 +481,7 @@ func (c *TargetConfigReconciler) manageSoftTainterClusterRole(descheduler *desch
 
 func (c *TargetConfigReconciler) manageSoftTainterClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.ClusterRoleBinding, bool, error) {
 	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterclusterrolebinding.yaml"))
+	setBindingSubjectsNamespace(required.Subjects, descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -497,6 +500,7 @@ func (c *TargetConfigReconciler) manageSoftTainterClusterRoleBinding(descheduler
 
 func (c *TargetConfigReconciler) manageClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRoleBinding, bool, error) {
 	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandclusterrolebinding.yaml"))
+	setBindingSubjectsNamespace(required.Subjects, descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -513,6 +517,7 @@ func (c *TargetConfigReconciler) manageClusterRoleBinding(descheduler *deschedul
 
 func (c *TargetConfigReconciler) manageClusterMonitoringViewClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.ClusterRoleBinding, bool, error) {
 	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandclusterrolebindingprometheus.yaml"))
+	setBindingSubjectsNamespace(required.Subjects, descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -529,6 +534,7 @@ func (c *TargetConfigReconciler) manageClusterMonitoringViewClusterRoleBinding(d
 
 func (c *TargetConfigReconciler) managePrometheusRule(descheduler *deschedulerv1.KubeDescheduler) (*unstructured.Unstructured, bool, error) {
 	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/prometheusrule.yaml"))
+	required.SetNamespace(descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -542,6 +548,7 @@ func (c *TargetConfigReconciler) managePrometheusRule(descheduler *deschedulerv1
 
 func (c *TargetConfigReconciler) managePSIAlert(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*unstructured.Unstructured, bool, error) {
 	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/psialert.yaml"))
+	required.SetNamespace(descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -558,6 +565,13 @@ func (c *TargetConfigReconciler) managePSIAlert(descheduler *deschedulerv1.KubeD
 
 func (c *TargetConfigReconciler) manageSoftTainterValidatingAdmissionPolicy(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*admissionv1.ValidatingAdmissionPolicy, bool, error) {
 	required := resourceread.ReadValidatingAdmissionPolicyV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtaintervalidatingadmissionpolicy.yaml"))
+	for i := range required.Spec.MatchConditions {
+		required.Spec.MatchConditions[i].Expression = strings.ReplaceAll(
+			required.Spec.MatchConditions[i].Expression,
+			operatorclient.OperatorNamespace,
+			descheduler.Namespace,
+		)
+	}
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -591,6 +605,7 @@ func (c *TargetConfigReconciler) manageSoftTainterValidatingAdmissionPolicyBindi
 
 func (c *TargetConfigReconciler) manageSoftTainterClusterMonitoringViewClusterRoleBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.ClusterRoleBinding, bool, error) {
 	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterclusterrolebindingprometheus.yaml"))
+	setBindingSubjectsNamespace(required.Subjects, descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -661,6 +676,7 @@ func (c *TargetConfigReconciler) manageOperandRole(descheduler *deschedulerv1.Ku
 func (c *TargetConfigReconciler) manageOperandRoleBinding(descheduler *deschedulerv1.KubeDescheduler) (*rbacv1.RoleBinding, bool, error) {
 	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/operandrolebinding.yaml"))
 	required.Namespace = descheduler.Namespace
+	setBindingSubjectsNamespace(required.Subjects, descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -698,6 +714,7 @@ func (c *TargetConfigReconciler) manageSoftTainterRole(descheduler *deschedulerv
 func (c *TargetConfigReconciler) manageSoftTainterRoleBinding(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*rbacv1.RoleBinding, bool, error) {
 	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterrolebinding.yaml"))
 	required.Namespace = descheduler.Namespace
+	setBindingSubjectsNamespace(required.Subjects, descheduler.Namespace)
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -771,8 +788,62 @@ func (c *TargetConfigReconciler) manageService(descheduler *deschedulerv1.KubeDe
 
 func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
 	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/servicemonitor.yaml"))
+	required.SetNamespace(descheduler.Namespace)
+
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	if err := unstructured.SetNestedStringSlice(required.Object, []string{descheduler.Namespace}, "spec", "namespaceSelector", "matchNames"); err != nil {
+		return false, fmt.Errorf("failed to set ServiceMonitor namespaceSelector: %w", err)
+	}
+
+	// Bindata has a hardcoded namespace in serverName. SetNestedField cannot address
+	// slice indexes (spec.endpoints[0]), so update tlsConfig.serverName via NestedSlice.
+	serverName := fmt.Sprintf("metrics.%s.svc", descheduler.Namespace)
+	if err := setServiceMonitorServerName(required, serverName); err != nil {
+		return false, err
+	}
+
 	_, changed, err := resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
 	return changed, err
+}
+
+func setServiceMonitorServerName(sm *unstructured.Unstructured, serverName string) error {
+	endpoints, found, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+	if err != nil {
+		return fmt.Errorf("failed to read ServiceMonitor endpoints: %w", err)
+	}
+	if !found || len(endpoints) == 0 {
+		return fmt.Errorf("ServiceMonitor spec.endpoints is empty")
+	}
+	ep, ok := endpoints[0].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("ServiceMonitor spec.endpoints[0] is not an object")
+	}
+	tlsConfig, ok := ep["tlsConfig"].(map[string]interface{})
+	if !ok || tlsConfig == nil {
+		return fmt.Errorf("ServiceMonitor spec.endpoints[0].tlsConfig is missing or not an object")
+	}
+	tlsConfig["serverName"] = serverName
+	ep["tlsConfig"] = tlsConfig
+	endpoints[0] = ep
+	if err := unstructured.SetNestedSlice(sm.Object, endpoints, "spec", "endpoints"); err != nil {
+		return fmt.Errorf("failed to set ServiceMonitor serverName %q: %w", serverName, err)
+	}
+	return nil
+}
+
+func setBindingSubjectsNamespace(subjects []rbacv1.Subject, namespace string) {
+	for i := range subjects {
+		if subjects[i].Namespace == operatorclient.OperatorNamespace {
+			subjects[i].Namespace = namespace
+		}
+	}
 }
 
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
@@ -1098,6 +1169,18 @@ func (c *TargetConfigReconciler) manageSoftTainterDeployment(descheduler *desche
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterdeployment.yaml"))
 	required.Name = operatorclient.SoftTainterOperandName
 	required.Namespace = descheduler.Namespace
+	if len(required.Spec.Template.Spec.Containers) > 0 {
+		required.Spec.Template.Spec.Containers[0].Env = append(required.Spec.Template.Spec.Containers[0].Env,
+			v1.EnvVar{
+				Name: "OPERATOR_POD_NAMESPACE",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+		)
+	}
 	if stEnabled {
 		return c.manageDeployment(required, descheduler, targetImageKey, c.softtainterImagePullSpec, specAnnotations)
 	}
@@ -1152,13 +1235,14 @@ func (c *TargetConfigReconciler) eventHandler() cache.ResourceEventHandler {
 }
 
 func (c *TargetConfigReconciler) checkNamespaceMonitoringLabel() error {
-	operatorNamespace, err := c.namespaceLister.Get(operatorclient.OperatorNamespace)
+	nsName := c.deschedulerClient.GetNamespace()
+	operatorNamespace, err := c.namespaceLister.Get(nsName)
 	if err != nil {
 		klog.ErrorS(err, "error fetching operator namespace")
 		return err
 	}
 	if operatorNamespace.GetLabels()[operatorclient.OpenshiftClusterMonitoringLabelKey] != operatorclient.OpenshiftClusterMonitoringLabelValue {
-		return fmt.Errorf("namespace %v is not labeled with %v=%v", operatorclient.OperatorNamespace, operatorclient.OpenshiftClusterMonitoringLabelKey, operatorclient.OpenshiftClusterMonitoringLabelValue)
+		return fmt.Errorf("namespace %v is not labeled with %v=%v", nsName, operatorclient.OpenshiftClusterMonitoringLabelKey, operatorclient.OpenshiftClusterMonitoringLabelValue)
 	}
 	return nil
 }

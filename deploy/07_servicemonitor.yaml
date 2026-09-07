@@ -14,4 +14,12 @@ spec:
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
         caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
-        serverName: descheduler-operator-metrics.openshift-kube-descheduler-operator.svc
+      relabelings:
+        - sourceLabels:
+            - __meta_kubernetes_service_name
+            - __meta_kubernetes_namespace
+          separator: "."
+          regex: "(.*)"
+          targetLabel: __address__
+          replacement: "${1}.svc:8443"
+          action: replace

@@ -56,10 +56,16 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
+	operatorNamespace := os.Getenv("OPERATOR_POD_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = operatorclient.OperatorNamespace
+	}
+	klog.Infof("Operator running in namespace: %s", operatorNamespace)
+
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
 		kubeClient,
 		"",
-		operatorclient.OperatorNamespace,
+		operatorNamespace,
 	)
 
 	operatorConfigClient, err := operatorconfigclient.NewForConfig(cc.KubeConfig)
@@ -69,6 +75,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	deschedulerClient := &operatorclient.DeschedulerClient{
 		Ctx:            ctx,
+		Namespace:      operatorNamespace,
 		SharedInformer: operatorConfigInformers.Kubedeschedulers().V1().KubeDeschedulers().Informer(),
 		OperatorClient: operatorConfigClient.KubedeschedulersV1(),
 	}
@@ -89,6 +96,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		configInformers,
 		resourceSyncController,
 		cc.EventRecorder,
+		operatorNamespace,
 	)
 
 	targetConfigReconciler := NewTargetConfigReconciler(
