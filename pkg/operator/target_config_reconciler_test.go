@@ -1738,3 +1738,62 @@ func TestSetServiceMonitorServerName(t *testing.T) {
 		t.Fatal("expected error when tlsConfig is missing")
 	}
 }
+
+func TestManageServiceMonitorCustomNamespace(t *testing.T) {
+	const customNS = "custom-ns"
+	ctx := context.Background()
+	gvr := schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}
+	dynamicClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{gvr: "ServiceMonitorList"},
+	)
+	c := &TargetConfigReconciler{
+		ctx:           ctx,
+		dynamicClient: dynamicClient,
+		eventRecorder: NewFakeRecorder(1024),
+	}
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: customNS,
+			UID:       "test-uid",
+		},
+	}
+
+	if _, err := c.manageServiceMonitor(descheduler); err != nil {
+		t.Fatalf("manageServiceMonitor: %v", err)
+	}
+
+	got, err := dynamicClient.Resource(gvr).Namespace(customNS).Get(ctx, "kube-descheduler", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get ServiceMonitor: %v", err)
+	}
+	if got.GetNamespace() != customNS {
+		t.Fatalf("metadata.namespace = %q, want %q", got.GetNamespace(), customNS)
+	}
+
+	matchNames, found, err := unstructured.NestedStringSlice(got.Object, "spec", "namespaceSelector", "matchNames")
+	if err != nil || !found {
+		t.Fatalf("namespaceSelector.matchNames not found: found=%v err=%v", found, err)
+	}
+	if len(matchNames) != 1 || matchNames[0] != customNS {
+		t.Fatalf("namespaceSelector.matchNames = %v, want [%s]", matchNames, customNS)
+	}
+
+	endpoints, found, err := unstructured.NestedSlice(got.Object, "spec", "endpoints")
+	if err != nil || !found || len(endpoints) == 0 {
+		t.Fatalf("failed to read endpoints: found=%v err=%v", found, err)
+	}
+	ep, ok := endpoints[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("endpoints[0] is not an object")
+	}
+	tlsConfig, ok := ep["tlsConfig"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("tlsConfig is not an object")
+	}
+	serverName, ok := tlsConfig["serverName"].(string)
+	if !ok || serverName != "metrics.custom-ns.svc" {
+		t.Fatalf("tlsConfig.serverName = %q, want %q", serverName, "metrics.custom-ns.svc")
+	}
+}
