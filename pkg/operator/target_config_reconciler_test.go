@@ -16,6 +16,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -108,6 +109,11 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	openshiftRouteClient := fakeroutev1client.NewSimpleClientset(routesObjects...)
 	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
+		fakeKubeClient,
+		"",
+		operatorclient.OperatorNamespace,
+	)
 	scheme := runtime.NewScheme()
 
 	targetConfigReconciler := NewTargetConfigReconciler(
@@ -122,6 +128,7 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 		configInformers,
 		routeInformers,
 		coreInformers,
+		kubeInformersForNamespaces,
 		NewFakeRecorder(1024),
 	)
 
@@ -129,11 +136,13 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	configInformers.Start(ctx.Done())
 	routeInformers.Start(ctx.Done())
 	coreInformers.Start(ctx.Done())
+	kubeInformersForNamespaces.Start(ctx.Done())
 
 	operatorConfigInformers.WaitForCacheSync(ctx.Done())
 	configInformers.WaitForCacheSync(ctx.Done())
 	routeInformers.WaitForCacheSync(ctx.Done())
 	coreInformers.WaitForCacheSync(ctx.Done())
+	kubeInformersForNamespaces.WaitForCacheSync(ctx.Done())
 
 	return targetConfigReconciler, operatorConfigClient
 }
@@ -1347,6 +1356,7 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 		configInformers,
 		routev1informers.NewSharedInformerFactory(fakeroutev1client.NewSimpleClientset(), 10*time.Minute),
 		coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute),
+		kubeInformersForNamespaces,
 		eventRecorder,
 	)
 
@@ -1674,5 +1684,105 @@ func TestCheckProfileConflicts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+const allowNetworkPolicyOperandName = "allow-all-egress-and-metrics-ingress-operand"
+
+func TestManageOperandNetworkPolicyAllow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kubeClient := fake.NewSimpleClientset()
+	eventRecorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+	}
+
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: eventRecorder,
+		cache:         resourceapply.NewResourceCache(),
+	}
+
+	policy, modified, err := reconciler.manageOperandNetworkPolicyAllow(descheduler)
+	if err != nil {
+		t.Fatalf("manageOperandNetworkPolicyAllow failed: %v", err)
+	}
+
+	if !modified {
+		t.Error("Expected modified=true when creating policy")
+	}
+
+	if policy.GetName() != allowNetworkPolicyOperandName {
+		t.Errorf("Expected policy name %q, got %q", allowNetworkPolicyOperandName, policy.GetName())
+	}
+
+	if policy.GetNamespace() != operatorclient.OperatorNamespace {
+		t.Errorf("Expected policy namespace %q, got %q", operatorclient.OperatorNamespace, policy.GetNamespace())
+	}
+
+	if got := policy.Spec.PodSelector.MatchLabels["app"]; got != operatorclient.OperandName {
+		t.Errorf("Expected podSelector app=%q, got %q", operatorclient.OperandName, got)
+	}
+}
+
+const (
+	allowNetworkPolicySoftTainterName = "allow-all-egress-and-health-ingress-operand-softtainter"
+	softTainterAppLabel               = "softtainer"
+)
+
+func TestManageSoftTainterNetworkPolicyAllow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kubeClient := fake.NewSimpleClientset()
+	eventRecorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+	}
+
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: eventRecorder,
+		cache:         resourceapply.NewResourceCache(),
+	}
+
+	policy, modified, err := reconciler.manageSoftTainterNetworkPolicyAllow(descheduler, true)
+	if err != nil {
+		t.Fatalf("manageSoftTainterNetworkPolicyAllow(enabled) failed: %v", err)
+	}
+	if !modified {
+		t.Error("Expected modified=true when creating softtainter policy")
+	}
+	if policy.GetName() != allowNetworkPolicySoftTainterName {
+		t.Errorf("Expected policy name %q, got %q", allowNetworkPolicySoftTainterName, policy.GetName())
+	}
+	if policy.GetNamespace() != operatorclient.OperatorNamespace {
+		t.Errorf("Expected policy namespace %q, got %q", operatorclient.OperatorNamespace, policy.GetNamespace())
+	}
+	if got := policy.Spec.PodSelector.MatchLabels["app"]; got != softTainterAppLabel {
+		t.Errorf("Expected podSelector app=%q, got %q", softTainterAppLabel, got)
+	}
+
+	_, _, err = reconciler.manageSoftTainterNetworkPolicyAllow(descheduler, false)
+	if err != nil {
+		t.Fatalf("manageSoftTainterNetworkPolicyAllow(disabled) failed: %v", err)
+	}
+	_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+	if !errors.IsNotFound(getErr) {
+		t.Fatalf("Expected softtainter NetworkPolicy to be deleted when disabled, got: %v", getErr)
 	}
 }

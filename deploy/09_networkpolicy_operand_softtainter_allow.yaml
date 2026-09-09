@@ -1,0 +1,37 @@
+# Allow all egress and required ingress for the softtainter operand pods.
+#
+# Softtainter is an optional operand, deployed only when KubeVirtRelieveAndMigrate
+# is enabled (or leftover soft taints need cleanup).
+#
+# Egress is needed for:
+# - DNS resolution via openshift-dns
+# - Kubernetes API server communication (watch nodes, apply/remove soft taints)
+# - Prometheus (load-aware utilization queries)
+#
+# Ingress is needed for:
+# - Kubelet liveness/readiness probes on port 6060
+# Do not restrict ingress sources: kubelet runs with hostNetwork and does not
+# match namespace/pod selectors. There is no ServiceMonitor for this operand.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-egress-and-health-ingress-operand-softtainter
+  namespace: openshift-kube-descheduler-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app: softtainer
+  egress:
+  - {}
+  ingress:
+  # Allow kubelet health/readiness probes. Do not restrict sources: kubelet
+  # often runs with hostNetwork and does not match namespace/pod selectors.
+  - ports:
+    - protocol: TCP
+      port: 6060
+  policyTypes:
+  - Ingress
+  - Egress
