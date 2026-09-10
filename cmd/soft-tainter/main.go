@@ -104,7 +104,9 @@ func main() {
 	// Setup a Manager
 	entryLog.Info("setting up manager")
 	needLeaderElection := true
-	mgr, err := manager.New(config.GetConfigOrDie(), getManagerOptions(operatorclient.OperatorNamespace, needLeaderElection, scheme))
+	// NOTE: For custom namespace support in future, WATCH_NAMESPACE env should be assigned to operatorNamespace
+	operatorNamespace := operatorclient.OperatorNamespace
+	mgr, err := manager.New(config.GetConfigOrDie(), getManagerOptions(operatorNamespace, needLeaderElection, scheme))
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
@@ -122,7 +124,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = softtainter.RegisterReconciler(mgr, policyConfigFile)
+	err = softtainter.RegisterReconciler(mgr, policyConfigFile, operatorNamespace)
 	if err != nil {
 		entryLog.Error(err, "unable to register the controller")
 		os.Exit(1)

@@ -32,6 +32,7 @@ const PromRouteName = "prometheus-k8s"
 
 type DeschedulerClient struct {
 	Ctx            context.Context
+	Namespace      string
 	SharedInformer cache.SharedIndexInformer
 	OperatorClient operatorconfigclientv1.KubedeschedulersV1Interface
 }
@@ -40,8 +41,12 @@ func (c *DeschedulerClient) Informer() cache.SharedIndexInformer {
 	return c.SharedInformer
 }
 
+func (c *DeschedulerClient) GetNamespace() string {
+	return c.Namespace
+}
+
 func (c *DeschedulerClient) GetOperatorState() (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
-	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -53,7 +58,7 @@ func (c *DeschedulerClient) GetOperatorStateWithQuorum(ctx context.Context) (*op
 }
 
 func (c *DeschedulerClient) UpdateOperatorSpec(ctx context.Context, resourceVersion string, spec *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
-	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	original, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -61,7 +66,7 @@ func (c *DeschedulerClient) UpdateOperatorSpec(ctx context.Context, resourceVers
 	copy.ResourceVersion = resourceVersion
 	copy.Spec.OperatorSpec = *spec
 
-	ret, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Update(ctx, copy, v1.UpdateOptions{})
+	ret, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Update(ctx, copy, v1.UpdateOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -70,7 +75,7 @@ func (c *DeschedulerClient) UpdateOperatorSpec(ctx context.Context, resourceVers
 }
 
 func (c *DeschedulerClient) UpdateOperatorStatus(ctx context.Context, resourceVersion string, status *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
-	original, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	original, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +83,7 @@ func (c *DeschedulerClient) UpdateOperatorStatus(ctx context.Context, resourceVe
 	copy.ResourceVersion = resourceVersion
 	copy.Status.OperatorStatus = *status
 
-	ret, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).UpdateStatus(ctx, copy, v1.UpdateOptions{})
+	ret, err := c.OperatorClient.KubeDeschedulers(c.Namespace).UpdateStatus(ctx, copy, v1.UpdateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +92,7 @@ func (c *DeschedulerClient) UpdateOperatorStatus(ctx context.Context, resourceVe
 }
 
 func (c *DeschedulerClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error) {
-	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -102,10 +107,10 @@ func (c *DeschedulerClient) ApplyOperatorSpec(ctx context.Context, fieldManager 
 	desiredSpec := &deschedulerapplyconfiguration.KubeDeschedulerSpecApplyConfiguration{
 		OperatorSpecApplyConfiguration: *desiredConfiguration,
 	}
-	desired := deschedulerapplyconfiguration.KubeDescheduler(OperatorConfigName, OperatorNamespace)
+	desired := deschedulerapplyconfiguration.KubeDescheduler(OperatorConfigName, c.Namespace)
 	desired.WithSpec(desiredSpec)
 
-	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 	// do nothing and proceed with the apply
@@ -121,7 +126,7 @@ func (c *DeschedulerClient) ApplyOperatorSpec(ctx context.Context, fieldManager 
 		}
 	}
 
-	_, err = c.OperatorClient.KubeDeschedulers(OperatorNamespace).Apply(ctx, desired, v1.ApplyOptions{
+	_, err = c.OperatorClient.KubeDeschedulers(c.Namespace).Apply(ctx, desired, v1.ApplyOptions{
 		Force:        true,
 		FieldManager: fieldManager,
 	})
@@ -140,10 +145,10 @@ func (c *DeschedulerClient) ApplyOperatorStatus(ctx context.Context, fieldManage
 	desiredStatus := &deschedulerapplyconfiguration.KubeDeschedulerStatusApplyConfiguration{
 		OperatorStatusApplyConfiguration: *desiredConfiguration,
 	}
-	desired := deschedulerapplyconfiguration.KubeDescheduler(OperatorConfigName, OperatorNamespace)
+	desired := deschedulerapplyconfiguration.KubeDescheduler(OperatorConfigName, c.Namespace)
 	desired.WithStatus(desiredStatus)
 
-	instance, err := c.OperatorClient.KubeDeschedulers(OperatorNamespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.KubeDeschedulers(c.Namespace).Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 		// do nothing and proceed with the apply
@@ -165,7 +170,7 @@ func (c *DeschedulerClient) ApplyOperatorStatus(ctx context.Context, fieldManage
 		}
 	}
 
-	_, err = c.OperatorClient.KubeDeschedulers(OperatorNamespace).ApplyStatus(ctx, desired, v1.ApplyOptions{
+	_, err = c.OperatorClient.KubeDeschedulers(c.Namespace).ApplyStatus(ctx, desired, v1.ApplyOptions{
 		Force:        true,
 		FieldManager: fieldManager,
 	})
@@ -181,6 +186,6 @@ func (c *DeschedulerClient) PatchOperatorStatus(ctx context.Context, jsonPatch *
 	if err != nil {
 		return err
 	}
-	_, err = c.OperatorClient.KubeDeschedulers(OperatorNamespace).Patch(ctx, OperatorConfigName, types.JSONPatchType, jsonPatchBytes, metav1.PatchOptions{}, "/status")
+	_, err = c.OperatorClient.KubeDeschedulers(c.Namespace).Patch(ctx, OperatorConfigName, types.JSONPatchType, jsonPatchBytes, metav1.PatchOptions{}, "/status")
 	return err
 }
