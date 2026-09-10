@@ -44,10 +44,16 @@ type ProfileCustomizationsApplyConfiguration struct {
 	// Currently provided as an experimental feature.
 	DevActualUtilizationProfile *deschedulerv1.ActualUtilizationProfile `json:"devActualUtilizationProfile,omitempty"`
 	// devDeviationThresholds enables dynamic thresholds based on average resource utilization
-	DevDeviationThresholds    *deschedulerv1.DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
-	DevMigrationCooldown      *metav1.Duration                       `json:"devMigrationCooldown,omitempty"`
-	DevMaxMigrationCooldown   *metav1.Duration                       `json:"devMaxMigrationCooldown,omitempty"`
-	DevMigrationHistoryWindow *metav1.Duration                       `json:"devMigrationHistoryWindow,omitempty"`
+	DevDeviationThresholds *deschedulerv1.DeviationThresholdsType `json:"devDeviationThresholds,omitempty"`
+	// devMigrationCooldown configures the base migration cooldown for the KubevirtMigrationAware plugin.
+	// Only applicable for the KubeVirtRelieveAndMigrate profile.
+	DevMigrationCooldown *metav1.Duration `json:"devMigrationCooldown,omitempty"`
+	// devMaxMigrationCooldown configures the maximum migration cooldown for the KubevirtMigrationAware plugin.
+	// Only applicable for the KubeVirtRelieveAndMigrate profile.
+	DevMaxMigrationCooldown *metav1.Duration `json:"devMaxMigrationCooldown,omitempty"`
+	// devMigrationHistoryWindow configures the migration history window for the KubevirtMigrationAware plugin.
+	// Only applicable for the KubeVirtRelieveAndMigrate profile.
+	DevMigrationHistoryWindow *metav1.Duration `json:"devMigrationHistoryWindow,omitempty"`
 }
 
 // ProfileCustomizationsApplyConfiguration constructs a declarative configuration of the ProfileCustomizations type for use with

@@ -16,6 +16,7 @@ import (
 
 	otecmd "github.com/openshift-eng/openshift-tests-extension/pkg/cmd"
 	oteextension "github.com/openshift-eng/openshift-tests-extension/pkg/extension"
+	oteginkgo "github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/version"
 
 	"k8s.io/klog/v2"
@@ -28,7 +29,10 @@ func main() {
 }
 
 func newOperatorTestCommand(ctx context.Context) *cobra.Command {
-	registry := prepareOperatorTestsRegistry()
+	registry, err := prepareOperatorTestsRegistry()
+	if err != nil {
+		klog.Fatalf("Failed to prepare registry: %v", err)
+	}
 
 	cmd := &cobra.Command{
 		Use:   "cluster-kube-descheduler-operator-tests-ext",
@@ -57,10 +61,28 @@ func newOperatorTestCommand(ctx context.Context) *cobra.Command {
 // Note:
 //
 // This method must be called before adding the registry to the OTE framework.
-func prepareOperatorTestsRegistry() *oteextension.Registry {
+func prepareOperatorTestsRegistry() (*oteextension.Registry, error) {
 	registry := oteextension.NewRegistry()
 	extension := oteextension.NewExtension("openshift", "payload", "cluster-kube-descheduler-operator")
 
+	// Add test suite for serial operator tests
+	extension.AddSuite(oteextension.Suite{
+		Name:        "openshift/cluster-kube-descheduler-operator/operator/serial",
+		Parallelism: 1,
+		Qualifiers: []string{
+			`name.contains("[Operator]") && name.contains("[Serial]")`,
+		},
+	})
+
+	// Build test specs from Ginkgo tests
+	specs, err := oteginkgo.BuildExtensionTestSpecsFromOpenShiftGinkgoSuite()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add specs to the extension
+	extension.AddSpecs(specs)
+
 	registry.Register(extension)
-	return registry
+	return registry, nil
 }

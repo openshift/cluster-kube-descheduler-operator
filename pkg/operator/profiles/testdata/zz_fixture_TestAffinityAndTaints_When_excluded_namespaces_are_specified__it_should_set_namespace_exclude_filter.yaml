@@ -1,0 +1,64 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: AffinityAndTaints
+  pluginConfig:
+  - args:
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+        - excludedNamespace
+    name: RemovePodsViolatingInterPodAntiAffinity
+  - args:
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+        - excludedNamespace
+    name: RemovePodsViolatingNodeTaints
+  - args:
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+        - excludedNamespace
+      nodeAffinityType:
+      - requiredDuringSchedulingIgnoredDuringExecution
+    name: RemovePodsViolatingNodeAffinity
+  - args:
+      ignorePvcPods: true
+      podProtections: {}
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled: null
+    deschedule:
+      disabled: null
+      enabled:
+      - RemovePodsViolatingInterPodAntiAffinity
+      - RemovePodsViolatingNodeTaints
+      - RemovePodsViolatingNodeAffinity
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
