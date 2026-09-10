@@ -56,10 +56,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	operatorNamespace := os.Getenv("OPERATOR_POD_NAMESPACE")
-	if operatorNamespace == "" {
-		operatorNamespace = operatorclient.OperatorNamespace
-	}
+	// NOTE: For custom namespace support in future, WATCH_NAMESPACE env should be assigned to operatorNamespace
+	operatorNamespace := operatorclient.OperatorNamespace
 	klog.Infof("Operator running in namespace: %s", operatorNamespace)
 
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(

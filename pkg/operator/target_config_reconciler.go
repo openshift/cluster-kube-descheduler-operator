@@ -1169,18 +1169,6 @@ func (c *TargetConfigReconciler) manageSoftTainterDeployment(descheduler *desche
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterdeployment.yaml"))
 	required.Name = operatorclient.SoftTainterOperandName
 	required.Namespace = descheduler.Namespace
-	if len(required.Spec.Template.Spec.Containers) > 0 {
-		required.Spec.Template.Spec.Containers[0].Env = append(required.Spec.Template.Spec.Containers[0].Env,
-			v1.EnvVar{
-				Name: "OPERATOR_POD_NAMESPACE",
-				ValueFrom: &v1.EnvVarSource{
-					FieldRef: &v1.ObjectFieldSelector{
-						FieldPath: "metadata.namespace",
-					},
-				},
-			},
-		)
-	}
 	if stEnabled {
 		return c.manageDeployment(required, descheduler, targetImageKey, c.softtainterImagePullSpec, specAnnotations)
 	}

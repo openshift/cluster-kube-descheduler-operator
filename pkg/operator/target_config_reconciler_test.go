@@ -576,7 +576,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
 			Namespace:       "openshift-kube-descheduler-operator",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "dbc8d6adc396d87de0c49f7c57ac381d417cd96919167c85f6e22d21dfd24f3c"},
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "ef97d3d0f3b5175d75facaefb8102ae00469a9d38676a3b6b4a96ef67b52b1b5"},
 			Labels:          map[string]string{"app": "softtainer"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler", Name: "cluster"}},
 		},
@@ -617,16 +617,6 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
 								FailureThreshold:    1,
-							},
-							Env: []corev1.EnvVar{
-								{
-									Name: "OPERATOR_POD_NAMESPACE",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "metadata.namespace",
-										},
-									},
-								},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{

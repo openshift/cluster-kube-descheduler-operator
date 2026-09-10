@@ -104,10 +104,8 @@ func main() {
 	// Setup a Manager
 	entryLog.Info("setting up manager")
 	needLeaderElection := true
-	operatorNamespace := os.Getenv("OPERATOR_POD_NAMESPACE")
-	if operatorNamespace == "" {
-		operatorNamespace = operatorclient.OperatorNamespace
-	}
+	// NOTE: For custom namespace support in future, WATCH_NAMESPACE env should be assigned to operatorNamespace
+	operatorNamespace := operatorclient.OperatorNamespace
 	mgr, err := manager.New(config.GetConfigOrDie(), getManagerOptions(operatorNamespace, needLeaderElection, scheme))
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
