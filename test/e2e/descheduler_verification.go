@@ -44,6 +44,10 @@ func isOperatorOLMInstallationEnabled() bool {
 	return os.Getenv("NO_OLM") == "" && os.Getenv("OPERATOR_IMAGE") == "" && os.Getenv("OPERAND_IMAGE") == ""
 }
 
+func isSkipOperatorInstall() bool {
+	return os.Getenv("SKIP_OPERATOR_INSTALL") == "true"
+}
+
 // Ginkgo test specs for migrated OTP tests
 var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Ordered, g.Serial, func() {
 	var (
@@ -64,12 +68,16 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		apiExtClient = GetApiExtensionClient()
 		ctx, cancelFnc = context.WithCancel(context.TODO())
 
-		if !isOperatorOLMInstallationEnabled() {
+		if isSkipOperatorInstall() {
+			g.By("SKIP_OPERATOR_INSTALL=true: skipping operator installation")
+			klog.Infof("Skipping operator installation, assuming pre-verified by CI step")
+		} else if !isOperatorOLMInstallationEnabled() {
 			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		} else {
 			err = installOperatorWithSubscription(ctx, kubeClient, deschClient, dynamicClient, operatorclient.OperatorNamespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	g.AfterAll(func() {
