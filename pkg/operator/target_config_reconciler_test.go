@@ -669,6 +669,8 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		objects                []runtime.Object
 		checkContainerOnly     bool
 		checkContainerArgsOnly bool
+		psiAvailable           bool
+		expectEnabled          bool
 	}{
 		{
 			name: "DevKubeVirtRelieveAndMigrate",
@@ -680,9 +682,53 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 				}
 				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
 			}),
+			objects: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
 			checkContainerOnly:     false,
 			checkContainerArgsOnly: false,
+			psiAvailable:           true,
+			expectEnabled:          true,
 			want:                   expectedSoftTainterDeployment,
+		},
+		{
+			name: "DevKubeVirtRelieveAndMigrate without PSI",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
+			objects: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
+				},
+			},
+			psiAvailable:  false,
+			expectEnabled: false,
+		},
+		{
+			name: "DevKubeVirtRelieveAndMigrate without KubeVirt",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
+			psiAvailable:  true,
+			expectEnabled: false,
 		},
 		{
 			name: "LifecycleAndUtilization (without the softtainer) and no leftovers on existing nodes",
@@ -765,6 +811,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			},
 			checkContainerOnly:     false,
 			checkContainerArgsOnly: false,
+			expectEnabled:          true,
 			want:                   expectedSoftTainterDeployment,
 		},
 		{
@@ -815,6 +862,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			},
 			checkContainerOnly:     false,
 			checkContainerArgsOnly: false,
+			expectEnabled:          true,
 			want:                   expectedSoftTainterDeployment,
 		},
 	}
@@ -826,10 +874,21 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			}
 
 			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, tt.objects, nil, nil, nil)
+			if tt.psiAvailable {
+				targetConfigReconciler.psiPath = tempPSIPath
+			} else {
+				targetConfigReconciler.psiPath = path.Join(tempPSIPath, "MISSING")
+			}
 
 			enabled, err := targetConfigReconciler.isSoftTainterNeeded(tt.descheduler)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v\n", err)
+			}
+			if enabled != tt.expectEnabled {
+				t.Fatalf("Expected isSoftTainterNeeded to return %v, got %v", tt.expectEnabled, enabled)
+			}
+			if tt.want == nil {
+				return
 			}
 			got, _, err := targetConfigReconciler.manageSoftTainterDeployment(tt.descheduler, nil, enabled)
 			if err != nil {
