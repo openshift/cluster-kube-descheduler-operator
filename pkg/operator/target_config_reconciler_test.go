@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1687,8 +1688,6 @@ func TestCheckProfileConflicts(t *testing.T) {
 	}
 }
 
-const allowNetworkPolicyOperandName = "allow-all-egress-and-metrics-ingress-operand"
-
 func TestManageOperandNetworkPolicyAllow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1733,10 +1732,7 @@ func TestManageOperandNetworkPolicyAllow(t *testing.T) {
 	}
 }
 
-const (
-	allowNetworkPolicySoftTainterName = "allow-all-egress-and-health-ingress-operand-softtainter"
-	softTainterAppLabel               = "softtainer"
-)
+const softTainterAppLabel = "softtainer"
 
 func TestManageSoftTainterNetworkPolicyAllow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1784,5 +1780,61 @@ func TestManageSoftTainterNetworkPolicyAllow(t *testing.T) {
 	_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
 	if !errors.IsNotFound(getErr) {
 		t.Fatalf("Expected softtainter NetworkPolicy to be deleted when disabled, got: %v", getErr)
+	}
+}
+
+func testNetworkPolicy(name, namespace string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+func TestPruneUnmanagedNetworkPolicy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const unmanagedName = "user-restricting-policy"
+	const otherNamespace = "other-namespace"
+
+	kubeClient := fake.NewSimpleClientset(
+		testNetworkPolicy(allowNetworkPolicyOperandName, operatorclient.OperatorNamespace),
+		testNetworkPolicy(allowNetworkPolicySoftTainterName, operatorclient.OperatorNamespace),
+		testNetworkPolicy(unmanagedName, operatorclient.OperatorNamespace),
+		testNetworkPolicy("other-ns-policy", otherNamespace),
+	)
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: events.NewInMemoryRecorder("test", clock.RealClock{}),
+	}
+
+	if err := reconciler.pruneUnmanagedNetworkPolicies(operatorclient.OperatorNamespace, true); err != nil {
+		t.Fatalf("pruneUnmanagedNetworkPolicies(softtainter enabled) failed: %v", err)
+	}
+
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{}); err != nil {
+		t.Errorf("expected managed operand NetworkPolicy to be kept: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{}); err != nil {
+		t.Errorf("expected managed softtainter NetworkPolicy to be kept when enabled: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, unmanagedName, metav1.GetOptions{}); !errors.IsNotFound(err) {
+		t.Errorf("expected unmanaged NetworkPolicy to be deleted, got: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(otherNamespace).Get(ctx, "other-ns-policy", metav1.GetOptions{}); err != nil {
+		t.Errorf("expected NetworkPolicy in another namespace to be left alone: %v", err)
+	}
+
+	if err := reconciler.pruneUnmanagedNetworkPolicies(operatorclient.OperatorNamespace, false); err != nil {
+		t.Fatalf("pruneUnmanagedNetworkPolicies(softtainter disabled) failed: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{}); err != nil {
+		t.Errorf("expected managed operand NetworkPolicy to be kept after softtainter disabled: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{}); !errors.IsNotFound(err) {
+		t.Errorf("expected leftover softtainter NetworkPolicy to be deleted when disabled, got: %v", err)
 	}
 }

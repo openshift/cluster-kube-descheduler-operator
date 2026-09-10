@@ -65,6 +65,13 @@ const kubeVirtShedulableLabelSelector = "kubevirt.io/schedulable=true"
 const psiPath = "/proc/pressure/"
 const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
 
+// Managed operand NetworkPolicy names. Any other NetworkPolicy in the operator
+// namespace is treated as unmanaged and deleted.
+const (
+	allowNetworkPolicyOperandName     = "allow-all-egress-and-metrics-ingress-operand"
+	allowNetworkPolicySoftTainterName = "allow-all-egress-and-health-ingress-operand-softtainter"
+)
+
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "2"}
@@ -141,17 +148,10 @@ func NewTargetConfigReconciler(
 	coreInformers.Core().V1().Nodes().Informer().AddEventHandler(c.eventHandler())
 	coreInformers.Core().V1().Namespaces().Informer().AddEventHandler(c.eventHandler())
 
-	// Watch NetworkPolicies in operator namespace for immediate reconciliation on deletion or modification.
-	// Only watches operator namespace because all operand resources (including NetworkPolicies)
-	// are created in the same namespace as the KubeDescheduler CR (always operator namespace).
-	_, err = kubeInformersForNamespaces.InformersFor(operatorclient.OperatorNamespace).Networking().V1().NetworkPolicies().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			c.queue.Add(workQueueKey)
-		},
-		DeleteFunc: func(obj interface{}) {
-			c.queue.Add(workQueueKey)
-		},
-	})
+	// Watch NetworkPolicies in the operator namespace so create/update/delete
+	// of managed or unmanaged policies requeues immediately. Operand resources
+	// (including NetworkPolicies) live in the same namespace as the CR.
+	_, err = kubeInformersForNamespaces.InformersFor(operatorclient.OperatorNamespace).Networking().V1().NetworkPolicies().Informer().AddEventHandler(c.eventHandler())
 	if err != nil {
 		klog.ErrorS(err, "error watching NetworkPolicies")
 		return nil
@@ -436,7 +436,7 @@ func (c TargetConfigReconciler) sync() error {
 		if np != nil {
 			resourceVersion = np.ObjectMeta.ResourceVersion
 		}
-		specAnnotations["networkpolicies/allow-all-egress-and-metrics-ingress-operand"] = resourceVersion
+		specAnnotations["networkpolicies/"+allowNetworkPolicyOperandName] = resourceVersion
 	}
 
 	if stnp, _, err := c.manageSoftTainterNetworkPolicyAllow(descheduler, isSoftTainterNeeded); err != nil {
@@ -446,7 +446,11 @@ func (c TargetConfigReconciler) sync() error {
 		if stnp != nil {
 			resourceVersion = stnp.ObjectMeta.ResourceVersion
 		}
-		specAnnotations["networkpolicies/allow-all-egress-and-health-ingress-operand-softtainter"] = resourceVersion
+		specAnnotations["networkpolicies/"+allowNetworkPolicySoftTainterName] = resourceVersion
+	}
+
+	if err := c.pruneUnmanagedNetworkPolicies(descheduler.Namespace, isSoftTainterNeeded); err != nil {
+		return err
 	}
 
 	deschedulerDeployment, _, err := c.manageDeschedulerDeployment(descheduler, specAnnotations)
@@ -851,6 +855,36 @@ func (c *TargetConfigReconciler) manageSoftTainterNetworkPolicyAllow(descheduler
 		return resourceapply.ApplyNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, required, c.cache)
 	}
 	return resourceapply.DeleteNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, required)
+}
+
+// pruneUnmanagedNetworkPolicies deletes NetworkPolicies in the operator namespace
+// that are not owned by this operator. Extra policies can isolate operand or
+// operator pods; cluster-wide overrides belong on AdminNetworkPolicy / ClusterNetworkPolicy.
+func (c *TargetConfigReconciler) pruneUnmanagedNetworkPolicies(namespace string, stEnabled bool) error {
+	managed := sets.NewString(allowNetworkPolicyOperandName)
+	if stEnabled {
+		managed.Insert(allowNetworkPolicySoftTainterName)
+	}
+
+	policies, err := c.kubeClient.NetworkingV1().NetworkPolicies(namespace).List(c.ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list NetworkPolicies in %s: %w", namespace, err)
+	}
+
+	var firstErr error
+	for i := range policies.Items {
+		np := &policies.Items[i]
+		if managed.Has(np.Name) {
+			continue
+		}
+		if _, _, err := resourceapply.DeleteNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, np); err != nil {
+			klog.ErrorS(err, "failed to delete unmanaged NetworkPolicy", "namespace", np.Namespace, "name", np.Name)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.KubeDescheduler) (*v1.ConfigMap, bool, error) {
