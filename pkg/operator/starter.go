@@ -103,6 +103,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		configInformers,
 		routeInformers,
 		coreInformers,
+		kubeInformersForNamespaces,
 		cc.EventRecorder,
 	)
 

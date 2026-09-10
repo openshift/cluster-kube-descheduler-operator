@@ -16,10 +16,12 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -108,6 +110,11 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	openshiftRouteClient := fakeroutev1client.NewSimpleClientset(routesObjects...)
 	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
+		fakeKubeClient,
+		"",
+		operatorclient.OperatorNamespace,
+	)
 	scheme := runtime.NewScheme()
 
 	targetConfigReconciler := NewTargetConfigReconciler(
@@ -122,6 +129,7 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 		configInformers,
 		routeInformers,
 		coreInformers,
+		kubeInformersForNamespaces,
 		NewFakeRecorder(1024),
 	)
 
@@ -129,11 +137,13 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	configInformers.Start(ctx.Done())
 	routeInformers.Start(ctx.Done())
 	coreInformers.Start(ctx.Done())
+	kubeInformersForNamespaces.Start(ctx.Done())
 
 	operatorConfigInformers.WaitForCacheSync(ctx.Done())
 	configInformers.WaitForCacheSync(ctx.Done())
 	routeInformers.WaitForCacheSync(ctx.Done())
 	coreInformers.WaitForCacheSync(ctx.Done())
+	kubeInformersForNamespaces.WaitForCacheSync(ctx.Done())
 
 	return targetConfigReconciler, operatorConfigClient
 }
@@ -1347,6 +1357,7 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 		configInformers,
 		routev1informers.NewSharedInformerFactory(fakeroutev1client.NewSimpleClientset(), 10*time.Minute),
 		coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute),
+		kubeInformersForNamespaces,
 		eventRecorder,
 	)
 
@@ -1674,5 +1685,156 @@ func TestCheckProfileConflicts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestManageOperandNetworkPolicyAllow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kubeClient := fake.NewSimpleClientset()
+	eventRecorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+	}
+
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: eventRecorder,
+		cache:         resourceapply.NewResourceCache(),
+	}
+
+	policy, modified, err := reconciler.manageOperandNetworkPolicyAllow(descheduler)
+	if err != nil {
+		t.Fatalf("manageOperandNetworkPolicyAllow failed: %v", err)
+	}
+
+	if !modified {
+		t.Error("Expected modified=true when creating policy")
+	}
+
+	if policy.GetName() != allowNetworkPolicyOperandName {
+		t.Errorf("Expected policy name %q, got %q", allowNetworkPolicyOperandName, policy.GetName())
+	}
+
+	if policy.GetNamespace() != operatorclient.OperatorNamespace {
+		t.Errorf("Expected policy namespace %q, got %q", operatorclient.OperatorNamespace, policy.GetNamespace())
+	}
+
+	if got := policy.Spec.PodSelector.MatchLabels["app"]; got != operatorclient.OperandName {
+		t.Errorf("Expected podSelector app=%q, got %q", operatorclient.OperandName, got)
+	}
+}
+
+const softTainterAppLabel = "softtainer"
+
+func TestManageSoftTainterNetworkPolicyAllow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kubeClient := fake.NewSimpleClientset()
+	eventRecorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+	}
+
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: eventRecorder,
+		cache:         resourceapply.NewResourceCache(),
+	}
+
+	policy, modified, err := reconciler.manageSoftTainterNetworkPolicyAllow(descheduler, true)
+	if err != nil {
+		t.Fatalf("manageSoftTainterNetworkPolicyAllow(enabled) failed: %v", err)
+	}
+	if !modified {
+		t.Error("Expected modified=true when creating softtainter policy")
+	}
+	if policy.GetName() != allowNetworkPolicySoftTainterName {
+		t.Errorf("Expected policy name %q, got %q", allowNetworkPolicySoftTainterName, policy.GetName())
+	}
+	if policy.GetNamespace() != operatorclient.OperatorNamespace {
+		t.Errorf("Expected policy namespace %q, got %q", operatorclient.OperatorNamespace, policy.GetNamespace())
+	}
+	if got := policy.Spec.PodSelector.MatchLabels["app"]; got != softTainterAppLabel {
+		t.Errorf("Expected podSelector app=%q, got %q", softTainterAppLabel, got)
+	}
+
+	_, _, err = reconciler.manageSoftTainterNetworkPolicyAllow(descheduler, false)
+	if err != nil {
+		t.Fatalf("manageSoftTainterNetworkPolicyAllow(disabled) failed: %v", err)
+	}
+	_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+	if !errors.IsNotFound(getErr) {
+		t.Fatalf("Expected softtainter NetworkPolicy to be deleted when disabled, got: %v", getErr)
+	}
+}
+
+func testNetworkPolicy(name, namespace string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+func TestPruneUnmanagedNetworkPolicy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const unmanagedName = "user-restricting-policy"
+	const otherNamespace = "other-namespace"
+
+	kubeClient := fake.NewSimpleClientset(
+		testNetworkPolicy(allowNetworkPolicyOperandName, operatorclient.OperatorNamespace),
+		testNetworkPolicy(allowNetworkPolicySoftTainterName, operatorclient.OperatorNamespace),
+		testNetworkPolicy(unmanagedName, operatorclient.OperatorNamespace),
+		testNetworkPolicy("other-ns-policy", otherNamespace),
+	)
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: events.NewInMemoryRecorder("test", clock.RealClock{}),
+	}
+
+	if err := reconciler.pruneUnmanagedNetworkPolicies(operatorclient.OperatorNamespace, true); err != nil {
+		t.Fatalf("pruneUnmanagedNetworkPolicies(softtainter enabled) failed: %v", err)
+	}
+
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{}); err != nil {
+		t.Errorf("expected managed operand NetworkPolicy to be kept: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{}); err != nil {
+		t.Errorf("expected managed softtainter NetworkPolicy to be kept when enabled: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, unmanagedName, metav1.GetOptions{}); !errors.IsNotFound(err) {
+		t.Errorf("expected unmanaged NetworkPolicy to be deleted, got: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(otherNamespace).Get(ctx, "other-ns-policy", metav1.GetOptions{}); err != nil {
+		t.Errorf("expected NetworkPolicy in another namespace to be left alone: %v", err)
+	}
+
+	if err := reconciler.pruneUnmanagedNetworkPolicies(operatorclient.OperatorNamespace, false); err != nil {
+		t.Fatalf("pruneUnmanagedNetworkPolicies(softtainter disabled) failed: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{}); err != nil {
+		t.Errorf("expected managed operand NetworkPolicy to be kept after softtainter disabled: %v", err)
+	}
+	if _, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{}); !errors.IsNotFound(err) {
+		t.Errorf("expected leftover softtainter NetworkPolicy to be deleted when disabled, got: %v", err)
 	}
 }
