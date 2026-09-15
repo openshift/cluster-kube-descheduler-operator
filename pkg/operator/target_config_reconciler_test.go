@@ -682,9 +682,9 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		expectEnabled          bool
 	}{
 		{
-			name: "DevKubeVirtRelieveAndMigrate",
+			name: "KubeVirtRelieveAndMigrate",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
 					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
@@ -706,9 +706,9 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			want:                   expectedSoftTainterDeployment,
 		},
 		{
-			name: "DevKubeVirtRelieveAndMigrate without PSI",
+			name: "KubeVirtRelieveAndMigrate without PSI",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
 					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
@@ -727,9 +727,9 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			expectEnabled: false,
 		},
 		{
-			name: "DevKubeVirtRelieveAndMigrate without KubeVirt",
+			name: "KubeVirtRelieveAndMigrate without KubeVirt",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
 					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
 					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
