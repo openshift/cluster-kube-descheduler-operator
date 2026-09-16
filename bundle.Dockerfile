@@ -21,7 +21,7 @@ ARG REPLACED_OPERAND_IMG=registry-proxy.engineering.redhat.com/rh-osbs/deschedul
 RUN hack/replace-image.sh manifests ${REPLACED_OPERATOR_IMG} ${OPERATOR_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_OPERAND_IMG} ${OPERAND_IMAGE}
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:d235f607e1d6d833f031db107dc42206e4dd4d5aa9142c43d3771fb7f9bea76a
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:e5161a7d7d99cf22e4f34b72e111211a399d956d9b0e8714da18e9c4c8151041
 
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
