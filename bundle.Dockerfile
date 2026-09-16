@@ -23,6 +23,7 @@ ARG REPLACED_SOFTTAINER_IMG=registry-proxy.engineering.redhat.com/rh-osbs/kube-d
 RUN hack/replace-image.sh manifests ${REPLACED_OPERATOR_IMG} ${OPERATOR_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_OPERAND_IMG} ${OPERAND_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_SOFTTAINER_IMG} ${SOFTTAINER_IMAGE}
+RUN sed -i "s/createdAt: \".*\"/createdAt: \"$(date -I)\"/" manifests/cluster-kube-descheduler-operator.clusterserviceversion.yaml
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:e5161a7d7d99cf22e4f34b72e111211a399d956d9b0e8714da18e9c4c8151041
 
