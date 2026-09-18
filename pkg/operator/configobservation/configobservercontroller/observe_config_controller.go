@@ -5,7 +5,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/configobservation"
-	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/configobserver"
 	libgoapiserver "github.com/openshift/library-go/pkg/operator/configobserver/apiserver"
@@ -24,9 +23,10 @@ func NewConfigObserver(
 	configInformer configinformers.SharedInformerFactory,
 	resourceSyncer resourcesynccontroller.ResourceSyncer,
 	eventRecorder events.Recorder,
+	operatorNamespace string,
 ) *ConfigObserver {
 	interestingNamespaces := []string{
-		operatorclient.OperatorNamespace,
+		operatorNamespace,
 	}
 
 	informers := []factory.Informer{

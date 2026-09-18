@@ -2,7 +2,6 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: descheduler-operator
-  namespace: openshift-kube-descheduler-operator
 spec:
   selector:
     matchLabels:
@@ -14,4 +13,14 @@ spec:
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
         caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
-        serverName: descheduler-operator-metrics.openshift-kube-descheduler-operator.svc
+      # Scrape via Service DNS so TLS hostname is <service>.<namespace>.svc,
+      # matching the serving-cert SAN in any install namespace. Do not hardcode serverName.
+      relabelings:
+        - sourceLabels:
+            - __meta_kubernetes_service_name
+            - __meta_kubernetes_namespace
+          separator: "."
+          regex: "(.*)"
+          targetLabel: __address__
+          replacement: "${1}.svc:8443"
+          action: replace
