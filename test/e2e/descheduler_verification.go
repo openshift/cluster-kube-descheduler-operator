@@ -273,6 +273,227 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 })
 
+// NetworkPolicy tests live outside the OTP suite so names are not prefixed with [OTP].
+// If the operator is already installed, reuse it; otherwise install like the OTP suite.
+var _ = g.Describe("[Operator][Serial] Descheduler NetworkPolicy", g.Ordered, func() {
+	var (
+		ctx                   context.Context
+		cancelFnc             context.CancelFunc
+		kubeClient            *k8sclient.Clientset
+		dynamicClient         dynamic.Interface
+		deschClient           *deschclient.Clientset
+		apiExtClient          *apiextclientv1.Clientset
+		operatorInstalledByUs bool
+	)
+
+	g.BeforeAll(func() {
+		g.By("Setting up NetworkPolicy test environment")
+		var err error
+		kubeClient = GetKubeClient()
+		dynamicClient = GetDynamicClient()
+		deschClient = GetDeschedulerClient()
+		apiExtClient = GetApiExtensionClient()
+		ctx, cancelFnc = context.WithCancel(context.TODO())
+
+		exists, err := deschedulerOperatorDeploymentExists(ctx, kubeClient)
+		o.Expect(err).NotTo(o.HaveOccurred(), "should determine whether descheduler-operator Deployment exists")
+
+		if exists {
+			g.By("Descheduler operator already installed — reusing existing installation")
+			operatorInstalledByUs = false
+			_, err = waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName+"-operator", "")
+			o.Expect(err).NotTo(o.HaveOccurred(), "descheduler-operator pod should be running")
+			ensureNetworkPolicySuiteOperandReady(ctx, kubeClient, deschClient)
+			return
+		}
+
+		g.By("Descheduler operator not installed — installing")
+		operatorInstalledByUs = true
+		if !isOperatorOLMInstallationEnabled() {
+			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
+		} else {
+			err = installOperatorWithSubscription(ctx, kubeClient, deschClient, dynamicClient, operatorclient.OperatorNamespace)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	g.AfterAll(func() {
+		if cancelFnc != nil {
+			defer cancelFnc()
+		}
+
+		// Do not tear down an installation we did not create.
+		if !operatorInstalledByUs {
+			g.By("Skipping cleanup — operator was already installed before these tests")
+			return
+		}
+
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cleanupCancel()
+
+		if isOperatorOLMInstallationEnabled() {
+			g.By("Cleaning up operator installation")
+
+			og := &operatorsv1.OperatorGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "descheduler-og",
+					Namespace: operatorclient.OperatorNamespace,
+				},
+			}
+			sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
+			if err != nil {
+				klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
+			}
+
+			if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+				klog.Warningf("Failed to delete KubeDescheduler: %v", err)
+			}
+			if sub != nil {
+				if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
+					klog.Warningf("Failed to delete Subscription: %v", err)
+				}
+			}
+			if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
+				klog.Warningf("Failed to delete OperatorGroup: %v", err)
+			}
+		}
+
+		g.By("Deleting operator namespace")
+		err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
+		if err != nil {
+			klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
+		}
+
+		g.By("Ensuring namespace is fully deleted")
+		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
+					return true, nil
+				}
+				klog.Warningf("Error checking namespace: %v", err)
+				return false, nil
+			}
+			klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
+			return false, nil
+		})
+		if err != nil {
+			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
+		}
+	})
+
+	g.It("should have operand NetworkPolicy configured", func() {
+		g.By("Testing operand NetworkPolicy")
+		testOperandNetworkPolicy(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	g.It("should allow metrics traffic from monitoring namespace", func() {
+		g.By("Testing NetworkPolicy allow path from openshift-monitoring")
+		testOperandNetworkPolicyAllowFromMonitoring(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	g.It("should deny metrics traffic from non-monitoring namespace", func() {
+		g.By("Testing NetworkPolicy deny path from non-monitoring namespace")
+		testOperandNetworkPolicyDenyFromNonMonitoring(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	g.It("should deny non-metrics ports to descheduler from monitoring namespace", func() {
+		g.By("Testing NetworkPolicy deny for non-10258 ports")
+		testOperandNetworkPolicyDenyWrongPorts(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	g.It("should self-heal operand NetworkPolicy after deletion", func() {
+		g.By("Testing operand NetworkPolicy self-heal after deletion")
+		testOperandNetworkPolicySelfHeal(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	g.It("should self-heal operand NetworkPolicy after modification", func() {
+		g.By("Testing operand NetworkPolicy self-heal after modification")
+		testOperandNetworkPolicySelfHealOnModification(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	// Softtainter NetworkPolicy cases (policy only exists when softtainter is enabled).
+	g.Context("with softtainter enabled", func() {
+		var softtainterCleanup func()
+
+		g.BeforeAll(func() {
+			g.By("Enabling softtainter for NetworkPolicy tests")
+			softtainterCleanup = setupSoftTainterController(ctx, g.GinkgoTB(), kubeClient, deschClient)
+		})
+
+		g.AfterAll(func() {
+			if softtainterCleanup != nil {
+				g.By("Disabling softtainter after NetworkPolicy tests")
+				softtainterCleanup()
+			}
+		})
+
+		g.It("should have softtainter NetworkPolicy configured", func() {
+			g.By("Testing softtainter NetworkPolicy configuration")
+			testSoftTainterNetworkPolicyConfigured(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("should allow softtainter health traffic from any namespace", func() {
+			g.By("Testing softtainter NetworkPolicy allow path for TCP 6060")
+			testSoftTainterNetworkPolicyAllowHealth(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("should deny non-health ports to softtainter", func() {
+			g.By("Testing softtainter NetworkPolicy deny for non-6060 ports")
+			testSoftTainterNetworkPolicyDenyWrongPorts(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("should self-heal softtainter NetworkPolicy after deletion", func() {
+			g.By("Testing softtainter NetworkPolicy self-heal after deletion")
+			testSoftTainterNetworkPolicySelfHeal(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("should self-heal softtainter NetworkPolicy after modification", func() {
+			g.By("Testing softtainter NetworkPolicy self-heal after modification")
+			testSoftTainterNetworkPolicySelfHealOnModification(g.GinkgoTB(), ctx, kubeClient)
+		})
+	})
+
+	g.It("should create and remove softtainter NetworkPolicy", func() {
+		g.By("Testing softtainter NetworkPolicy lifecycle")
+		testSoftTainterNetworkPolicy(g.GinkgoTB(), ctx, kubeClient)
+	})
+})
+
+// deschedulerOperatorDeploymentExists reports whether the descheduler-operator Deployment
+// object exists. Existence is independent of readiness; Get errors other than NotFound are returned.
+func deschedulerOperatorDeploymentExists(ctx context.Context, kubeClient *k8sclient.Clientset) (bool, error) {
+	_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, "descheduler-operator", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ensureNetworkPolicySuiteOperandReady ensures a KubeDescheduler CR and operand (including NetworkPolicy)
+// exist when reusing a pre-installed operator that may not have a CR yet.
+func ensureNetworkPolicySuiteOperandReady(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+	_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		g.By("Pre-existing operator has no KubeDescheduler CR — applying base CR")
+		err = operatorConfigsAppliers[baseConf](ctx, deschClient)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred(), "KubeDescheduler CR must exist for NetworkPolicy tests")
+
+	_, err = waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	o.Expect(err).NotTo(o.HaveOccurred(), "descheduler operand should be running for NetworkPolicy tests")
+
+	o.Eventually(func(gomega o.Gomega) {
+		_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+		gomega.Expect(getErr).NotTo(o.HaveOccurred(), "operand NetworkPolicy should exist")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+}
+
 // Test implementations
 
 // testPDBCompliance verifies that descheduler respects Pod Disruption Budgets
