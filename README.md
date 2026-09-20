@@ -6,7 +6,7 @@ Run the descheduler in your OpenShift cluster to move pods based on specific str
 
 ```
 releases:
-- {version: "4.12.1",        ocp: "4.12",       k8s: "1.25", go: "1.19", release_branch: "4.12"}
+- {version: "4.12.1-4.12.2", ocp: "4.12",       k8s: "1.25", go: "1.19", release_branch: "4.12"}
 - {version: "4.13.1",        ocp: "4.13",       k8s: "1.26", go: "1.19", release_branch: "4.13"}
 - {version: "4.14.1-4.14.4", ocp: "4.14",       k8s: "1.27", go: "1.20", release_branch: "4.14"}
 - {version: "5.0.0",         ocp: "4.15, 4.16", k8s: "1.28", go: "1.20", release_branch: "4.15"}
