@@ -40,7 +40,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=4.12.0 <5.0.6"
+    olm.skipRange: ">=4.14.0 <5.0.6"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -51,7 +51,7 @@ metadata:
     operatorframework.io/suggested-namespace: "openshift-kube-descheduler-operator"
     console.openshift.io/operator-monitoring-default: "true"
 spec:
-  replaces: clusterkubedescheduleroperator.4.14.1
+  replaces: clusterkubedescheduleroperator.v4.14.0
   # buffering up to 6 5.0.z releases to allow to include these in all supported bundle index images
   # The buffer len 6 should be sufficient for normal cadance. Including CVE releases.
   # The buffer can be extened later as needed.
