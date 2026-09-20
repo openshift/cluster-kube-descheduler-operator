@@ -40,7 +40,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=4.9.0 <4.12.2"
+    olm.skipRange: ">=4.11.0 <4.12.2"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -57,9 +57,6 @@ spec:
   # The buffer can be extened later as needed.
   # So far all previous 4.y.z releases have had z=0
   skips:
-    - clusterkubedescheduleroperator.v4.8.0
-    - clusterkubedescheduleroperator.v4.9.0
-    - clusterkubedescheduleroperator.v4.10.0
     - clusterkubedescheduleroperator.4.12.0-202209130958
     - clusterkubedescheduleroperator.4.12.0-202210031439
     - clusterkubedescheduleroperator.4.12.0-202210052203
@@ -120,6 +117,20 @@ spec:
     - clusterkubedescheduleroperator.4.12.0-202502191728
     - clusterkubedescheduleroperator.4.12.0-202503101712
     - clusterkubedescheduleroperator.4.12.0-202503181728
+    - clusterkubedescheduleroperator.v4.10.0
+    - clusterkubedescheduleroperator.v4.10.1
+    - clusterkubedescheduleroperator.v4.10.2
+    - clusterkubedescheduleroperator.v4.10.3
+    - clusterkubedescheduleroperator.v4.10.4
+    - clusterkubedescheduleroperator.v4.10.5
+    - clusterkubedescheduleroperator.v4.10.6
+    - clusterkubedescheduleroperator.v4.11.0
+    - clusterkubedescheduleroperator.v4.11.1
+    - clusterkubedescheduleroperator.v4.11.2
+    - clusterkubedescheduleroperator.v4.11.3
+    - clusterkubedescheduleroperator.v4.11.4
+    - clusterkubedescheduleroperator.v4.11.5
+    - clusterkubedescheduleroperator.v4.11.6
     - clusterkubedescheduleroperator.v4.12.0
     - clusterkubedescheduleroperator.v4.12.1
   customresourcedefinitions:
