@@ -5,7 +5,7 @@ COPY . .
 RUN mkdir licenses
 COPY ./LICENSE licenses/.
 
-ARG OPERATOR_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:9b277859320f4d7e48a914b0042f4f2637c62bc638810f094430c2dbdf3366d4
+ARG OPERATOR_IMAGE=registry.redhat.io/kube-descheduler-operator/kube-descheduler-rhel9-operator@sha256:eaf6596b9f22a6f60bd646539f3c07e4eadd815e52910b1135578fb25a6b11a4
 # artificial distance to avoid rebase conflicts when the operand and the operator image gets updated at the same time
 #
 #
