@@ -40,7 +40,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    olm.skipRange: ">=4.11.0 <4.14.4"
+    olm.skipRange: ">=4.13.0 <4.14.4"
     description: An operator to run descheduler in Openshift cluster.
     repository: https://github.com/openshift/cluster-kube-descheduler-operator
     support: Red Hat, Inc.
@@ -57,22 +57,6 @@ spec:
   # The buffer can be extened later as needed.
   # So far all previous 4.y.z releases have had z=0
   skips:
-    - clusterkubedescheduleroperator.v4.10.0
-    - clusterkubedescheduleroperator.v4.11.0
-    - clusterkubedescheduleroperator.v4.12.0
-    - clusterkubedescheduleroperator.v4.12.1
-    - clusterkubedescheduleroperator.v4.12.2
-    - clusterkubedescheduleroperator.v4.12.3
-    - clusterkubedescheduleroperator.v4.12.4
-    - clusterkubedescheduleroperator.v4.12.5
-    - clusterkubedescheduleroperator.v4.12.6
-    - clusterkubedescheduleroperator.v4.13.0
-    - clusterkubedescheduleroperator.v4.13.1
-    - clusterkubedescheduleroperator.v4.13.2
-    - clusterkubedescheduleroperator.v4.13.3
-    - clusterkubedescheduleroperator.v4.13.4
-    - clusterkubedescheduleroperator.v4.13.5
-    - clusterkubedescheduleroperator.v4.13.6
     - clusterkubedescheduleroperator.4.14.0-202304241531
     - clusterkubedescheduleroperator.4.14.0-202305180141
     - clusterkubedescheduleroperator.4.14.0-202306070816
@@ -123,6 +107,20 @@ spec:
     - clusterkubedescheduleroperator.4.14.0-202503131537
     - clusterkubedescheduleroperator.4.14.0-202503171209
     - clusterkubedescheduleroperator.4.14.0-202503310335
+    - clusterkubedescheduleroperator.v4.12.0
+    - clusterkubedescheduleroperator.v4.12.1
+    - clusterkubedescheduleroperator.v4.12.2
+    - clusterkubedescheduleroperator.v4.12.3
+    - clusterkubedescheduleroperator.v4.12.4
+    - clusterkubedescheduleroperator.v4.12.5
+    - clusterkubedescheduleroperator.v4.12.6
+    - clusterkubedescheduleroperator.v4.13.0
+    - clusterkubedescheduleroperator.v4.13.1
+    - clusterkubedescheduleroperator.v4.13.2
+    - clusterkubedescheduleroperator.v4.13.3
+    - clusterkubedescheduleroperator.v4.13.4
+    - clusterkubedescheduleroperator.v4.13.5
+    - clusterkubedescheduleroperator.v4.13.6
     - clusterkubedescheduleroperator.v4.14.0
     - clusterkubedescheduleroperator.v4.14.1
     - clusterkubedescheduleroperator.v4.14.2
