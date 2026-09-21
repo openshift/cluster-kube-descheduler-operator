@@ -432,6 +432,7 @@ func TestReconcile(t *testing.T) {
 				client:                 cl,
 				resyncPeriod:           60 * time.Second,
 				policyConfigFile:       path.Join(getTestFilesLocation(t), tc.testfilename),
+				namespace:              operatorclient.OperatorNamespace,
 				nodeUtilizationFactory: tc.nodeUtilization.newNodeUtilizationFactory,
 			}
 			result, err := st.Reconcile(ctx, reconcile.Request{})
