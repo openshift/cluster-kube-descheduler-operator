@@ -583,29 +583,29 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "softtainter",
 			Namespace:       "openshift-kube-descheduler-operator",
-			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "ef97d3d0f3b5175d75facaefb8102ae00469a9d38676a3b6b4a96ef67b52b1b5"},
-			Labels:          map[string]string{"app": "softtainer"},
+			Annotations:     map[string]string{"operator.openshift.io/spec-hash": "b33e3ce3c91e37fcfb739b5d5a9ad5fcb7582600c9fc45663fca0dc121d83dab"},
+			Labels:          map[string]string{"app": "softtainter"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "operator.openshift.io/v1", Kind: "KubeDescheduler", Name: "cluster"}},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: utilptr.To(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": "softtainer",
+					"app": "softtainter",
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "softtainer"},
+					Labels: map[string]string{"app": "softtainter"},
 					Annotations: map[string]string{
-						"kubectl.kubernetes.io/default-container": "openshift-softtainer",
+						"kubectl.kubernetes.io/default-container": "openshift-softtainter",
 						"openshift.io/required-scc":               "restricted-v2",
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:    "openshift-softtainer",
+							Name:    "openshift-softtainter",
 							Command: []string{"/usr/bin/soft-tainter"},
 							Args: []string{
 								"--policy-config-file=/policy-dir/policy.yaml",
@@ -705,42 +705,42 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			expectEnabled:          true,
 			want:                   expectedSoftTainterDeployment,
 		},
-		{
-			name: "KubeVirtRelieveAndMigrate without PSI",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-				}
-				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
-			}),
-			objects: []runtime.Object{
-				&corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
-					},
+	{
+		name: "KubeVirtRelieveAndMigrate without PSI",
+		descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+			spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
+			spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+				DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+				DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+			}
+			spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+		}),
+		objects: []runtime.Object{
+			&corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node1",
+					Labels: map[string]string{"kubevirt.io/schedulable": "true"},
 				},
 			},
-			psiAvailable:  false,
-			expectEnabled: false,
 		},
-		{
-			name: "KubeVirtRelieveAndMigrate without KubeVirt",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-				}
-				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
-			}),
-			psiAvailable:  true,
-			expectEnabled: false,
-		},
-		{
-			name: "LifecycleAndUtilization (without the softtainer) and no leftovers on existing nodes",
+		psiAvailable:  false,
+		expectEnabled: false,
+	},
+	{
+		name: "KubeVirtRelieveAndMigrate without KubeVirt",
+		descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+			spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
+			spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+				DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+				DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+			}
+			spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+		}),
+		psiAvailable:  true,
+		expectEnabled: false,
+	},
+	{
+		name: "LifecycleAndUtilization (without the softtainter) and no leftovers on existing nodes",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
@@ -784,7 +784,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			want:                   nil,
 		},
 		{
-			name: "LifecycleAndUtilization (without the softtainer) but a leftover on existing nodes - 1",
+			name: "LifecycleAndUtilization (without the softtainter) but a leftover on existing nodes - 1",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
@@ -824,7 +824,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			want:                   expectedSoftTainterDeployment,
 		},
 		{
-			name: "LifecycleAndUtilization (without the softtainer) but a leftover on existing nodes - 2",
+			name: "LifecycleAndUtilization (without the softtainter) but a leftover on existing nodes - 2",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
