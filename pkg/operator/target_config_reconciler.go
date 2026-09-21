@@ -1200,6 +1200,20 @@ func hasKubeVirtRelieveAndMigrateProfile(profiles []deschedulerv1.DeschedulerPro
 
 func (c *TargetConfigReconciler) isSoftTainterNeeded(descheduler *deschedulerv1.KubeDescheduler) (bool, error) {
 	if hasKubeVirtRelieveAndMigrateProfile(descheduler.Spec.Profiles) {
+		kvDeployed, err := c.isKubeVirtDeployed()
+		if err != nil {
+			return false, err
+		}
+		if !kvDeployed {
+			return false, nil
+		}
+		psiEnabled, err := c.isPSIenabled()
+		if err != nil {
+			return false, err
+		}
+		if !psiEnabled {
+			return false, nil
+		}
 		return true, nil
 	}
 
