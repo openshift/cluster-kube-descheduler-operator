@@ -18,6 +18,7 @@ releases:
 - {version: "5.3.0-5.3.1",   ocp: "4.20, 4.21", k8s: "1.33", go: "1.24", release_branch: "4.20"}
 - {version: "5.3.2-5.3.4",   ocp: "4.20, 4.21", k8s: "1.34", go: "1.24", release_branch: "4.21"}
 - {version: "5.4.0-5.4.3",   ocp: "4.22, 5.0",  k8s: "1.35", go: "1.25", release_branch: "4.22"}
+- {version: "5.4.4",         ocp: "4.22, 5.0",  k8s: "1.36", go: "1.26", release_branch: "5.0" }
 ```
 
 ## Rebase instruction
