@@ -4,7 +4,7 @@ COPY . .
 RUN make build --warn-undefined-variables \
     && gzip cluster-kube-descheduler-operator-tests-ext
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:984df0a2b8d9011d419b0ad260b25f6b74b7ce69ab0595b75522e30f8849f27f
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:8ebe2ad8fdf3cab3e5a53c1edc69194c98209cfadab24b884f4ad9ebcf7bbbfc
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/cluster-kube-descheduler-operator-tests-ext.gz /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/soft-tainter /usr/bin/
