@@ -44,6 +44,16 @@ func isOperatorOLMInstallationEnabled() bool {
 	return os.Getenv("NO_OLM") == "" && os.Getenv("OPERATOR_IMAGE") == "" && os.Getenv("OPERAND_IMAGE") == ""
 }
 
+// isOperatorPreInstalled checks if the operator was already installed
+// (e.g., via operator-sdk run bundle in CI) by looking for an existing CSV.
+func isOperatorPreInstalled(ctx context.Context, dynamicClient dynamic.Interface, namespace string) bool {
+	csvName, err := getCSVName(ctx, dynamicClient, namespace, "")
+	if err != nil {
+		return false
+	}
+	return csvName != ""
+}
+
 // Ginkgo test specs for migrated OTP tests
 var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Ordered, g.Serial, func() {
 	var (
@@ -64,9 +74,21 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		apiExtClient = GetApiExtensionClient()
 		ctx, cancelFnc = context.WithCancel(context.TODO())
 
-		if !isOperatorOLMInstallationEnabled() {
+		if isOperatorPreInstalled(ctx, dynamicClient, operatorclient.OperatorNamespace) {
+			// Bundle-based CI installation (operator-sdk run bundle) pre-installs the operator;
+			// only the KubeDescheduler CR and operand readiness are needed.
+			klog.Infof("Operator already installed, skipping installation")
+			kdCR := newDefaultKubeDescheduler()
+			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kdCR, metav1.CreateOptions{})
+			if err != nil && !strings.Contains(err.Error(), "already exists") {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
+		} else if !isOperatorOLMInstallationEnabled() {
+			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
 			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
 		} else {
+			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
 			err = installOperatorWithSubscription(ctx, kubeClient, deschClient, dynamicClient, operatorclient.OperatorNamespace)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
