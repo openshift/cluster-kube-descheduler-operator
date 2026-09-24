@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: descheduler-operator
+  namespace: openshift-kube-descheduler-operator
+spec:
+  selector:
+    matchLabels:
+      name: descheduler-operator
+  endpoints:
+    - port: https
+      scheme: https
+      interval: 30s
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        serverName: descheduler-operator-metrics.openshift-kube-descheduler-operator.svc

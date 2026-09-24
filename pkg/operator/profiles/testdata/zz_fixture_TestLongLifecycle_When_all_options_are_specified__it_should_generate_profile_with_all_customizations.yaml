@@ -1,0 +1,74 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+maxNoOfPodsToEvictPerNode: 3
+maxNoOfPodsToEvictTotal: 10
+metricsProviders:
+- prometheus:
+    url: https://prometheus-k8s.openshift-monitoring.svc:9091
+  source: Prometheus
+profiles:
+- name: LongLifecycle
+  pluginConfig:
+  - args:
+      includingInitContainers: true
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+        - kube-system
+        - openshift-*
+      podRestartThreshold: 100
+    name: RemovePodsHavingTooManyRestarts
+  - args:
+      evictableNamespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+        - kube-system
+        - openshift-*
+      evictionLimits:
+        node: 3
+      metricsUtilization:
+        prometheus:
+          query: instance:node_cpu:rate:sum
+        source: Prometheus
+      targetThresholds:
+        MetricResource: 30
+      thresholds:
+        MetricResource: 10
+    name: LowNodeUtilization
+  - args:
+      evictLocalStoragePods: true
+      podProtections: {}
+      priorityThreshold:
+        name: ""
+        value: 500
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - LowNodeUtilization
+    deschedule:
+      disabled: null
+      enabled:
+      - RemovePodsHavingTooManyRestarts
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

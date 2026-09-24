@@ -1,0 +1,50 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: TopologyAndDuplicates
+  pluginConfig:
+  - args:
+      constraints:
+      - DoNotSchedule
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+    name: RemovePodsViolatingTopologySpreadConstraint
+  - args:
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+    name: RemoveDuplicates
+  - args:
+      podProtections: {}
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - RemovePodsViolatingTopologySpreadConstraint
+      - RemoveDuplicates
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

@@ -1,0 +1,59 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: LongLifecycle
+  pluginConfig:
+  - args:
+      includingInitContainers: true
+      namespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+      podRestartThreshold: 100
+    name: RemovePodsHavingTooManyRestarts
+  - args:
+      evictableNamespaces:
+        exclude:
+        - kube-system
+        - hypershift
+        - openshift
+        - openshift-kube-descheduler-operator
+        - openshift-kube-scheduler
+      targetThresholds:
+        cpu: 30
+        memory: 30
+        pods: 30
+      thresholds:
+        cpu: 10
+        memory: 10
+        pods: 10
+    name: LowNodeUtilization
+  - args:
+      ignorePvcPods: true
+      podProtections: {}
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - LowNodeUtilization
+    deschedule:
+      disabled: null
+      enabled:
+      - RemovePodsHavingTooManyRestarts
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null

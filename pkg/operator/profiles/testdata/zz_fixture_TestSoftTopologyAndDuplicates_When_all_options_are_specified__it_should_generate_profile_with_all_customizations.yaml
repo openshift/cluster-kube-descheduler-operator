@@ -1,0 +1,49 @@
+apiVersion: descheduler/v1alpha2
+kind: DeschedulerPolicy
+profiles:
+- name: SoftTopologyAndDuplicates
+  pluginConfig:
+  - args:
+      constraints:
+      - DoNotSchedule
+      - ScheduleAnyway
+      namespaces:
+        include:
+        - ns1
+        - ns2
+    name: RemovePodsViolatingTopologySpreadConstraint
+  - args:
+      namespaces:
+        include:
+        - ns1
+        - ns2
+    name: RemoveDuplicates
+  - args:
+      evictLocalStoragePods: true
+      podProtections: {}
+      priorityThreshold:
+        name: ""
+        value: 500
+    name: DefaultEvictor
+  plugins:
+    balance:
+      disabled: null
+      enabled:
+      - RemovePodsViolatingTopologySpreadConstraint
+      - RemoveDuplicates
+    deschedule:
+      disabled: null
+      enabled: null
+    filter:
+      disabled: null
+      enabled:
+      - DefaultEvictor
+    preevictionfilter:
+      disabled: null
+      enabled: null
+    presort:
+      disabled: null
+      enabled: null
+    sort:
+      disabled: null
+      enabled: null
