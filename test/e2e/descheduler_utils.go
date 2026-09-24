@@ -14,6 +14,7 @@ import (
 	operatorsv1 "github.com/operator-framework/api/pkg/operators/v1"
 	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -317,7 +318,6 @@ func createAndValidateKubeDeschedulerCR(ctx context.Context, kubeClient *k8sclie
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -348,8 +348,61 @@ func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Cli
 		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
 	}
 
+	// Wait for pod stability (single pod, no restarts in progress)
+	klog.Infof("Waiting for descheduler operand pod to be stable")
+	err = waitForOperandStability(ctx, kubeClient, 3*time.Minute)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
+	}
 	klog.Infof("KubeDescheduler CR created and operand deployment ready")
 	return nil
+}
+
+// kubeDeschedulerSpecIsDefault reports whether spec matches the default test CR.
+// Observed config is written by the operator and is ignored. Empty log levels match
+// the API default of Normal.
+func kubeDeschedulerSpecIsDefault(spec descv1.KubeDeschedulerSpec) bool {
+	desired := newDefaultKubeDescheduler().Spec
+	normalize := func(s *descv1.KubeDeschedulerSpec) {
+		s.ObservedConfig = runtime.RawExtension{}
+		s.UnsupportedConfigOverrides = runtime.RawExtension{}
+		if s.LogLevel == "" {
+			s.LogLevel = operatorv1.Normal
+		}
+		if s.OperatorLogLevel == "" {
+			s.OperatorLogLevel = operatorv1.Normal
+		}
+	}
+	normalize(&spec)
+	normalize(&desired)
+	return apiequality.Semantic.DeepEqual(spec, desired)
+}
+
+// ensureDefaultKubeDescheduler leaves a default CR in place. A non-default CR is
+// deleted, the operand ConfigMap is waited out, and the default CR is created.
+// A missing CR is created as the default without a delete.
+func ensureDefaultKubeDescheduler(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) error {
+	current, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		klog.Infof("KubeDescheduler CR not found, creating default")
+		return createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, newDefaultKubeDescheduler())
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get KubeDescheduler CR: %w", err)
+	}
+	if kubeDeschedulerSpecIsDefault(current.Spec) {
+		klog.Infof("KubeDescheduler CR already has the default spec, leaving it in place")
+		return nil
+	}
+
+	klog.Infof("KubeDescheduler CR spec is not default, deleting it before creating the default")
+	if err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient); err != nil {
+		return err
+	}
+	if err := waitForConfigMapDeletion(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+		return fmt.Errorf("timed out waiting for ConfigMap deletion before creating default CR: %w", err)
+	}
+	return createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, newDefaultKubeDescheduler())
 }
 
 // deleteKubeDeschedulerAndWait deletes a KubeDescheduler CR and waits for the operand deployment to be gone
@@ -854,29 +907,62 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 		return fmt.Errorf("failed to normalize expected policy: %w", err)
 	}
 
+	// This prevents policy mismatch when tests run in sequence where previous test's ConfigMap
+	// cleanup may still be in progress. We actively wait for the new ConfigMap to be created.
+	klog.Infof("Waiting for operator to create/update ConfigMap (grace period)...")
+	graceCtx, graceCancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer graceCancel()
+	err = wait.PollUntilContextTimeout(graceCtx, 1*time.Second, 2*time.Minute, true, func(pollCtx context.Context) (bool, error) {
+		_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(pollCtx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+		if err == nil {
+			klog.Infof("ConfigMap exists - operator reconciliation in progress")
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		klog.Warningf("Timeout waiting for ConfigMap creation (will retry in policy validation): %v", err)
+	}
+
 	// Poll until actual policy matches expected
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+	policyCtx, policyCancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer policyCancel()
+
+	startPolicyCheck := time.Now()
+	attemptCount := 0
+	err = wait.PollUntilContextTimeout(policyCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		elapsed := time.Since(startPolicyCheck)
+		attemptCount++
+
+		// Log every 30 seconds to show progress
+		if attemptCount%6 == 1 {
+			klog.Infof("Policy validation attempt %d (elapsed: %v)", attemptCount, elapsed)
+		}
+
 		// Get actual policy from ConfigMap
 		actualPolicy, err := getDeschedulerPolicyFromConfigMap(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
 		if err != nil {
-			klog.V(2).Infof("Failed to get DeschedulerPolicy from ConfigMap: %v", err)
+			klog.V(2).Infof("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
 			return false, nil
 		}
 
-		// Normalize actual policy
+		// Normalize actual policy to ensure consistent comparison with RawExtension formatting
 		normalizedActual, err := normalizeDeschedulerPolicy(actualPolicy)
 		if err != nil {
-			klog.V(2).Infof("Failed to normalize actual policy: %v", err)
+			klog.V(2).Infof("Failed to normalize actual policy (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
 			return false, nil
 		}
 
-		// Compare normalized policies using cmp.Diff
+		// Compare full normalized policies (including profile names, plugins, and arguments)
 		if diff := cmp.Diff(normalizedExpected, normalizedActual); diff != "" {
-			klog.V(2).Infof("Policy mismatch (-expected +actual):\n%s", diff)
+			if attemptCount%6 == 1 { // Log every 30 seconds
+				klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed)
+			}
+			klog.V(4).Infof("Policy mismatch (-expected +actual):\n%s", diff)
 			return false, nil
 		}
 
-		klog.V(4).Info("Operator-generated policy matches expected policy")
+		klog.V(4).Infof("Policy validation SUCCEEDED after %d attempts, %v total elapsed", attemptCount, elapsed)
 		return true, nil
 	})
 
@@ -902,6 +988,31 @@ func normalizeDeschedulerPolicy(policy *v1alpha2.DeschedulerPolicy) (*v1alpha2.D
 	err = yaml.Unmarshal(yamlBytes, normalized)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal normalized policy: %w", err)
+	}
+
+	// Normalize RawExtension fields to ensure consistent JSON encoding
+	// RawExtension bytes might have different formatting (whitespace, ordering) even if semantically identical
+	for profileIdx := range normalized.Profiles {
+		profile := &normalized.Profiles[profileIdx]
+		for pluginConfigIdx := range profile.PluginConfigs {
+			pluginConfig := &profile.PluginConfigs[pluginConfigIdx]
+			// Normalize the Args RawExtension by parsing and re-marshaling as JSON
+			if len(pluginConfig.Args.Raw) > 0 {
+				var args map[string]interface{}
+				if err := json.Unmarshal(pluginConfig.Args.Raw, &args); err == nil {
+					// Strip "namespaces" from comparison: the operator caches its
+					// protectedNamespaces list at startup, so the excluded namespace
+					// set in its policy may differ from what the test observes at
+					// validation time (openshift-* namespaces are created/deleted
+					// during test execution). Everything else is deterministic.
+					delete(args, "namespaces")
+					normalizedBytes, err := json.Marshal(args)
+					if err == nil {
+						pluginConfig.Args.Raw = normalizedBytes
+					}
+				}
+			}
+		}
 	}
 
 	return normalized, nil
@@ -933,4 +1044,60 @@ func getDeschedulerPolicyFromConfigMap(ctx context.Context, kubeClient *k8sclien
 
 	klog.V(4).Infof("Successfully parsed DeschedulerPolicy from ConfigMap with %d profiles", len(policy.Profiles))
 	return policy, nil
+}
+
+// ensureNamespaceMonitoringLabel ensures namespace has cluster-monitoring label for Prometheus scraping
+func ensureNamespaceMonitoringLabel(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) error {
+	const labelKey = "openshift.io/cluster-monitoring"
+	const labelValue = "true"
+
+	ns, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
+	}
+
+	// Check if label already exists
+	if ns.Labels != nil && ns.Labels[labelKey] == labelValue {
+		klog.Infof("Namespace %s already has monitoring label %s=%s", namespace, labelKey, labelValue)
+		return nil
+	}
+
+	// Add label
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+	ns.Labels[labelKey] = labelValue
+
+	_, err = kubeClient.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to add monitoring label to namespace %s: %w", namespace, err)
+	}
+
+	klog.Infof("Added monitoring label to namespace %s", namespace)
+
+	// Verify label was applied
+	nsVerify, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to verify label on namespace %s: %w", namespace, err)
+	}
+
+	if nsVerify.Labels[labelKey] != labelValue {
+		return fmt.Errorf("label verification failed: expected %s=%s, got %s", labelKey, labelValue, nsVerify.Labels[labelKey])
+	}
+
+	klog.Infof("✓ Verified: namespace %s has monitoring label %s=%s", namespace, labelKey, labelValue)
+	return nil
+}
+
+// waitForConfigMapDeletion waits for operator ConfigMap to be deleted
+func waitForConfigMapDeletion(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name string) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := kubeClient.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			klog.Infof("ConfigMap cleaned up - preventing stale policy in next test")
+			return true, nil
+		}
+		klog.V(4).Infof("ConfigMap still exists, waiting for deletion")
+		return false, nil
+	})
 }
