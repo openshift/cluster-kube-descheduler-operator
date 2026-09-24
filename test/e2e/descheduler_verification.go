@@ -45,13 +45,41 @@ func isOperatorOLMInstallationEnabled() bool {
 }
 
 // isOperatorPreInstalled checks if the operator was already installed
-// (e.g., via operator-sdk run bundle in CI) by looking for an existing CSV.
-func isOperatorPreInstalled(ctx context.Context, dynamicClient dynamic.Interface, namespace string) bool {
-	csvName, err := getCSVName(ctx, dynamicClient, namespace, "")
+// by checking if the operator Deployment is running and ready in the namespace.
+// This is more reliable than checking for CSV which is created asynchronously.
+func isOperatorPreInstalled(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) bool {
+	klog.Infof("isOperatorPreInstalled: checking if operator deployment is ready in namespace %s", namespace)
+
+	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, "descheduler-operator", metav1.GetOptions{})
+		if err != nil {
+			klog.V(2).Infof("isOperatorPreInstalled: deployment not found yet: %v", err)
+			return false, nil
+		}
+
+		if deployment.Spec.Replicas == nil {
+			klog.V(2).Infof("isOperatorPreInstalled: deployment has nil Spec.Replicas")
+			return false, nil
+		}
+
+		if deployment.Status.ReadyReplicas >= *deployment.Spec.Replicas {
+			klog.Infof("isOperatorPreInstalled: operator deployment is ready with %d/%d replicas",
+				deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+			return true, nil
+		}
+
+		klog.V(2).Infof("isOperatorPreInstalled: operator deployment not yet ready: %d/%d replicas",
+			deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+		return false, nil
+	})
+
 	if err != nil {
+		klog.Warningf("isOperatorPreInstalled: timed out waiting for operator deployment: %v", err)
 		return false
 	}
-	return csvName != ""
+
+	klog.Infof("isOperatorPreInstalled: returning true - operator is pre-installed")
+	return true
 }
 
 // Ginkgo test specs for migrated OTP tests
@@ -59,6 +87,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	var (
 		ctx           context.Context
 		cancelFnc     context.CancelFunc
+		olmInstalled  bool // Flag: true if operator installed via OLM (bundle or CatalogSource), false if non-OLM
 		kubeClient    *k8sclient.Clientset
 		dynamicClient dynamic.Interface
 		deschClient   *deschclient.Clientset
@@ -74,21 +103,24 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		apiExtClient = GetApiExtensionClient()
 		ctx, cancelFnc = context.WithCancel(context.TODO())
 
-		if isOperatorPreInstalled(ctx, dynamicClient, operatorclient.OperatorNamespace) {
+		if !isOperatorOLMInstallationEnabled() {
+			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
+			olmInstalled = false // Operator will be installed non-OLM way
+			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
+		} else if isOperatorPreInstalled(ctx, kubeClient, operatorclient.OperatorNamespace) {
 			// Bundle-based CI installation (operator-sdk run bundle) pre-installs the operator;
 			// only the KubeDescheduler CR and operand readiness are needed.
 			klog.Infof("Operator already installed, skipping installation")
+			olmInstalled = true // Operator was installed via OLM (bundle)
 			kdCR := newDefaultKubeDescheduler()
 			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kdCR, metav1.CreateOptions{})
 			if err != nil && !strings.Contains(err.Error(), "already exists") {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 			err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
-		} else if !isOperatorOLMInstallationEnabled() {
-			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
-			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
 		} else {
 			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
+			olmInstalled = true // Operator will be installed via OLM
 			err = installOperatorWithSubscription(ctx, kubeClient, deschClient, dynamicClient, operatorclient.OperatorNamespace)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -163,7 +195,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	// OCP-83032
 	g.It("[OTP][Operator][Serial] should validate RelatedImages defined in CSV [Slow][Timeout:15m]", func() {
 		g.By("Testing RelatedImages defined in CSV")
-		if !isOperatorOLMInstallationEnabled() {
+		if !olmInstalled {
 			g.Skip("Skipping. The operator is not installed via OLM")
 		}
 		testRelatedImages(g.GinkgoTB(), ctx, kubeClient)
@@ -172,7 +204,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	// OCP-45694
 	g.It("[OTP][Operator][Serial] should validate must-gather OLM data collection [Slow][Disruptive][Timeout:15m]", func() {
 		g.By("Testing must-gather OLM data collection")
-		if !isOperatorOLMInstallationEnabled() {
+		if !olmInstalled {
 			g.Skip("Skipping. The operator is not installed via OLM")
 		}
 		testOLMMustGatherData(g.GinkgoTB(), ctx, kubeClient)
