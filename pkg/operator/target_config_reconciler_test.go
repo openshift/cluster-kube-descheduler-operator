@@ -109,6 +109,11 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
 	scheme := runtime.NewScheme()
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
+		fakeKubeClient,
+		"",
+		operatorclient.OperatorNamespace,
+	)
 
 	targetConfigReconciler := NewTargetConfigReconciler(
 		ctx,
@@ -122,6 +127,7 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 		configInformers,
 		routeInformers,
 		coreInformers,
+		kubeInformersForNamespaces,
 		NewFakeRecorder(1024),
 	)
 
@@ -129,11 +135,13 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	configInformers.Start(ctx.Done())
 	routeInformers.Start(ctx.Done())
 	coreInformers.Start(ctx.Done())
+	kubeInformersForNamespaces.Start(ctx.Done())
 
 	operatorConfigInformers.WaitForCacheSync(ctx.Done())
 	configInformers.WaitForCacheSync(ctx.Done())
 	routeInformers.WaitForCacheSync(ctx.Done())
 	coreInformers.WaitForCacheSync(ctx.Done())
+	kubeInformersForNamespaces.WaitForCacheSync(ctx.Done())
 
 	return targetConfigReconciler, operatorConfigClient
 }
@@ -1697,6 +1705,7 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 		configInformers,
 		routev1informers.NewSharedInformerFactory(fakeroutev1client.NewSimpleClientset(), 10*time.Minute),
 		coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute),
+		kubeInformersForNamespaces,
 		eventRecorder,
 	)
 
