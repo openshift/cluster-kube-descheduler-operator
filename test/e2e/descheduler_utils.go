@@ -448,7 +448,7 @@ func waitForDeploymentReady(ctx context.Context, kubeClient *k8sclient.Clientset
 	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			klog.Warningf("Failed to get deployment %s/%s: %v", namespace, name, err)
+			g.By(fmt.Sprintf("ERROR: Failed to get deployment %s/%s: %v", namespace, name, err))
 			return false, nil
 		}
 
@@ -456,15 +456,117 @@ func waitForDeploymentReady(ctx context.Context, kubeClient *k8sclient.Clientset
 			return false, fmt.Errorf("deployment %s/%s has nil Spec.Replicas", namespace, name)
 		}
 
+		// DEBUG: Log deployment image and pod status
+		if len(deployment.Spec.Template.Spec.Containers) > 0 {
+			containerImage := deployment.Spec.Template.Spec.Containers[0].Image
+			g.By(fmt.Sprintf("DEBUG: Deployment %s/%s container image: %s", namespace, name, containerImage))
+		}
+		g.By(fmt.Sprintf("DEBUG: Deployment %s/%s status: Ready=%d, Desired=%d, Updated=%d, Available=%d",
+			namespace, name, deployment.Status.ReadyReplicas, *deployment.Spec.Replicas,
+			deployment.Status.UpdatedReplicas, deployment.Status.AvailableReplicas))
+
+		// DEBUG: List pods for this deployment
+		pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("app=%s", name),
+		})
+		if err == nil && len(pods.Items) > 0 {
+			g.By(fmt.Sprintf("DEBUG: Found %d pods for deployment %s/%s", len(pods.Items), namespace, name))
+			for _, pod := range pods.Items {
+				g.By(fmt.Sprintf("DEBUG: Pod %s/%s phase=%s, ready=%v", namespace, pod.Name, pod.Status.Phase, isPodReady(&pod)))
+				if len(pod.Spec.Containers) > 0 {
+					g.By(fmt.Sprintf("DEBUG: Pod %s container image: %s", pod.Name, pod.Spec.Containers[0].Image))
+				}
+				if len(pod.Status.ContainerStatuses) > 0 {
+					cs := pod.Status.ContainerStatuses[0]
+					g.By(fmt.Sprintf("DEBUG: Pod %s container status: Ready=%v, State=%+v", pod.Name, cs.Ready, cs.State))
+				}
+			}
+		} else if err != nil {
+			g.By(fmt.Sprintf("ERROR: Failed to list pods for %s/%s: %v", namespace, name, err))
+		}
+
 		if deployment.Status.ReadyReplicas >= *deployment.Spec.Replicas {
-			klog.Infof("Deployment %s/%s is ready with %d replicas", namespace, name, deployment.Status.ReadyReplicas)
+			g.By(fmt.Sprintf("DEBUG: Deployment %s/%s is ready with %d replicas", namespace, name, deployment.Status.ReadyReplicas))
 			return true, nil
 		}
 
-		klog.Infof("Waiting for deployment %s/%s: %d/%d replicas ready",
-			namespace, name, deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+		g.By(fmt.Sprintf("DEBUG: Waiting for deployment %s/%s: %d/%d replicas ready",
+			namespace, name, deployment.Status.ReadyReplicas, *deployment.Spec.Replicas))
 		return false, nil
 	})
+}
+
+func isPodReady(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+// checkOperandPodHealth checks the health of operand pods and prints detailed status
+func checkOperandPodHealth(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) error {
+	fmt.Printf("\n=== OPERAND POD HEALTH CHECK ===\n")
+
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "app=descheduler",
+	})
+	if err != nil {
+		fmt.Printf("ERROR: Failed to list operand pods: %v\n", err)
+		return err
+	}
+
+	if len(pods.Items) == 0 {
+		fmt.Printf("ERROR: No operand pods found with label app=descheduler\n")
+		return fmt.Errorf("no operand pods found")
+	}
+
+	fmt.Printf("DEBUG: Found %d operand pod(s)\n", len(pods.Items))
+
+	for _, pod := range pods.Items {
+		fmt.Printf("\n--- Pod: %s ---\n", pod.Name)
+		fmt.Printf("  Phase: %s\n", pod.Status.Phase)
+		fmt.Printf("  Ready: %v\n", isPodReady(&pod))
+		fmt.Printf("  Restart Count: %d\n", pod.Status.ContainerStatuses[0].RestartCount)
+
+		// Print all conditions
+		fmt.Printf("  Conditions:\n")
+		for _, condition := range pod.Status.Conditions {
+			fmt.Printf("    - Type: %s, Status: %s, Reason: %s\n", condition.Type, condition.Status, condition.Reason)
+		}
+
+		// Print container details
+		if len(pod.Spec.Containers) > 0 {
+			fmt.Printf("  Container Image: %s\n", pod.Spec.Containers[0].Image)
+		}
+
+		// Print container status
+		if len(pod.Status.ContainerStatuses) > 0 {
+			cs := pod.Status.ContainerStatuses[0]
+			fmt.Printf("  Container Status:\n")
+			fmt.Printf("    - Ready: %v\n", cs.Ready)
+			fmt.Printf("    - Image: %s\n", cs.Image)
+			fmt.Printf("    - ImageID: %s\n", cs.ImageID)
+
+			// Print container state
+			if cs.State.Running != nil {
+				fmt.Printf("    - State: RUNNING (started at %s)\n", cs.State.Running.StartedAt.Time)
+			} else if cs.State.Waiting != nil {
+				fmt.Printf("    - State: WAITING\n")
+				fmt.Printf("      Reason: %s\n", cs.State.Waiting.Reason)
+				fmt.Printf("      Message: %s\n", cs.State.Waiting.Message)
+			} else if cs.State.Terminated != nil {
+				fmt.Printf("    - State: TERMINATED\n")
+				fmt.Printf("      Reason: %s\n", cs.State.Terminated.Reason)
+				fmt.Printf("      Message: %s\n", cs.State.Terminated.Message)
+				fmt.Printf("      Exit Code: %d\n", cs.State.Terminated.ExitCode)
+			}
+		}
+	}
+
+	fmt.Printf("\n=== END HEALTH CHECK ===\n\n")
+	return nil
 }
 
 // checkPodLogs checks if pod logs contain the expected pattern

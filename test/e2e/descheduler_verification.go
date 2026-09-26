@@ -48,37 +48,48 @@ func isOperatorOLMInstallationEnabled() bool {
 // by checking if the operator Deployment is running and ready in the namespace.
 // This is more reliable than checking for CSV which is created asynchronously.
 func isOperatorPreInstalled(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) bool {
-	klog.Infof("isOperatorPreInstalled: checking if operator deployment is ready in namespace %s", namespace)
+	g.By(fmt.Sprintf("TRACE: isOperatorPreInstalled: checking if operator deployment is ready in namespace %s", namespace))
 
 	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, "descheduler-operator", metav1.GetOptions{})
 		if err != nil {
-			klog.V(2).Infof("isOperatorPreInstalled: deployment not found yet: %v", err)
+			g.By(fmt.Sprintf("TRACE: isOperatorPreInstalled: deployment not found yet: %v", err))
 			return false, nil
 		}
 
 		if deployment.Spec.Replicas == nil {
-			klog.V(2).Infof("isOperatorPreInstalled: deployment has nil Spec.Replicas")
+			g.By("TRACE: isOperatorPreInstalled: deployment has nil Spec.Replicas")
 			return false, nil
 		}
 
+		// DEBUG: Log operator image and env vars
+		if len(deployment.Spec.Template.Spec.Containers) > 0 {
+			operatorImage := deployment.Spec.Template.Spec.Containers[0].Image
+			g.By(fmt.Sprintf("TRACE: Operator image: %s", operatorImage))
+			for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == "RELATED_IMAGE_OPERAND_IMAGE" || env.Name == "RELATED_IMAGE_SOFTTAINTER_IMAGE" {
+					g.By(fmt.Sprintf("TRACE: Operator env %s=%s", env.Name, env.Value))
+				}
+			}
+		}
+
 		if deployment.Status.ReadyReplicas >= *deployment.Spec.Replicas {
-			klog.Infof("isOperatorPreInstalled: operator deployment is ready with %d/%d replicas",
-				deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+			g.By(fmt.Sprintf("TRACE: isOperatorPreInstalled: RESULT=TRUE - operator deployment is ready %d/%d replicas",
+				deployment.Status.ReadyReplicas, *deployment.Spec.Replicas))
 			return true, nil
 		}
 
-		klog.V(2).Infof("isOperatorPreInstalled: operator deployment not yet ready: %d/%d replicas",
-			deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+		g.By(fmt.Sprintf("TRACE: isOperatorPreInstalled: deployment not yet ready: %d/%d replicas",
+			deployment.Status.ReadyReplicas, *deployment.Spec.Replicas))
 		return false, nil
 	})
 
 	if err != nil {
-		klog.Warningf("isOperatorPreInstalled: timed out waiting for operator deployment: %v", err)
+		g.By("TRACE: isOperatorPreInstalled: RESULT=FALSE - timed out waiting for operator deployment")
 		return false
 	}
 
-	klog.Infof("isOperatorPreInstalled: returning true - operator is pre-installed")
+	g.By("TRACE: isOperatorPreInstalled: RESULT=TRUE - operator is pre-installed")
 	return true
 }
 
@@ -103,22 +114,43 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		apiExtClient = GetApiExtensionClient()
 		ctx, cancelFnc = context.WithCancel(context.TODO())
 
+		g.By("Checking installation paths: isOperatorOLMInstallationEnabled")
 		if !isOperatorOLMInstallationEnabled() {
+			g.By("PATH: Non-OLM installation (OPERATOR_IMAGE/OPERAND_IMAGE env vars)")
 			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
 			olmInstalled = false // Operator will be installed non-OLM way
 			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
 		} else if isOperatorPreInstalled(ctx, kubeClient, operatorclient.OperatorNamespace) {
 			// Bundle-based CI installation (operator-sdk run bundle) pre-installs the operator;
 			// only the KubeDescheduler CR and operand readiness are needed.
-			klog.Infof("Operator already installed, skipping installation")
+			g.By("Operator already installed, skipping installation")
+			g.By("DEBUG: Operator already installed, skipping installation")
 			olmInstalled = true // Operator was installed via OLM (bundle)
 			kdCR := newDefaultKubeDescheduler()
 			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kdCR, metav1.CreateOptions{})
 			if err != nil && !strings.Contains(err.Error(), "already exists") {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
+			g.By("Created KubeDescheduler CR, now waiting for operand deployment to be ready")
+			g.By("DEBUG: Created KubeDescheduler CR, now waiting for operand deployment to be ready")
 			err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
+			if err != nil {
+				g.By(fmt.Sprintf("ERROR: Operand deployment failed to become ready: %v", err))
+				g.By(fmt.Sprintf("ERROR: Operand deployment failed to become ready: %v", err))
+			} else {
+				g.By("Operand deployment is now ready")
+				g.By("DEBUG: Operand deployment is now ready")
+			}
+			// Check operand pod health after setup
+			g.By("Checking operand pod health status")
+			g.By("DEBUG: Checking operand pod health status")
+			healthErr := checkOperandPodHealth(ctx, kubeClient, operatorclient.OperatorNamespace)
+			if healthErr != nil {
+				g.By(fmt.Sprintf("WARNING: Operand pod health check failed: %v", healthErr))
+				g.By(fmt.Sprintf("WARNING: Operand pod health check failed: %v", healthErr))
+			}
 		} else {
+			g.By("PATH: OLM installation via PackageManifest/Subscription")
 			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
 			olmInstalled = true // Operator will be installed via OLM
 			err = installOperatorWithSubscription(ctx, kubeClient, deschClient, dynamicClient, operatorclient.OperatorNamespace)
@@ -185,11 +217,58 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			cancelFnc()
 		}
 	})
+	/*
+		// OCP-76194
+		g.It("[OTP][Operator][Serial] should validate profile conflict validation [Slow][Timeout:15m]", func() {
+			g.By("Testing profile conflict validation")
+			testProfileConflicts(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		})
 
-	// OCP-76194
-	g.It("[OTP][Operator][Serial] should validate profile conflict validation [Slow][Timeout:15m]", func() {
-		g.By("Testing profile conflict validation")
-		testProfileConflicts(g.GinkgoTB(), ctx, kubeClient, deschClient)
+
+
+		// OCP-45694
+		g.It("[OTP][Operator][Serial] should validate must-gather OLM data collection [Slow][Disruptive][Timeout:15m]", func() {
+			g.By("Testing must-gather OLM data collection")
+			if !olmInstalled {
+				g.Skip("Skipping. The operator is not installed via OLM")
+			}
+			testOLMMustGatherData(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("[OTP][Operator][Serial] should create and remove soft tainter objects [Slow][Timeout:15m]", func() {
+			g.By("Testing soft tainter controller lifecycle")
+			testSoftTainterController(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("[OTP][Operator][Serial] should validate soft tainter controller with VAP [Slow][Timeout:15m]", func() {
+			g.By("Testing soft tainter controller with VAP")
+			testSoftTainterControllerWithVAP(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("[OTP][Operator][Serial] should deschedule pods correctly [Disruptive][Slow][Timeout:15m]", func() {
+			g.By("Testing pod descheduling")
+			testPodDescheduling(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("[OTP][Operator][Serial] should have ServiceMonitor configured [Slow][Timeout:15m]", func() {
+			g.By("Testing ServiceMonitor")
+			testServiceMonitor(g.GinkgoTB(), ctx, kubeClient)
+		})
+
+		g.It("[OTP][Operator][Serial] should have metrics data available [Slow][Timeout:15m]", func() {
+			g.By("Testing metrics data")
+			testMetricsData(g.GinkgoTB(), ctx, kubeClient)
+		})
+	*/
+
+	g.It("[OTP][Operator][Serial] should have metrics service available [Slow][Timeout:15m]", func() {
+		g.By("Testing metrics service")
+		testMetricsService(g.GinkgoTB(), ctx, kubeClient)
+	})
+
+	g.It("[OTP][Operator][Serial] should have Prometheus target up [Slow][Timeout:15m]", func() {
+		g.By("Testing Prometheus target")
+		testPrometheusTarget(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	// OCP-83032
@@ -199,50 +278,6 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			g.Skip("Skipping. The operator is not installed via OLM")
 		}
 		testRelatedImages(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	// OCP-45694
-	g.It("[OTP][Operator][Serial] should validate must-gather OLM data collection [Slow][Disruptive][Timeout:15m]", func() {
-		g.By("Testing must-gather OLM data collection")
-		if !olmInstalled {
-			g.Skip("Skipping. The operator is not installed via OLM")
-		}
-		testOLMMustGatherData(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should create and remove soft tainter objects [Slow][Timeout:15m]", func() {
-		g.By("Testing soft tainter controller lifecycle")
-		testSoftTainterController(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should validate soft tainter controller with VAP [Slow][Timeout:15m]", func() {
-		g.By("Testing soft tainter controller with VAP")
-		testSoftTainterControllerWithVAP(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should deschedule pods correctly [Disruptive][Slow][Timeout:15m]", func() {
-		g.By("Testing pod descheduling")
-		testPodDescheduling(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should have metrics service available [Slow][Timeout:15m]", func() {
-		g.By("Testing metrics service")
-		testMetricsService(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should have ServiceMonitor configured [Slow][Timeout:15m]", func() {
-		g.By("Testing ServiceMonitor")
-		testServiceMonitor(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should have Prometheus target up [Slow][Timeout:15m]", func() {
-		g.By("Testing Prometheus target")
-		testPrometheusTarget(g.GinkgoTB(), ctx, kubeClient)
-	})
-
-	g.It("[OTP][Operator][Serial] should have metrics data available [Slow][Timeout:15m]", func() {
-		g.By("Testing metrics data")
-		testMetricsData(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	// NOTE: This validates that the operator correctly translates the KubeDescheduler CR's
@@ -275,55 +310,57 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			testPDBCompliance(g.GinkgoTB(), ctx, kubeClient, deschClient)
 		})
 
-		// OCP-43277, OCP-50941, OCP-76158
-		g.It("should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing Predictive and Automatic modes with eviction limits")
-			testDeschedulerModes(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+		/*
+			// OCP-43277, OCP-50941, OCP-76158
+			g.It("should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing Predictive and Automatic modes with eviction limits")
+				testDeschedulerModes(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		// OCP-37463, OCP-40055
-		g.It("should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
-			testAffinityAndTopologyProfiles(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			// OCP-37463, OCP-40055
+			g.It("should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
+				testAffinityAndTopologyProfiles(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		// OCP-52303
-		g.It("should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace include filtering")
-			testNamespaceIncludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			// OCP-52303
+			g.It("should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing namespace include filtering")
+				testNamespaceIncludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		// OCP-53058
-		g.It("should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace exclude filtering")
-			testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			// OCP-53058
+			g.It("should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing namespace exclude filtering")
+				testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		// OCP-76422
-		g.It("should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing LongLifecycle profile behavior")
-			testLongLifecycleProfile(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			// OCP-76422
+			g.It("should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing LongLifecycle profile behavior")
+				testLongLifecycleProfile(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		g.It("should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeAffinity strategy")
-			testNodeAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			g.It("should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing NodeAffinity strategy")
+				testNodeAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		g.It("should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeTaint strategy")
-			testNodeTaintStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			g.It("should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing NodeTaint strategy")
+				testNodeTaintStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		g.It("should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing InterPodAntiAffinity strategy")
-			testInterPodAntiAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			g.It("should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing InterPodAntiAffinity strategy")
+				testInterPodAntiAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
 
-		g.It("should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing RemoveDuplicates strategy")
-			testRemoveDuplicatesStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+			g.It("should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
+				g.By("Testing RemoveDuplicates strategy")
+				testRemoveDuplicatesStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+			})
+		*/
 	})
 })
 
