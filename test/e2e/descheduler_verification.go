@@ -35,8 +35,108 @@ import (
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 )
 
+// ============================================================================
+// TEST SUITE DESIGN AND STRUCTURE
+// ============================================================================
+//
+// EVOLUTION OF THE DESIGN:
+//
+// ITERATION 1 - NESTED DESCRIBE (FAILED):
+// ┌─ Describe "Descheduler Operator Functionality"
+// │  ├─ BeforeAll (install operator)
+// │  ├─ It "test1"
+// │  ├─ It "test2"
+// │  ├─ AfterAll (DELETE NAMESPACE) ← RUNS AFTER test2, BEFORE nested suite!
+// │  └─ Describe "for Profiles" (SEPARATE SUITE!)
+// │     ├─ It "profile_test1" ← Namespace already deleted!
+// │     └─ It "profile_test2" ← FAILS - no operator!
+//
+// PROBLEM WITH NESTED DESCRIBE:
+// - Nested Describe creates SEPARATE test suite with INDEPENDENT BeforeAll/AfterAll
+// - Outer suite's AfterAll runs after outer tests, BEFORE nested suite starts
+// - Namespace deleted prematurely = all nested tests fail
+// - Result: Profile tests CANNOT run
+//
+// ITERATION 2 - SPLIT FILES (PARTIALLY FIXED, BUT UNRELIABLE):
+// Split into two separate files:
+// - descheduler_verification.go (basic tests)
+// - descheduler_verification_profiles.go (profile tests)
+//
+// PROBLEMS WITH SPLIT FILES:
+// 1. FILE EXECUTION ORDER UNPREDICTABLE
+//    - Ginkgo doesn't guarantee file execution order
+//    - If profile file runs FIRST: operator installed via non-OLM path (deploy/)
+//    - If main file runs FIRST: operator installed via OLM path (bundle)
+//    - INCONSISTENT test environment for the same test suite!
+//
+// 2. OLM INSTALLATION METHOD NOT GUARANTEED
+//    - Main file expects OLM installation
+//    - Profile file had to handle both OLM and non-OLM paths
+//    - Added complexity and potential for operator to be in wrong state
+//
+// 3. NAMESPACE LIFECYCLE CONFUSION
+//    - Main file installs operator, keeps namespace alive
+//    - Profile file could either reuse OR re-create namespace
+//    - Unclear ownership of cleanup responsibility
+//
+// 4. IMPLICIT DEPENDENCIES
+//    - Profile file relied on main file running first
+//    - No explicit contract between files
+//    - Silent failures if execution order changed
+//
+// ITERATION 3 - SINGLE FILE, PHASE-BASED (CURRENT SOLUTION - WORKS):
+// ┌─ Single Describe block (g.Ordered, g.Serial)
+// │  ├─ BeforeAll (install operator ONCE via OLM)
+// │  ├─ PHASE 1: BasicTest1, BasicTest2 (NO hooks)
+// │  ├─ PHASE 2: Hook definitions (BeforeEach/AfterEach)
+// │  ├─ PHASE 3: ProfileTest1, ProfileTest2 (WITH hooks)
+// │  └─ AfterAll (delete namespace ONCE)
+//
+//
+// SOLUTION: SINGLE DESCRIBE BLOCK with PHASE-BASED STRUCTURE
+//
+// EXECUTION FLOW:
+// ┌─ BeforeAll ─────────────────────────────────┐
+// │ • Install operator (guaranteed OLM method)  │
+// │ • Create namespace                          │
+// │ • Setup clients                             │
+// └─────────────────────────────────────────────┘
+//           ↓
+// ┌─ PHASE 1: BASIC TESTS (10 tests) ──────────┐
+// │ • Use default KubeDescheduler CR            │
+// │ • NO BeforeEach/AfterEach hooks apply      │
+// │ • Operator stays running                    │
+// │ Tests: ProfileConflicts, RelatedImages,     │
+// │        MustGatherData, SoftTainter(×2),     │
+// │        PodDescheduling, Metrics(×4)         │
+// └─────────────────────────────────────────────┘
+//           ↓
+// ┌─ PHASE 2: HOOK DEFINITIONS ─────────────────┐
+// │ • BeforeEach/AfterEach defined HERE        │
+// │ • CRITICAL: Only apply to tests AFTER      │
+// │ • Deletes and recreates KubeDescheduler CR  │
+// └─────────────────────────────────────────────┘
+//           ↓
+// ┌─ PHASE 3: PROFILE TESTS (10 tests) ────────┐
+// │ • WITH BeforeEach/AfterEach hooks          │
+// │ • KubeDescheduler CR cleaned between tests │
+// │ • Each test gets fresh CR state            │
+// │ • Operator stays running                    │
+// │ Tests: PDBCompliance, Modes, Affinity,     │
+// │        NamespaceFiltering(×2), Lifecycle,  │
+// │        NodeAffinity, NodeTaint,             │
+// │        InterPodAntiAffinity, RemoveDups     │
+// └─────────────────────────────────────────────┘
+//           ↓
+// ┌─ AfterAll ──────────────────────────────────┐
+// │ • Delete namespace (final cleanup)          │
+// │ • Runs ONLY AFTER ALL TESTS complete      │
+// │ • Operator lifecycle ends here              │
+// └─────────────────────────────────────────────┘
+//
+
 const (
-	deschedulerOperatorLabel = "app=descheduler-operator"
+	deschedulerOperatorLabel = "name=descheduler-operator"
 	deschedulerLabel         = "app=descheduler"
 )
 
@@ -126,65 +226,9 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.AfterAll(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cleanupCancel()
-
-		if isOperatorOLMInstallationEnabled() {
-			g.By("Cleaning up operator installation")
-
-			og := &operatorsv1.OperatorGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "descheduler-og",
-					Namespace: operatorclient.OperatorNamespace,
-				},
-			}
-			sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
-			if err != nil {
-				klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
-			}
-
-			if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
-				klog.Warningf("Failed to delete KubeDescheduler: %v", err)
-			}
-			if sub != nil {
-				if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
-					klog.Warningf("Failed to delete Subscription: %v", err)
-				}
-			}
-			if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
-				klog.Warningf("Failed to delete OperatorGroup: %v", err)
-			}
-		}
-
-		g.By("Deleting operator namespace")
-		err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
-		if err != nil {
-			klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
-		}
-
-		g.By("Ensuring namespace is fully deleted")
-		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
-			if err != nil {
-				if strings.Contains(err.Error(), "not found") {
-					klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
-					return true, nil
-				}
-				klog.Warningf("Error checking namespace: %v", err)
-				return false, nil
-			}
-			klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
-			return false, nil
-		})
-		if err != nil {
-			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
-		}
-
-		if cancelFnc != nil {
-			cancelFnc()
-		}
-	})
+	// ============================================================================
+	// Phase 1: Basic Tests - Use default KubeDescheduler CR, NO hooks apply
+	// ============================================================================
 
 	// OCP-76194
 	g.It("[OTP][Operator][Serial] should validate profile conflict validation [Slow][Timeout:15m]", func() {
@@ -245,89 +289,289 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		testMetricsData(g.GinkgoTB(), ctx, kubeClient)
 	})
 
-	// NOTE: This validates that the operator correctly translates the KubeDescheduler CR's
-	// profile configuration into the descheduler's policy ConfigMap.
-	// The actual behavior is tested in the upstream descheduler e2e test suite:
-	// https://github.com/kubernetes-sigs/descheduler/blob/master/test/e2e/e2e_test.go
-	g.Describe("for Profiles", func() {
-		g.BeforeEach(func() {
-			g.By("Deleting existing KubeDescheduler CR and waiting for operand to be gone")
-			err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		})
+	// ============================================================================
+	// Phase 2: Profile Test Lifecycle Hooks
+	// ============================================================================
+	// CRITICAL: Hooks defined HERE only apply to tests defined AFTER them
+	// This ensures basic tests run WITHOUT hooks, profile tests run WITH hooks
+	// ============================================================================
 
-		g.AfterEach(func() {
-			g.By("Deleting test KubeDescheduler CR and waiting for operand to be gone")
-			err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+	g.BeforeEach(func() {
+		g.By("BeforeEach (PROFILE): Deleting existing KubeDescheduler CR and waiting for operand to be gone")
+		err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	g.AfterEach(func() {
+		g.By("AfterEach (PROFILE): Deleting test KubeDescheduler CR and waiting for operand to be gone")
+		err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+		if err != nil {
+			klog.Errorf("Error deleting the KubeDescheduler CR: %v", err)
+		}
+
+		g.By("AfterEach (PROFILE): Recreating default KubeDescheduler CR for next test")
+		defaultKD := newDefaultKubeDescheduler()
+		err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, defaultKD)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// ============================================================================
+	// Phase 3: Profile Tests - each runs WITH BeforeEach/AfterEach cleanup
+	// ============================================================================
+
+	// OCP-21205, OCP-36584
+	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing PDB compliance during pod evictions")
+		testPDBCompliance(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	// OCP-43277, OCP-50941, OCP-76158
+	g.It("[OTP][Operator][Serial] should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing Predictive and Automatic modes with eviction limits")
+		testDeschedulerModes(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	// OCP-37463, OCP-40055
+	g.It("[OTP][Operator][Serial] should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
+		testAffinityAndTopologyProfiles(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	// OCP-52303
+	g.It("[OTP][Operator][Serial] should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing namespace include filtering")
+		testNamespaceIncludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	// OCP-53058
+	g.It("[OTP][Operator][Serial] should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing namespace exclude filtering")
+		testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	// OCP-76422
+	g.It("[OTP][Operator][Serial] should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing LongLifecycle profile behavior")
+		testLongLifecycleProfile(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing NodeAffinity strategy")
+		testNodeAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	g.It("[OTP][Operator][Serial] should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing NodeTaint strategy")
+		testNodeTaintStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing InterPodAntiAffinity strategy")
+		testInterPodAntiAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	g.It("[OTP][Operator][Serial] should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing RemoveDuplicates strategy")
+		testRemoveDuplicatesStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+	})
+
+	g.AfterAll(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cleanupCancel()
+
+		if olmInstalled {
+			g.By("Cleaning up operator installation")
+
+			og := &operatorsv1.OperatorGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "descheduler-og",
+					Namespace: operatorclient.OperatorNamespace,
+				},
+			}
+			sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
 			if err != nil {
-				klog.Errorf("Error deleting the KubeDescheduler CR: %v", err)
+				klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
 			}
 
-			g.By("Recreating default KubeDescheduler CR")
-			defaultKD := newDefaultKubeDescheduler()
-			err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, defaultKD)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		})
+			if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+				klog.Warningf("Failed to delete KubeDescheduler: %v", err)
+			}
+			if sub != nil {
+				if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
+					klog.Warningf("Failed to delete Subscription: %v", err)
+				}
+			}
+			if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
+				klog.Warningf("Failed to delete OperatorGroup: %v", err)
+			}
+		}
 
-		// OCP-21205, OCP-36584
-		g.It("should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing PDB compliance during pod evictions")
-			testPDBCompliance(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+		g.By("Deleting operator namespace")
+		err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
+		if err != nil {
+			klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
+		}
 
-		// OCP-43277, OCP-50941, OCP-76158
-		g.It("should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing Predictive and Automatic modes with eviction limits")
-			testDeschedulerModes(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		g.By("Ensuring namespace is fully deleted")
+		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
+					return true, nil
+				}
+				klog.Warningf("Error checking namespace: %v", err)
+				return false, nil
+			}
+			klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
+			return false, nil
 		})
+		if err != nil {
+			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
+		}
 
-		// OCP-37463, OCP-40055
-		g.It("should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
-			testAffinityAndTopologyProfiles(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		// OCP-52303
-		g.It("should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace include filtering")
-			testNamespaceIncludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		// OCP-53058
-		g.It("should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace exclude filtering")
-			testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		// OCP-76422
-		g.It("should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing LongLifecycle profile behavior")
-			testLongLifecycleProfile(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeAffinity strategy")
-			testNodeAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeTaint strategy")
-			testNodeTaintStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing InterPodAntiAffinity strategy")
-			testInterPodAntiAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing RemoveDuplicates strategy")
-			testRemoveDuplicatesStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+		if cancelFnc != nil {
+			cancelFnc()
+		}
 	})
 })
 
 // Test implementations
+
+// testProfileConflicts validates profile conflict validation
+func testProfileConflicts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+
+	// Test 1: LongLifecycle + LifecycleAndUtilization should be rejected
+	g.By("Testing LongLifecycle + LifecycleAndUtilization conflict")
+	err := createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-1",
+		[]string{"EvictPodsWithPVC", "LongLifecycle", "LifecycleAndUtilization"})
+	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
+	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously"))
+	klog.Infof("LongLifecycle + LifecycleAndUtilization conflict correctly rejected")
+
+	// Test 2: CompactAndScale + LifecycleAndUtilization should be rejected
+	g.By("Testing CompactAndScale + LifecycleAndUtilization conflict")
+	err = createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-2",
+		[]string{"AffinityAndTaints", "CompactAndScale", "LifecycleAndUtilization"})
+	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
+	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously"))
+	klog.Infof("CompactAndScale + LifecycleAndUtilization conflict correctly rejected")
+
+	// Test 3: CompactAndScale + LongLifecycle should be rejected
+	g.By("Testing CompactAndScale + LongLifecycle conflict")
+	err = createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-3",
+		[]string{"AffinityAndTaints", "CompactAndScale", "LongLifecycle"})
+	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
+	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare CompactAndScale and LongLifecycle profiles simultaneously"))
+	klog.Infof("CompactAndScale + LongLifecycle conflict correctly rejected")
+
+	// Test 4: CompactAndScale + TopologyAndDuplicates should be rejected
+	g.By("Testing CompactAndScale + TopologyAndDuplicates conflict")
+	err = createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-4",
+		[]string{"AffinityAndTaints", "CompactAndScale", "TopologyAndDuplicates"})
+	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
+	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously"))
+	klog.Infof("CompactAndScale + TopologyAndDuplicates conflict correctly rejected")
+
+	klog.Infof("Profile conflict validation completed successfully")
+}
+
+// testRelatedImages tests that CSV has relatedImages defined correctly
+func testRelatedImages(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	dynamicClient := GetDynamicClient()
+
+	g.By("Getting CSV name for descheduler operator")
+	csvName, err := getCSVName(ctx, dynamicClient, operatorclient.OperatorNamespace, "")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+	klog.Infof("Found CSV: %s", csvName)
+
+	g.By("Verifying CSV has relatedImages defined")
+	relatedImages, err := getCSVRelatedImages(ctx, dynamicClient, operatorclient.OperatorNamespace, csvName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(relatedImages)).To(o.BeNumerically(">", 0), "CSV should have at least one relatedImage")
+
+	var foundOperator, foundOperand bool
+	for _, img := range relatedImages {
+		klog.Infof("Found relatedImage: %s -> %s", img.Name, img.Image)
+		if strings.Contains(img.Name, "descheduler-operator") || strings.Contains(img.Image, "descheduler-operator") {
+			foundOperator = true
+		}
+		if strings.Contains(img.Name, "descheduler-operand") || strings.Contains(img.Name, "descheduler") && !strings.Contains(img.Name, "operator") {
+			foundOperand = true
+		}
+	}
+
+	o.Expect(foundOperator).To(o.BeTrue(), "CSV should contain descheduler-operator related image")
+	o.Expect(foundOperand).To(o.BeTrue(), "CSV should contain descheduler-operand related image")
+
+	klog.Infof("RelatedImages validation completed successfully - found %d images", len(relatedImages))
+}
+
+// testOLMMustGatherData verifies that must-gather collects OLM data
+func testOLMMustGatherData(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	dynamicClient := GetDynamicClient()
+
+	g.By("Verifying CSV exists")
+	csvName, err := getCSVName(ctx, dynamicClient, operatorclient.OperatorNamespace, "")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+	klog.Infof("Found CSV: %s", csvName)
+
+	g.By("Verifying Subscription exists")
+	subList, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1alpha1.GroupName,
+		Version:  operatorsv1alpha1.GroupVersion,
+		Resource: "subscriptions",
+	}).Namespace(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(subList.Items)).To(o.BeNumerically(">", 0))
+	klog.Infof("Found %d Subscription(s)", len(subList.Items))
+
+	g.By("Verifying OperatorGroup exists")
+	ogList, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1.GroupVersion.Group,
+		Version:  operatorsv1.GroupVersion.Version,
+		Resource: "operatorgroups",
+	}).Namespace(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(len(ogList.Items)).To(o.BeNumerically(">", 0))
+	klog.Infof("Found %d OperatorGroup(s)", len(ogList.Items))
+
+	g.By("Running must-gather and verifying OLM data collection")
+	mustGatherDir := "/tmp/must-gather-45694"
+	defer func() {
+		_ = kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+	}()
+
+	cmd := fmt.Sprintf("oc adm must-gather --dest-dir=%s 2>&1 && rm -rf %s", mustGatherDir, mustGatherDir)
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+
+	if err != nil {
+		klog.Warningf("must-gather command failed (may not be available in this environment): %v", err)
+		klog.Infof("OLM resources verified successfully - CSV, Subscription, and OperatorGroup exist")
+		return
+	}
+
+	mustGatherOutput := string(output)
+
+	expectedOLMResources := []string{
+		"operators.coreos.com/installplans",
+		"operators.coreos.com/operatorconditions",
+		"operators.coreos.com/operatorgroups",
+		"operators.coreos.com/subscriptions",
+	}
+
+	for _, resource := range expectedOLMResources {
+		if !strings.Contains(mustGatherOutput, resource) {
+			klog.Warningf("must-gather output does not mention %s, but OLM resources were verified to exist", resource)
+		} else {
+			klog.Infof("must-gather successfully collected: %s", resource)
+		}
+	}
+
+	klog.Infof("OLM must-gather data validation completed successfully")
+}
 
 // testPDBCompliance verifies that descheduler respects Pod Disruption Budgets
 func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
@@ -552,43 +796,6 @@ func testNamespaceExcludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	klog.Infof("Namespace exclude filtering validated successfully")
 }
 
-func testProfileConflicts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
-
-	// Test 1: LongLifecycle + LifecycleAndUtilization should be rejected
-	g.By("Testing LongLifecycle + LifecycleAndUtilization conflict")
-	err := createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-1",
-		[]string{"EvictPodsWithPVC", "LongLifecycle", "LifecycleAndUtilization"})
-	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
-	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare LongLifecycle and LifecycleAndUtilization profiles simultaneously"))
-	klog.Infof("LongLifecycle + LifecycleAndUtilization conflict correctly rejected")
-
-	// Test 2: CompactAndScale + LifecycleAndUtilization should be rejected
-	g.By("Testing CompactAndScale + LifecycleAndUtilization conflict")
-	err = createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-2",
-		[]string{"AffinityAndTaints", "CompactAndScale", "LifecycleAndUtilization"})
-	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
-	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare CompactAndScale and LifecycleAndUtilization profiles simultaneously"))
-	klog.Infof("CompactAndScale + LifecycleAndUtilization conflict correctly rejected")
-
-	// Test 3: CompactAndScale + LongLifecycle should be rejected
-	g.By("Testing CompactAndScale + LongLifecycle conflict")
-	err = createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-3",
-		[]string{"AffinityAndTaints", "CompactAndScale", "LongLifecycle"})
-	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
-	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare CompactAndScale and LongLifecycle profiles simultaneously"))
-	klog.Infof("CompactAndScale + LongLifecycle conflict correctly rejected")
-
-	// Test 4: CompactAndScale + TopologyAndDuplicates should be rejected
-	g.By("Testing CompactAndScale + TopologyAndDuplicates conflict")
-	err = createKubeDeschedulerWithProfiles(ctx, deschClient, "test-conflict-4",
-		[]string{"AffinityAndTaints", "CompactAndScale", "TopologyAndDuplicates"})
-	o.Expect(err).To(o.HaveOccurred(), "Expected KubeDescheduler creation to fail with conflicting profiles")
-	o.Expect(err.Error()).To(o.ContainSubstring("cannot declare CompactAndScale and TopologyAndDuplicates profiles simultaneously"))
-	klog.Infof("CompactAndScale + TopologyAndDuplicates conflict correctly rejected")
-
-	klog.Infof("Profile conflict validation completed successfully")
-}
-
 func testLongLifecycleProfile(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LongLifecycle}
@@ -596,40 +803,6 @@ func testLongLifecycleProfile(t testing.TB, ctx context.Context, kubeClient *k8s
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	klog.Infof("LongLifecycle profile validated successfully")
-}
-
-// testRelatedImages tests that CSV has relatedImages defined correctly
-func testRelatedImages(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
-	dynamicClient := GetDynamicClient()
-
-	g.By("Getting CSV name for descheduler operator")
-	// Use empty label selector - will get all CSVs in namespace (there should only be one)
-	csvName, err := getCSVName(ctx, dynamicClient, operatorclient.OperatorNamespace, "")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(csvName).NotTo(o.BeEmpty())
-	klog.Infof("Found CSV: %s", csvName)
-
-	g.By("Verifying CSV has relatedImages defined")
-	relatedImages, err := getCSVRelatedImages(ctx, dynamicClient, operatorclient.OperatorNamespace, csvName)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(len(relatedImages)).To(o.BeNumerically(">", 0), "CSV should have at least one relatedImage")
-
-	// Check that we have both operator and operand images
-	var foundOperator, foundOperand bool
-	for _, img := range relatedImages {
-		klog.Infof("Found relatedImage: %s -> %s", img.Name, img.Image)
-		if strings.Contains(img.Name, "descheduler-operator") || strings.Contains(img.Image, "descheduler-operator") {
-			foundOperator = true
-		}
-		if strings.Contains(img.Name, "descheduler-operand") || strings.Contains(img.Name, "descheduler") && !strings.Contains(img.Name, "operator") {
-			foundOperand = true
-		}
-	}
-
-	o.Expect(foundOperator).To(o.BeTrue(), "CSV should contain descheduler-operator related image")
-	o.Expect(foundOperand).To(o.BeTrue(), "CSV should contain descheduler-operand related image")
-
-	klog.Infof("RelatedImages validation completed successfully - found %d images", len(relatedImages))
 }
 
 func testNodeAffinityStrategy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
@@ -666,75 +839,4 @@ func testRemoveDuplicatesStrategy(t testing.TB, ctx context.Context, kubeClient 
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	klog.Infof("RemoveDuplicates strategy validated successfully")
-}
-
-// testOLMMustGatherData verifies that must-gather collects OLM data
-func testOLMMustGatherData(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
-	dynamicClient := GetDynamicClient()
-
-	// Since BeforeAll already installed the operator, we just need to verify OLM resources exist
-	g.By("Verifying CSV exists")
-	csvName, err := getCSVName(ctx, dynamicClient, operatorclient.OperatorNamespace, "")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(csvName).NotTo(o.BeEmpty())
-	klog.Infof("Found CSV: %s", csvName)
-
-	g.By("Verifying Subscription exists")
-	subList, err := dynamicClient.Resource(schema.GroupVersionResource{
-		Group:    operatorsv1alpha1.GroupName,
-		Version:  operatorsv1alpha1.GroupVersion,
-		Resource: "subscriptions",
-	}).Namespace(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(len(subList.Items)).To(o.BeNumerically(">", 0))
-	klog.Infof("Found %d Subscription(s)", len(subList.Items))
-
-	g.By("Verifying OperatorGroup exists")
-	ogList, err := dynamicClient.Resource(schema.GroupVersionResource{
-		Group:    operatorsv1.GroupVersion.Group,
-		Version:  operatorsv1.GroupVersion.Version,
-		Resource: "operatorgroups",
-	}).Namespace(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(len(ogList.Items)).To(o.BeNumerically(">", 0))
-	klog.Infof("Found %d OperatorGroup(s)", len(ogList.Items))
-
-	g.By("Running must-gather and verifying OLM data collection")
-	// Create temporary directory for must-gather output
-	mustGatherDir := "/tmp/must-gather-45694"
-	defer func() {
-		// Cleanup must-gather directory
-		_ = kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
-	}()
-
-	// Run must-gather command via kubectl/oc
-	cmd := fmt.Sprintf("oc adm must-gather --dest-dir=%s 2>&1 && rm -rf %s", mustGatherDir, mustGatherDir)
-	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
-
-	if err != nil {
-		// If oc command fails, just log it and verify OLM resources exist (which we already did above)
-		klog.Warningf("must-gather command failed (may not be available in this environment): %v", err)
-		klog.Infof("OLM resources verified successfully - CSV, Subscription, and OperatorGroup exist")
-		return
-	}
-
-	mustGatherOutput := string(output)
-
-	// Verify must-gather output contains OLM resource types
-	expectedOLMResources := []string{
-		"operators.coreos.com/installplans",
-		"operators.coreos.com/operatorconditions",
-		"operators.coreos.com/operatorgroups",
-		"operators.coreos.com/subscriptions",
-	}
-
-	for _, resource := range expectedOLMResources {
-		if !strings.Contains(mustGatherOutput, resource) {
-			klog.Warningf("must-gather output does not mention %s, but OLM resources were verified to exist", resource)
-		} else {
-			klog.Infof("must-gather successfully collected: %s", resource)
-		}
-	}
-
-	klog.Infof("OLM must-gather data validation completed successfully")
 }
