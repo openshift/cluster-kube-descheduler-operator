@@ -1,6 +1,8 @@
 name: registry.redhat.io/kube-descheduler-operator/kube-descheduler-operator-bundle
 csvname: clusterkubedescheduleroperator
 bundles:
+  - release: 5.4.4
+    sha256: c3b4575e8c6cab4300fbabd6f852248022fc4c6daee521694dabb9111c151de9
   - release: 5.4.3
     sha256: 54c23ebd04e23250b7ade554c223e0f3ad96f28fe08890ba6e964ab294b834f8
   - release: 5.4.2
