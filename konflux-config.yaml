@@ -1,0 +1,38 @@
+tenantName: kdo-workloads-tenant
+shortName: kdo
+operand: true
+releases:
+- release: 4.12
+  version: 4.12.1
+- release: 4.13
+  version: 4.13.1
+- release: 4.14
+  version: 4.14.4
+- release: 4.16
+  version: 5.0.6
+- release: 4.18
+  version: 5.1.6
+- release: 4.19
+  version: 5.2.3
+- release: 4.21
+  version: 5.3.4
+- release: 4.22
+  version: 5.4.3
+- release: 5.0
+  version: 5.4.4
+- release: main
+  version: 5.4.4
+fbcs:
+- release: 4.12
+- release: 4.13
+- release: 4.14
+- release: 4.15
+- release: 4.16
+- release: 4.17
+- release: 4.18
+- release: 4.19
+- release: 4.20
+- release: 4.21
+- release: 4.22
+- release: 4.23
+- release: 5.0
