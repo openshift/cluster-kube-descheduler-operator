@@ -270,6 +270,7 @@ bundles:
 releases:
   - operator: "5.4"
     ocp:
+      - "5.0"
       - "4.23"
       - "4.22"
   - operator: "5.3"
