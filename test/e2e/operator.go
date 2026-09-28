@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -472,6 +473,18 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		t.Fatalf("Unable to uncordon node %s: %v", workerNodes[0].Name, err)
 	}
 
+	// Verify node0 is actually uncordoned and ready before creating pods
+	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		node, err := kubeClient.CoreV1().Nodes().Get(ctx, workerNodes[0].Name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return !node.Spec.Unschedulable, nil
+	})
+	if err != nil {
+		t.Fatalf("Timeout waiting for node %s to be uncordoned", workerNodes[0].Name)
+	}
+
 	// Step 3: Create deployment with 12 replicas
 	deploymentObj := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -578,12 +591,13 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 			return false
 		}
 		if len(deschedulerPods.Items) == 0 {
+			t.Logf("DEBUG: No descheduler pods found")
 			return false
 		}
 
 		deschedulerPod := &deschedulerPods.Items[0]
 		logOpts := &corev1.PodLogOptions{
-			Container: "descheduler",
+			Container: "openshift-descheduler",
 		}
 		req := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).GetLogs(deschedulerPod.Name, logOpts)
 		logs, err := req.Stream(ctx)
@@ -597,12 +611,11 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		logContent := string(buf[:n])
 
 		// Check for both PDB prevention error messages in logs
-		// Both messages should appear: eviction attempt and PDB blocking it
-		hasError := strings.Contains(logContent, "Error evicting pod")
-		hasPDB := strings.Contains(logContent, "Cannot evict pod as it would violate the pod's disruption budget")
+		// Match exact format from actual logs: "Error evicting pod" (with quotes) and period at end
+		hasError := strings.Contains(logContent, `"Error evicting pod"`)
+		hasPDB := strings.Contains(logContent, "Cannot evict pod as it would violate the pod's disruption budget.")
 
 		if hasError && hasPDB {
-			t.Logf("SUCCESS: Found PDB prevention in descheduler logs")
 			return true
 		}
 		return false

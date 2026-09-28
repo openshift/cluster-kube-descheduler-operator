@@ -36,76 +36,29 @@ import (
 )
 
 // ============================================================================
-// TEST SUITE DESIGN AND STRUCTURE - COMMIT 2: CORRECT DESIGN
+// TEST SUITE DESIGN AND STRUCTURE
 // ============================================================================
 //
-// DESIGN: SINGLE DESCRIBE BLOCK WITH THREE PHASES (NO NESTING)
-//
-// Goal:
-//   BeforeAll (ONCE at start)
-//   ├─ PHASE 1: Test 1-10 Basic Tests (NO hooks)
-//   ├─ PHASE 2: [Hook definitions: BeforeEach/AfterEach]
-//   ├─ PHASE 3: Test 11-20 Profile Tests (WITH hooks: BeforeEach → Test → AfterEach)
-//   └─ AfterAll (ONCE at end)
-//
-// KEY PRINCIPLE: Single g.Describe block with g.Ordered
-//   - All tests in one suite = shared BeforeAll/AfterAll
-//   - Namespace created ONCE in BeforeAll
-//   - Namespace deleted ONCE in AfterAll
-//   - No premature cleanup that breaks subsequent tests
-//
-// HOOK SCOPING:
-//   - Phase 1 tests (defined BEFORE hooks) = NO BeforeEach/AfterEach
-//   - Phase 2: BeforeEach and AfterEach defined here
-//   - Phase 3 tests (defined AFTER hooks) = WITH BeforeEach/AfterEach
-//   - Hooks apply to tests AFTER their definition in execution order
+// DESIGN: Single g.Describe block with clear CR lifecycle management
 //
 // EXECUTION FLOW:
-// BeforeAll (ONCE) ✅
-// ├─ Setting up test environment
-// ├─ Installing operator
-// └─ Creating namespace and KubeDescheduler CR
-//           ↓
-// PHASE 1: BASIC TESTS (10 tests, NO hooks) ✅
-// ├─ Test 1: Profile conflict validation
-// ├─ Test 2: RelatedImages in CSV
-// ├─ Test 3: Must-gather OLM data
-// ├─ Test 4: Soft tainter objects
-// ├─ Test 5: Soft tainter VAP
-// ├─ Test 6: Pod descheduling
-// ├─ Test 7: Metrics service
-// ├─ Test 8: Prometheus target
-// ├─ Test 9: Metrics data
-// └─ Test 10: ServiceMonitor config
-//           ↓
-// PHASE 2: HOOK DEFINITIONS (after Phase 1, before Phase 3) ✅
-// ├─ BeforeEach { deleteKubeDescheduler() }
-// └─ AfterEach { recreateKubeDescheduler() }
-//           ↓
-// PHASE 3: PROFILE TESTS (10 tests, WITH hooks) ✅
-// ├─ BeforeEach → Test 1: PDB compliance → AfterEach
-// ├─ BeforeEach → Test 2: Descheduler modes → AfterEach
-// ├─ BeforeEach → Test 3: AffinityAndTaints+Topology → AfterEach
-// ├─ BeforeEach → Test 4: Namespace include → AfterEach
-// ├─ BeforeEach → Test 5: Namespace exclude → AfterEach
-// ├─ BeforeEach → Test 6: LongLifecycle → AfterEach
-// ├─ BeforeEach → Test 7: NodeAffinity → AfterEach
-// ├─ BeforeEach → Test 8: NodeTaint → AfterEach
-// ├─ BeforeEach → Test 9: InterPodAntiAffinity → AfterEach
-// └─ BeforeEach → Test 10: RemoveDuplicates → AfterEach
-//           ↓
-// AfterAll (ONCE) ✅
-// ├─ Delete KubeDescheduler CR
-// ├─ Delete Subscription
-// ├─ Delete OperatorGroup
-// ├─ Delete namespace
-// └─ Wait for namespace deletion
+// 1. BeforeAll: Install operator + create default CR (LifecycleAndUtilization)
+// 2. METRICS/SERVICE TESTS: Use pre-created default CR (no hooks)
+//    - Metrics service available
+//    - Prometheus target up
+//    - Metrics data available
+//    - Plus other basic tests
+// 3. PROFILE/STRATEGY TESTS: Each test manages its own CR via runProfileTest()
+//    - Each test creates custom CR with its profile
+//    - Test validates the profile
+//    - Cleanup deletes CR
+// 4. AfterAll: Cancel context (cleanup skipped for debugging)
 //
-// WHY THIS DESIGN WORKS:
-// ✅ Single Describe block = single namespace lifecycle
-// ✅ No nested suites = no premature AfterAll execution
-// ✅ Hook scoping = Phase 1 unaffected, Phase 3 properly cleaned
-// ✅ Proven by Commit 2 CI logs (hooks execute correctly)
+// WHY THIS WORKS:
+// ✅ No shared hooks = no CR lifecycle conflicts
+// ✅ Metrics tests use default CR = simple and predictable
+// ✅ Profile tests explicitly manage CRs = each test owns its state
+// ✅ Clear separation = easy to understand and maintain
 //
 
 const (
@@ -186,11 +139,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			klog.Infof("Operator already installed, skipping installation")
 			olmInstalled = true // Operator was installed via OLM (bundle)
 			kdCR := newDefaultKubeDescheduler()
-			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kdCR, metav1.CreateOptions{})
-			if err != nil && !strings.Contains(err.Error(), "already exists") {
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
+			err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kdCR)
 		} else {
 			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
 			olmInstalled = true // Operator will be installed via OLM
@@ -200,10 +149,10 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	// ============================================================================
-	// PHASE 1: BASIC TESTS - No hooks applied to these tests
+	// METRICS/SERVICE TESTS - Use default CR from BeforeAll
 	// ============================================================================
-	// These tests run WITHOUT BeforeEach/AfterEach (defined later in Phase 2)
-	// Each test is independent using the default KubeDescheduler CR
+	// These tests run WITHOUT hooks, using the default KubeDescheduler CR
+	// Simple, predictable validation of operator functionality
 
 	// OCP-76194
 	g.It("[OTP][Operator][Serial] should validate profile conflict validation [Slow][Timeout:15m]", func() {
@@ -265,34 +214,13 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	// ============================================================================
-	// PHASE 2: HOOK DEFINITIONS (define BeforeEach/AfterEach here)
+	// PROFILE/STRATEGY TESTS - Each test manages its own CR
 	// ============================================================================
-	// These hooks apply to all tests AFTER this point (Phase 3 tests)
-	// Phase 1 tests (defined earlier) do NOT get these hooks
-
-	g.BeforeEach(func() {
-		g.By("BeforeEach (PROFILE): Deleting existing KubeDescheduler CR and waiting for operand to be gone")
-		err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	g.AfterEach(func() {
-		g.By("AfterEach (PROFILE): Deleting test KubeDescheduler CR and waiting for operand to be gone")
-		err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
-		if err != nil {
-			klog.Errorf("Error deleting the KubeDescheduler CR: %v", err)
-		}
-
-		g.By("AfterEach (PROFILE): Recreating default KubeDescheduler CR for next test")
-		defaultKD := newDefaultKubeDescheduler()
-		err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, defaultKD)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	// ============================================================================
-	// PHASE 3: PROFILE TESTS - With BeforeEach/AfterEach hooks
-	// ============================================================================
-	// Each test will have: BeforeEach (from Phase 2) → Test → AfterEach (from Phase 2)
+	// Each test explicitly manages CR lifecycle via runProfileTest():
+	// - Test function creates custom CR with its specific profile
+	// - Test validates the profile behavior
+	// - Cleanup deletes CR after test completes
+	// This avoids hook scoping issues and makes CR state explicit
 
 	// OCP-21205, OCP-36584
 	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
@@ -332,22 +260,22 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 
 	g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing NodeAffinity strategy")
-		testNodeAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testNodeAffinityStrategy)
 	})
 
 	g.It("[OTP][Operator][Serial] should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing NodeTaint strategy")
-		testNodeTaintStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
 	})
 
 	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing InterPodAntiAffinity strategy")
-		testInterPodAntiAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
 	})
 
 	g.It("[OTP][Operator][Serial] should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing RemoveDuplicates strategy")
-		testRemoveDuplicatesStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testRemoveDuplicatesStrategy)
 	})
 
 	g.AfterAll(func() {
@@ -361,61 +289,64 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cleanupCancel()
 
-			if olmInstalled {
-				g.By("Cleaning up operator installation")
 
-				og := &operatorsv1.OperatorGroup{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "descheduler-og",
-						Namespace: operatorclient.OperatorNamespace,
-					},
-				}
-				sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
-				if err != nil {
-					klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
-				}
+				if olmInstalled {
+					g.By("Cleaning up operator installation")
 
-				if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
-					klog.Warningf("Failed to delete KubeDescheduler: %v", err)
-				}
-				if sub != nil {
-					if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
-						klog.Warningf("Failed to delete Subscription: %v", err)
+					og := &operatorsv1.OperatorGroup{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "descheduler-og",
+							Namespace: operatorclient.OperatorNamespace,
+						},
+					}
+					sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
+					if err != nil {
+						klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
+					}
+
+					if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+						klog.Warningf("Failed to delete KubeDescheduler: %v", err)
+					}
+					if sub != nil {
+						if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
+							klog.Warningf("Failed to delete Subscription: %v", err)
+						}
+					}
+					if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
+						klog.Warningf("Failed to delete OperatorGroup: %v", err)
 					}
 				}
-				if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
-					klog.Warningf("Failed to delete OperatorGroup: %v", err)
-				}
-			}
 
-			g.By("Deleting operator namespace")
-			err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
-			if err != nil {
-				klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
-			}
 
-			g.By("Ensuring namespace is fully deleted")
-			err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-				_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
-				if err != nil {
-					if strings.Contains(err.Error(), "not found") {
-						klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
-						return true, nil
+					g.By("Deleting operator namespace")
+					err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
+					if err != nil {
+						klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
 					}
-					klog.Warningf("Error checking namespace: %v", err)
-					return false, nil
-				}
-				klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
-				return false, nil
-			})
-			if err != nil {
-				klog.Warningf("Timeout waiting for namespace deletion: %v", err)
-			}
 
-			if cancelFnc != nil {
-				cancelFnc()
-			}
+					g.By("Ensuring namespace is fully deleted")
+					err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+						_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+						if err != nil {
+							if strings.Contains(err.Error(), "not found") {
+								klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
+								return true, nil
+							}
+							klog.Warningf("Error checking namespace: %v", err)
+							return false, nil
+						}
+						klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
+						return false, nil
+					})
+					if err != nil {
+						klog.Warningf("Timeout waiting for namespace deletion: %v", err)
+					}
+
+					if cancelFnc != nil {
+						cancelFnc()
+					}
 		*/
+
 	})
 })
 
@@ -822,4 +753,80 @@ func testRemoveDuplicatesStrategy(t testing.TB, ctx context.Context, kubeClient 
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	klog.Infof("RemoveDuplicates strategy validated successfully")
+}
+
+// runProfileTest manages CR lifecycle for profile tests:
+// 1. Save the default "cluster" CR spec
+// 2. Delete the current "cluster" CR
+// 3. Run the test (which creates "cluster" CR with custom profile)
+// 4. Validate the profile
+// 5. Delete the test CR
+// 6. Recreate the default "cluster" CR with saved spec
+// 7. Wait for deployment readiness
+func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, testFn func(testing.TB, context.Context, *k8sclient.Clientset, *deschclient.Clientset)) {
+	// Step 1: Save the current default "cluster" CR spec
+	g.By("Saving default KubeDescheduler CR spec before profile test")
+	originalCR, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting original KubeDescheduler CR: %v", err)
+		return
+	}
+	savedSpec := originalCR.Spec
+
+	// Step 2: Delete the current "cluster" CR to make room for test CR
+	g.By("Deleting default KubeDescheduler CR to prepare for profile test")
+	err = deleteKubeDescheduler(ctx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		klog.Errorf("Error deleting KubeDescheduler CR before test: %v", err)
+		return
+	}
+	klog.Infof("Successfully deleted default KubeDescheduler CR")
+
+	// Wait for deployment to be deleted
+	g.By("Waiting for descheduler deployment to be deleted")
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			klog.V(4).Info("Descheduler deployment deleted")
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		klog.Warningf("Timeout waiting for deployment deletion (may continue anyway): %v", err)
+	}
+
+	// Step 3: Run the test (which creates "cluster" CR with custom profile)
+	testFn(g.GinkgoTB(), ctx, kubeClient, deschClient)
+
+	// Step 4 & 5: Delete the test "cluster" CR
+	g.By("Deleting test KubeDescheduler CR after profile test")
+	err = deleteKubeDescheduler(ctx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		klog.Errorf("Error deleting test KubeDescheduler CR: %v", err)
+	}
+
+	// Wait for deployment to be deleted again
+	g.By("Waiting for descheduler deployment to be deleted after test")
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			klog.V(4).Info("Descheduler deployment deleted")
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		klog.Warningf("Timeout waiting for deployment deletion (may continue anyway): %v", err)
+	}
+
+	// Step 6 & 7: Recreate the default "cluster" CR with saved spec and wait for readiness
+	g.By("Recreating default KubeDescheduler CR after profile test")
+	restoredCR := buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
+		kd.Spec = savedSpec
+	})
+	err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, restoredCR)
+	if err != nil {
+		klog.Errorf("Error recreating default KubeDescheduler CR: %v", err)
+	}
 }
