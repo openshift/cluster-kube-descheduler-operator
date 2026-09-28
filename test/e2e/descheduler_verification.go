@@ -138,8 +138,16 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			// only the KubeDescheduler CR and operand readiness are needed.
 			klog.Infof("Operator already installed, skipping installation")
 			olmInstalled = true // Operator was installed via OLM (bundle)
-			kdCR := newDefaultKubeDescheduler()
-			err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kdCR)
+
+			// Check if CR exists before creating
+			_, crErr := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+			if apierrors.IsNotFound(crErr) {
+				// CR doesn't exist, create it
+				kdCR := newDefaultKubeDescheduler()
+				err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kdCR)
+			} else if crErr != nil {
+				err = crErr
+			}
 		} else {
 			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
 			olmInstalled = true // Operator will be installed via OLM
