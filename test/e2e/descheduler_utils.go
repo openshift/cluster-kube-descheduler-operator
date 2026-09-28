@@ -341,11 +341,32 @@ func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Cli
 		return fmt.Errorf("failed to create KubeDescheduler CR: %w", err)
 	}
 
+	// Wait for metrics endpoint to be available (required for metrics validation)
+	klog.Infof("Waiting for metrics endpoint to be available")
+	err = waitForMetricsEndpoint(ctx, kubeClient, operatorclient.OperatorNamespace)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for metrics endpoint: %w", err)
+	}
+
+	// Wait for deployment observedGeneration to reach at least 2 (proves operator reconciled the CR)
+	klog.Infof("Waiting for deployment to apply configuration (observedGeneration >= 2)")
+	err = waitForDeploymentObservedGeneration(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, 2)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for deployment to apply configuration: %w", err)
+	}
+
 	// Wait for descheduler deployment to be ready
 	klog.Infof("Waiting for descheduler deployment to be ready")
 	err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
+	}
+
+	// Wait for pod stability (single pod, no restarts in progress)
+	klog.Infof("Waiting for descheduler operand pod to be stable")
+	err = waitForPodStability(ctx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
 	}
 
 	klog.Infof("KubeDescheduler CR created and operand deployment ready")
@@ -441,6 +462,99 @@ func patchKubeDeschedulerNamespaceFiltering(ctx context.Context, deschClient *de
 
 	klog.Infof("Successfully patched KubeDescheduler (profiles: %v, included: %v, excluded: %v)", profiles, included, excluded)
 	return nil
+}
+
+// waitForMetricsEndpoint waits for the metrics service endpoint to be available
+// This ensures the descheduler metrics service has registered with the cluster
+func waitForMetricsEndpoint(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		endpoints, err := kubeClient.CoreV1().Endpoints(namespace).Get(ctx, "metrics", metav1.GetOptions{})
+		if err != nil {
+			klog.V(2).Infof("Metrics endpoint not yet available in namespace %s: %v", namespace, err)
+			return false, nil
+		}
+
+		if len(endpoints.Subsets) == 0 {
+			klog.V(2).Infof("Metrics endpoint has no subsets yet")
+			return false, nil
+		}
+
+		if len(endpoints.Subsets[0].Addresses) == 0 {
+			klog.V(2).Infof("Metrics endpoint subsets have no addresses yet")
+			return false, nil
+		}
+
+		klog.Infof("Metrics endpoint is available with %d addresses", len(endpoints.Subsets[0].Addresses))
+		return true, nil
+	})
+}
+
+// waitForDeploymentObservedGeneration waits for deployment.status.observedGeneration to reach expected value
+// This indicates the operator has successfully reconciled and applied the configuration
+func waitForDeploymentObservedGeneration(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name string, expectedGen int64) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			klog.V(2).Infof("Failed to get deployment %s/%s: %v, retrying...", namespace, name, err)
+			return false, nil
+		}
+
+		if deployment.Status.ObservedGeneration >= expectedGen {
+			klog.Infof("Deployment %s/%s has observedGeneration %d (expected >= %d)",
+				namespace, name, deployment.Status.ObservedGeneration, expectedGen)
+			return true, nil
+		}
+
+		klog.V(4).Infof("Deployment %s/%s observedGeneration is %d (waiting for >= %d)",
+			namespace, name, deployment.Status.ObservedGeneration, expectedGen)
+		return false, nil
+	})
+}
+
+// waitForPodStability waits for a single stable pod (no pod name contains spaces, which would indicate multiple pods)
+// Multiple pods in the list indicates pod churn/restarts
+func waitForPodStability(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, labelSelector string, duration time.Duration) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, duration, true, func(ctx context.Context) (bool, error) {
+		pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labelSelector,
+		})
+		if err != nil {
+			klog.V(2).Infof("Failed to list pods with label %s: %v, retrying...", labelSelector, err)
+			return false, nil
+		}
+
+		if len(pods.Items) == 0 {
+			klog.V(2).Infof("No pods found with label %s, retrying...", labelSelector)
+			return false, nil
+		}
+
+		// Get single pod name - if multiple pods, names will be space-separated (old pattern from kubectl)
+		if len(pods.Items) > 1 {
+			podNames := make([]string, len(pods.Items))
+			for i, pod := range pods.Items {
+				podNames[i] = pod.Name
+			}
+			klog.V(2).Infof("Found %d pods with label %s (not yet stable): %v", len(pods.Items), labelSelector, podNames)
+			return false, nil
+		}
+
+		pod := pods.Items[0]
+		if pod.Status.Phase != corev1.PodRunning {
+			klog.V(2).Infof("Pod %s is not running (phase: %s), retrying...", pod.Name, pod.Status.Phase)
+			return false, nil
+		}
+
+		// Check for container readiness
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			if !containerStatus.Ready {
+				klog.V(2).Infof("Container %s in pod %s is not ready, retrying...", containerStatus.Name, pod.Name)
+				return false, nil
+			}
+		}
+
+		klog.Infof("Pod %s with label %s is stable and running", pod.Name, labelSelector)
+		return true, nil
+	})
 }
 
 // waitForDeploymentReady waits for a deployment to have the expected number of ready replicas
@@ -854,8 +968,8 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 		return fmt.Errorf("failed to normalize expected policy: %w", err)
 	}
 
-	// Poll until actual policy matches expected
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+	// Poll until actual policy matches expected (increased timeout to 5 minutes)
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		// Get actual policy from ConfigMap
 		actualPolicy, err := getDeschedulerPolicyFromConfigMap(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
 		if err != nil {
@@ -881,6 +995,7 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 	})
 
 	if err != nil {
+		klog.Errorf("Timeout waiting for descheduling policy to match expected after 5 minutes")
 		return fmt.Errorf("timeout waiting for descheduling policy to match expected: %w", err)
 	}
 

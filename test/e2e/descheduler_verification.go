@@ -358,63 +358,63 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		// TODO: Implement proper cleanup when needed
 		// Original cleanup logic commented below for reference:
 		/*
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cleanupCancel()
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cleanupCancel()
 
-		if olmInstalled {
-			g.By("Cleaning up operator installation")
+			if olmInstalled {
+				g.By("Cleaning up operator installation")
 
-			og := &operatorsv1.OperatorGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "descheduler-og",
-					Namespace: operatorclient.OperatorNamespace,
-				},
-			}
-			sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
-			if err != nil {
-				klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
-			}
+				og := &operatorsv1.OperatorGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "descheduler-og",
+						Namespace: operatorclient.OperatorNamespace,
+					},
+				}
+				sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
+				if err != nil {
+					klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
+				}
 
-			if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
-				klog.Warningf("Failed to delete KubeDescheduler: %v", err)
-			}
-			if sub != nil {
-				if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
-					klog.Warningf("Failed to delete Subscription: %v", err)
+				if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+					klog.Warningf("Failed to delete KubeDescheduler: %v", err)
+				}
+				if sub != nil {
+					if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
+						klog.Warningf("Failed to delete Subscription: %v", err)
+					}
+				}
+				if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
+					klog.Warningf("Failed to delete OperatorGroup: %v", err)
 				}
 			}
-			if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
-				klog.Warningf("Failed to delete OperatorGroup: %v", err)
-			}
-		}
 
-		g.By("Deleting operator namespace")
-		err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
-		if err != nil {
-			klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
-		}
-
-		g.By("Ensuring namespace is fully deleted")
-		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+			g.By("Deleting operator namespace")
+			err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
 			if err != nil {
-				if strings.Contains(err.Error(), "not found") {
-					klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
-					return true, nil
+				klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
+			}
+
+			g.By("Ensuring namespace is fully deleted")
+			err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+				_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+				if err != nil {
+					if strings.Contains(err.Error(), "not found") {
+						klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
+						return true, nil
+					}
+					klog.Warningf("Error checking namespace: %v", err)
+					return false, nil
 				}
-				klog.Warningf("Error checking namespace: %v", err)
+				klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
 				return false, nil
+			})
+			if err != nil {
+				klog.Warningf("Timeout waiting for namespace deletion: %v", err)
 			}
-			klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
-			return false, nil
-		})
-		if err != nil {
-			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
-		}
 
-		if cancelFnc != nil {
-			cancelFnc()
-		}
+			if cancelFnc != nil {
+				cancelFnc()
+			}
 		*/
 	})
 })
