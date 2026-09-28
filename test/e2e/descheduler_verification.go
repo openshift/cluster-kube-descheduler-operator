@@ -233,37 +233,37 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	// OCP-21205, OCP-36584
 	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing PDB compliance during pod evictions")
-		testPDBCompliance(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testPDBCompliance)
 	})
 
 	// OCP-43277, OCP-50941, OCP-76158
 	g.It("[OTP][Operator][Serial] should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing Predictive and Automatic modes with eviction limits")
-		testDeschedulerModes(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testDeschedulerModes)
 	})
 
 	// OCP-37463, OCP-40055
 	g.It("[OTP][Operator][Serial] should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
-		testAffinityAndTopologyProfiles(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testAffinityAndTopologyProfiles)
 	})
 
 	// OCP-52303
 	g.It("[OTP][Operator][Serial] should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing namespace include filtering")
-		testNamespaceIncludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testNamespaceIncludeFiltering)
 	})
 
 	// OCP-53058
 	g.It("[OTP][Operator][Serial] should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing namespace exclude filtering")
-		testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testNamespaceExcludeFiltering)
 	})
 
 	// OCP-76422
 	g.It("[OTP][Operator][Serial] should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing LongLifecycle profile behavior")
-		testLongLifecycleProfile(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		runProfileTest(ctx, kubeClient, deschClient, testLongLifecycleProfile)
 	})
 
 	g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
@@ -275,7 +275,6 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		g.By("Testing NodeTaint strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
 	})
-
 	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
 		g.By("Testing InterPodAntiAffinity strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
@@ -497,8 +496,6 @@ func testOLMMustGatherData(t testing.TB, ctx context.Context, kubeClient *k8scli
 
 // testPDBCompliance verifies that descheduler respects Pod Disruption Budgets
 func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
-	g.Skip("The validation needs to abstract from the descheduler logs first")
-
 	g.By("Checking for SNO cluster")
 	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
 		LabelSelector: "node-role.kubernetes.io/worker=",
@@ -590,6 +587,9 @@ func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.
 	err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Mode = descv1.Automatic
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LifecycleAndUtilization}
+		kd.Spec.ProfileCustomizations = &descv1.ProfileCustomizations{
+			PodLifetime: &metav1.Duration{Duration: 10 * time.Second},
+		}
 	}))
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -663,6 +663,16 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 
 	g.By("Deleting Predictive KubeDescheduler CR and waiting for operand to be gone")
 	err = deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	g.By("Waiting for descheduler deployment to be fully deleted")
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			return true, nil
+		}
+		return false, nil
+	})
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Creating new KubeDescheduler CR with Automatic mode")
