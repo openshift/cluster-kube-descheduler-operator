@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -15,12 +14,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -411,27 +413,80 @@ func testSoftTainterControllerWithVAP(t testing.TB, ctx context.Context, kubeCli
 	klog.Infof("softtainter SA is not allowed to remove a hard taint")
 }
 
-// testPodDescheduling tests that pods can be descheduled.
-// This function works with both standard Go testing and Ginkgo.
+// testPodDescheduling tests that descheduler respects PDB (Pod Disruption Budget) constraints.
+// Follows Red Hat's exact test pattern (from kube_descheduler_operator.go):
+// 1. Cordon all nodes
+// 2. Uncordon node0 (pods schedule there)
+// 3. Create 12 test pods
+// 4. Create PDB with min-available=11
+// 5. Patch descheduler mode to Automatic
+// 6. Uncordon node1 (forces eviction attempts)
+// 7. Check descheduler logs for PDB prevention error
 func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	deschClient := GetDeschedulerClient()
+
 	testNamespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "e2e-testdescheduling"}}
 	if _, err := kubeClient.CoreV1().Namespaces().Create(ctx, testNamespace, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Unable to create ns %v", testNamespace.Name)
 	}
+	defer cleanupTestNamespace(t, ctx, kubeClient, testNamespace.Name)
+
+	// Get all worker nodes only (filter out control planes)
+	allNodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("Unable to get nodes: %v", err)
+	}
+
+	// Filter to only worker nodes
+	var workerNodes []corev1.Node
+	for _, node := range allNodes.Items {
+		_, isWorker := node.Labels["node-role.kubernetes.io/worker"]
+		if isWorker {
+			workerNodes = append(workerNodes, node)
+		}
+	}
+
+	if len(workerNodes) < 2 {
+		t.Fatalf("Need at least 2 worker nodes, got %d", len(workerNodes))
+	}
+
+	// Step 1: Cordon ALL worker nodes
+	for _, node := range workerNodes {
+		patch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":true}]`)
+		if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, types.JSONPatchType, patch, metav1.PatchOptions{}); err != nil {
+			t.Fatalf("Unable to cordon node %s: %v", node.Name, err)
+		}
+	}
+
+	// Defer: Uncordon all nodes after test
+	defer func() {
+		for _, node := range workerNodes {
+			patch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":false}]`)
+			_, _ = kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, types.JSONPatchType, patch, metav1.PatchOptions{})
+		}
+	}()
+
+	// Step 2: Uncordon node0 so pods can schedule there
+	uncordonPatch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":false}]`)
+	if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, workerNodes[0].Name, types.JSONPatchType, uncordonPatch, metav1.PatchOptions{}); err != nil {
+		t.Fatalf("Unable to uncordon node %s: %v", workerNodes[0].Name, err)
+	}
+
+	// Step 3: Create deployment with 12 replicas
 	deploymentObj := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testNamespace.Name,
-			Name:      "test-descheduler-operator-pod",
-			Labels:    map[string]string{"app": "test-descheduler-operator-pod"},
+			Name:      "test-pdb-pods",
+			Labels:    map[string]string{"app": "test-pdb-pods"},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: utilpointer.Int32(1),
+			Replicas: utilpointer.Int32(12),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test-descheduler-operator-pod"},
+				MatchLabels: map[string]string{"app": "test-pdb-pods"},
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "test-descheduler-operator-pod"},
+					Labels: map[string]string{"app": "test-pdb-pods"},
 				},
 				Spec: corev1.PodSpec{
 					SecurityContext: &corev1.PodSecurityContext{
@@ -458,40 +513,100 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 			},
 		},
 	}
-	defer cleanupTestNamespace(t, ctx, kubeClient, testNamespace.Name)
 	if _, err := kubeClient.AppsV1().Deployments(testNamespace.Name).Create(ctx, deploymentObj, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("Unable to create a deployment: %v", err)
+		t.Fatalf("Unable to create deployment: %v", err)
 	}
 	defer kubeClient.AppsV1().Deployments(testNamespace.Name).Delete(ctx, deploymentObj.Name, metav1.DeleteOptions{})
 
-	waitForPodsRunning(ctx, t, kubeClient, map[string]string{"app": "test-descheduler-operator-pod"}, 1, testNamespace.Name)
+	// Wait for all 12 replicas to be running
+	waitForPodsRunning(ctx, t, kubeClient, map[string]string{"app": "test-pdb-pods"}, 12, testNamespace.Name)
 
-	podList, err := kubeClient.CoreV1().Pods(testNamespace.Name).List(ctx, metav1.ListOptions{})
-	initialPodNames := getPodNames(podList.Items)
-	t.Logf("Initial test pods: %v", initialPodNames)
+	// Step 4: Create PDB with min-available=11 (equivalent to max-unavailable=1)
+	minAvailable := intstr.FromInt(11)
+	pdbObj := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pdb-pods",
+			Namespace: testNamespace.Name,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable: &minAvailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "test-pdb-pods"},
+			},
+		},
+	}
+	if _, err := kubeClient.PolicyV1().PodDisruptionBudgets(testNamespace.Name).Create(ctx, pdbObj, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Unable to create PDB: %v", err)
+	}
+	defer kubeClient.PolicyV1().PodDisruptionBudgets(testNamespace.Name).Delete(ctx, pdbObj.Name, metav1.DeleteOptions{})
+
+	// Step 5: Patch descheduler mode to Automatic
+	kdCR, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
-		t.Fatalf("Unable to get pods: %v", err)
+		t.Fatalf("Unable to get KubeDescheduler CR: %v", err)
+	}
+	kdCR.Spec.Mode = "Automatic"
+	_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, kdCR, metav1.UpdateOptions{})
+	if err != nil {
+		t.Fatalf("Unable to patch descheduler mode to Automatic: %v", err)
+	}
+	defer func() {
+		kdCR, _ := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+		kdCR.Spec.Mode = "Predictive"
+		_, _ = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, kdCR, metav1.UpdateOptions{})
+	}()
+
+	// Step 6: Uncordon node1 (forces eviction attempts - descheduler tries to move pods)
+	if len(workerNodes) > 1 {
+		if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, workerNodes[1].Name, types.JSONPatchType, uncordonPatch, metav1.PatchOptions{}); err != nil {
+			t.Logf("Warning: Unable to uncordon node %s: %v", workerNodes[1].Name, err)
+		}
 	}
 
+	// Wait for descheduler to attempt evictions
 	time.Sleep(40 * time.Second)
 
+	// Step 7: Check descheduler logs for PDB prevention error
 	o.Eventually(func() bool {
-		klog.Infof("Listing pods...")
-		podList, err := kubeClient.CoreV1().Pods(testNamespace.Name).List(ctx, metav1.ListOptions{})
+		t.Logf("Checking descheduler pod logs for PDB prevention error")
+
+		deschedulerPods, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: deschedulerLabel,
+		})
 		if err != nil {
-			klog.Errorf("Unable to get pods: %v", err)
+			klog.Errorf("Unable to get descheduler pods: %v", err)
 			return false
 		}
-		excludePodNames := getPodNames(podList.Items)
-		sort.Strings(excludePodNames)
-		t.Logf("Existing pods: %v", excludePodNames)
-		// validate no pods were deleted
-		if len(intersectStrings(initialPodNames, excludePodNames)) > 0 {
-			t.Logf("Not every pod was evicted")
+		if len(deschedulerPods.Items) == 0 {
 			return false
 		}
-		return true
-	}).WithTimeout(3*time.Minute).WithPolling(1*time.Second).Should(o.BeTrue(), "error while waiting for pod")
+
+		deschedulerPod := &deschedulerPods.Items[0]
+		logOpts := &corev1.PodLogOptions{
+			Container: "descheduler",
+		}
+		req := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).GetLogs(deschedulerPod.Name, logOpts)
+		logs, err := req.Stream(ctx)
+		if err != nil {
+			return false
+		}
+		defer logs.Close()
+
+		buf := make([]byte, 500000)
+		n, _ := logs.Read(buf)
+		logContent := string(buf[:n])
+
+		// Check for both PDB prevention error messages in logs
+		// Both messages should appear: eviction attempt and PDB blocking it
+		hasError := strings.Contains(logContent, "Error evicting pod")
+		hasPDB := strings.Contains(logContent, "Cannot evict pod as it would violate the pod's disruption budget")
+
+		if hasError && hasPDB {
+			t.Logf("SUCCESS: Found PDB prevention in descheduler logs")
+			return true
+		}
+		return false
+	}).WithTimeout(3*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(), "Descheduler should respect PDB constraints")
 }
 
 // testMetricsService tests that the metrics service exists and is properly configured.
