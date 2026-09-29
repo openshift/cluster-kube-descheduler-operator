@@ -61,7 +61,7 @@ require (
 
 // the softtainter is used in conjuction with KubevirtMigrationAware plugin that
 // is registered by github.com/openshift/descheduler but not in sigs.k8s.io/descheduler
-replace sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20260817085140-13b43896adec
+replace sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20261001192034-498b6f9e5395
 
 replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 
@@ -182,5 +182,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
+	sigs.k8s.io/yaml v1.6.0
 )

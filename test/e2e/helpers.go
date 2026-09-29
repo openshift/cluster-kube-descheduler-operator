@@ -30,7 +30,6 @@ import (
 
 	"github.com/openshift/cluster-kube-descheduler-operator/bindata"
 	deschclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
-	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator"
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 )
@@ -315,18 +314,18 @@ func queryPrometheusTarget(ctx context.Context, kubeClient *k8sclient.Clientset,
 // getPrometheusURL retrieves the Prometheus URL from the route
 func getPrometheusURL(ctx context.Context, routeClient *routeclientv1.Clientset) (string, error) {
 	// Get the prometheus-k8s route from openshift-monitoring namespace
-	route, err := routeClient.RouteV1().Routes(operator.PromNamespace).Get(ctx, operator.PromRouteName, metav1.GetOptions{})
+	route, err := routeClient.RouteV1().Routes(operatorclient.PromNamespace).Get(ctx, operatorclient.PromRouteName, metav1.GetOptions{})
 	if err != nil {
-		return "", fmt.Errorf("unable to get %s/%s route: %w", operator.PromNamespace, operator.PromRouteName, err)
+		return "", fmt.Errorf("unable to get %s/%s route: %w", operatorclient.PromNamespace, operatorclient.PromRouteName, err)
 	}
 
 	// Validate route has ingress information
 	if len(route.Status.Ingress) == 0 {
-		return "", fmt.Errorf("no ingress found in %s/%s route", operator.PromNamespace, operator.PromRouteName)
+		return "", fmt.Errorf("no ingress found in %s/%s route", operatorclient.PromNamespace, operatorclient.PromRouteName)
 	}
 
 	if route.Status.Ingress[0].Host == "" {
-		return "", fmt.Errorf("host for status.ingress[0] in %s/%s route is empty", operator.PromNamespace, operator.PromRouteName)
+		return "", fmt.Errorf("host for status.ingress[0] in %s/%s route is empty", operatorclient.PromNamespace, operatorclient.PromRouteName)
 	}
 
 	host := route.Status.Ingress[0].Host
