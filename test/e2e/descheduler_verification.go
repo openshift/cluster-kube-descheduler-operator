@@ -238,62 +238,60 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	// - Cleanup deletes CR after test completes
 	// This avoids hook scoping issues and makes CR state explicit
 
-	/*
-		// OCP-21205, OCP-36584
-		g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing PDB compliance during pod evictions")
-			runProfileTest(ctx, kubeClient, deschClient, testPDBCompliance)
-		})
+	// OCP-21205, OCP-36584
+	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing PDB compliance during pod evictions")
+		runProfileTest(ctx, kubeClient, deschClient, testPDBCompliance)
+	})
 
-		// OCP-43277, OCP-50941, OCP-76158
-		g.It("[OTP][Operator][Serial] should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing Predictive and Automatic modes with eviction limits")
-			runProfileTest(ctx, kubeClient, deschClient, testDeschedulerModes)
-		})
+	// OCP-43277, OCP-50941, OCP-76158
+	g.It("[OTP][Operator][Serial] should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing Predictive and Automatic modes with eviction limits")
+		runProfileTest(ctx, kubeClient, deschClient, testDeschedulerModes)
+	})
 
-		// OCP-37463, OCP-40055
-		g.It("[OTP][Operator][Serial] should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
-			runProfileTest(ctx, kubeClient, deschClient, testAffinityAndTopologyProfiles)
-		})
+	// OCP-37463, OCP-40055
+	g.It("[OTP][Operator][Serial] should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
+		runProfileTest(ctx, kubeClient, deschClient, testAffinityAndTopologyProfiles)
+	})
 
-		// OCP-52303
-		g.It("[OTP][Operator][Serial] should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace include filtering")
-			runProfileTest(ctx, kubeClient, deschClient, testNamespaceIncludeFiltering)
-		})
+	// OCP-52303
+	g.It("[OTP][Operator][Serial] should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing namespace include filtering")
+		runProfileTest(ctx, kubeClient, deschClient, testNamespaceIncludeFiltering)
+	})
 
-		// OCP-53058
-		g.It("[OTP][Operator][Serial] should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace exclude filtering")
-			runProfileTest(ctx, kubeClient, deschClient, testNamespaceExcludeFiltering)
-		})
+	// OCP-53058
+	g.It("[OTP][Operator][Serial] should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing namespace exclude filtering")
+		runProfileTest(ctx, kubeClient, deschClient, testNamespaceExcludeFiltering)
+	})
 
-		// OCP-76422
-		g.It("[OTP][Operator][Serial] should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing LongLifecycle profile behavior")
-			runProfileTest(ctx, kubeClient, deschClient, testLongLifecycleProfile)
-		})
+	// OCP-76422
+	g.It("[OTP][Operator][Serial] should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing LongLifecycle profile behavior")
+		runProfileTest(ctx, kubeClient, deschClient, testLongLifecycleProfile)
+	})
 
-		g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeAffinity strategy")
-			runProfileTest(ctx, kubeClient, deschClient, testNodeAffinityStrategy)
-		})
+	g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing NodeAffinity strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testNodeAffinityStrategy)
+	})
 
-		g.It("[OTP][Operator][Serial] should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeTaint strategy")
-			runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
-		})
-		g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing InterPodAntiAffinity strategy")
-			runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
-		})
+	g.It("[OTP][Operator][Serial] should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing NodeTaint strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
+	})
+	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing InterPodAntiAffinity strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
+	})
 
-		g.It("[OTP][Operator][Serial] should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing RemoveDuplicates strategy")
-			runProfileTest(ctx, kubeClient, deschClient, testRemoveDuplicatesStrategy)
-		})
-	*/
+	g.It("[OTP][Operator][Serial] should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing RemoveDuplicates strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testRemoveDuplicatesStrategy)
+	})
 
 	g.AfterAll(func() {
 		g.By("AfterAll: Skipping operator cleanup to preserve test environment")
