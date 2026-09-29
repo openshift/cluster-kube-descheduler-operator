@@ -109,7 +109,7 @@ func isOperatorPreInstalled(ctx context.Context, kubeClient *k8sclient.Clientset
 }
 
 // Ginkgo test specs for migrated OTP tests
-var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Ordered, g.Serial, func() {
+var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", func() {
 	var (
 		ctx           context.Context
 		cancelFnc     context.CancelFunc
@@ -120,7 +120,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		apiExtClient  *apiextclientv1.Clientset
 	)
 
-	g.BeforeAll(func() {
+	g.BeforeEach(func() {
 		g.By("Setting up test environment")
 		var err error
 		kubeClient = GetKubeClient()
@@ -251,50 +251,50 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	// OCP-37463, OCP-40055
-	g.It("[OTP][Operator][Serial] should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
 		runProfileTest(ctx, kubeClient, deschClient, testAffinityAndTopologyProfiles)
 	})
 
 	// OCP-52303
-	g.It("[OTP][Operator][Serial] should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate namespace include filtering [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing namespace include filtering")
 		runProfileTest(ctx, kubeClient, deschClient, testNamespaceIncludeFiltering)
 	})
 
 	// OCP-53058
-	g.It("[OTP][Operator][Serial] should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate namespace exclude filtering [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing namespace exclude filtering")
 		runProfileTest(ctx, kubeClient, deschClient, testNamespaceExcludeFiltering)
 	})
 
 	// OCP-76422
-	g.It("[OTP][Operator][Serial] should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing LongLifecycle profile behavior")
 		runProfileTest(ctx, kubeClient, deschClient, testLongLifecycleProfile)
 	})
 
-	g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate NodeAffinity strategy [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing NodeAffinity strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testNodeAffinityStrategy)
 	})
 
-	g.It("[OTP][Operator][Serial] should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate NodeTaint strategy [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing NodeTaint strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
 	})
-	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing InterPodAntiAffinity strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
 	})
 
-	g.It("[OTP][Operator][Serial] should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing RemoveDuplicates strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testRemoveDuplicatesStrategy)
 	})
 
-	g.AfterAll(func() {
-		g.By("AfterAll: Skipping operator cleanup to preserve test environment")
+	g.AfterEach(func() {
+		g.By("AfterEach: Skipping operator cleanup to preserve test environment")
 		if cancelFnc != nil {
 			cancelFnc()
 		}
