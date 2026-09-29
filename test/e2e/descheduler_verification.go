@@ -162,6 +162,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		if err != nil {
 			klog.Warningf("Warning: Timeout waiting for pod stability in BeforeAll: %v", err)
 		}
+		time.Sleep(8 * time.Hour)
 	})
 
 	// ============================================================================
