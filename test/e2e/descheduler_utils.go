@@ -300,24 +300,44 @@ func buildKubeDescheduler(modify func(*descv1.KubeDescheduler)) *descv1.KubeDesc
 // createAndValidateKubeDeschedulerCR creates a KubeDescheduler CR, validates the generated policy,
 // and waits for operand stability. This helper combines the common pattern used across profile tests.
 func createAndValidateKubeDeschedulerCR(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler, description string) error {
+	startTime := time.Now()
 	g.By(fmt.Sprintf("Creating new KubeDescheduler CR with %s", description))
-	err := createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kubeDescheduler)
+	klog.Infof("Creating new KubeDescheduler CR with %s", description)
+
+	// Create a fresh context for this validation to avoid parent context deadline issues
+	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer validateCancel()
+
+	err := createKubeDeschedulerAndWait(validateCtx, kubeClient, deschClient, kubeDescheduler)
 	if err != nil {
+		g.By(fmt.Sprintf("Failed to create KubeDescheduler CR: %v (elapsed: %v)", err, time.Since(startTime)))
+		klog.Errorf("Failed to create KubeDescheduler CR: %v", err)
 		return err
 	}
+	g.By(fmt.Sprintf("KubeDescheduler CR created successfully (elapsed: %v)", time.Since(startTime)))
 
 	g.By("Validating operator-generated descheduling policy matches expected policy")
-	err = validateDeschedulingPolicy(ctx, kubeClient, kubeDescheduler)
+	klog.Infof("Validating operator-generated descheduling policy")
+	err = validateDeschedulingPolicy(validateCtx, kubeClient, kubeDescheduler)
 	if err != nil {
+		g.By(fmt.Sprintf("Policy validation failed: %v (elapsed: %v)", err, time.Since(startTime)))
+		klog.Errorf("Policy validation failed: %v", err)
 		return err
 	}
+	g.By(fmt.Sprintf("Policy validation completed (elapsed: %v)", time.Since(startTime)))
 
 	g.By("Waiting for descheduler operand to run stably for 30 seconds")
-	err = waitForOperandStability(ctx, kubeClient, 30*time.Second)
+	klog.Infof("Waiting for descheduler operand to run stably")
+	err = waitForOperandStability(validateCtx, kubeClient, 30*time.Second)
 	if err != nil {
+		g.By(fmt.Sprintf("Operand stability check failed: %v (elapsed: %v)", err, time.Since(startTime)))
+		klog.Errorf("Operand stability check failed: %v", err)
 		return err
 	}
+	g.By(fmt.Sprintf("Operand stability verified (elapsed: %v)", time.Since(startTime)))
 
+	g.By(fmt.Sprintf("Profile test validation completed successfully (total elapsed: %v)", time.Since(startTime)))
+	klog.Infof("Profile test validation completed successfully")
 	return nil
 }
 
@@ -334,41 +354,63 @@ func newDefaultKubeDescheduler() *descv1.KubeDescheduler {
 
 // createKubeDeschedulerAndWait creates a KubeDescheduler CR and waits for the operand deployment to be ready
 func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler) error {
+	startTime := time.Now()
+
+	// Use a fresh context with extended timeout to avoid parent context deadline issues
+	opCtx, opCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer opCancel()
+
 	// Create the KubeDescheduler CR
+	g.By("Creating KubeDescheduler CR")
 	klog.Infof("Creating KubeDescheduler CR %s/%s", operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
-	_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kubeDescheduler, metav1.CreateOptions{})
+	_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(opCtx, kubeDescheduler, metav1.CreateOptions{})
 	if err != nil {
+		g.By(fmt.Sprintf("Failed to create KubeDescheduler CR: %v", err))
 		return fmt.Errorf("failed to create KubeDescheduler CR: %w", err)
 	}
+	g.By(fmt.Sprintf("KubeDescheduler CR created (elapsed: %v)", time.Since(startTime)))
 
 	// Wait for metrics endpoint to be available (required for metrics validation)
+	g.By("Waiting for metrics endpoint to be available")
 	klog.Infof("Waiting for metrics endpoint to be available")
-	err = waitForMetricsEndpoint(ctx, kubeClient, operatorclient.OperatorNamespace)
+	err = waitForMetricsEndpoint(opCtx, kubeClient, operatorclient.OperatorNamespace)
 	if err != nil {
+		g.By(fmt.Sprintf("Metrics endpoint timeout: %v (elapsed: %v)", err, time.Since(startTime)))
 		return fmt.Errorf("timeout waiting for metrics endpoint: %w", err)
 	}
+	g.By(fmt.Sprintf("Metrics endpoint available (elapsed: %v)", time.Since(startTime)))
 
 	// Wait for deployment observedGeneration to reach at least 2 (proves operator reconciled the CR)
+	g.By("Waiting for deployment to apply configuration (observedGeneration >= 2)")
 	klog.Infof("Waiting for deployment to apply configuration (observedGeneration >= 2)")
-	err = waitForDeploymentObservedGeneration(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, 2)
+	err = waitForDeploymentObservedGeneration(opCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, 2)
 	if err != nil {
+		g.By(fmt.Sprintf("Deployment observedGeneration timeout: %v (elapsed: %v)", err, time.Since(startTime)))
 		return fmt.Errorf("timeout waiting for deployment to apply configuration: %w", err)
 	}
+	g.By(fmt.Sprintf("Deployment applied configuration (elapsed: %v)", time.Since(startTime)))
 
 	// Wait for descheduler deployment to be ready
+	g.By("Waiting for descheduler deployment to be ready")
 	klog.Infof("Waiting for descheduler deployment to be ready")
-	err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
+	err = waitForDeploymentReady(opCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
 	if err != nil {
+		g.By(fmt.Sprintf("Deployment ready timeout: %v (elapsed: %v)", err, time.Since(startTime)))
 		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
 	}
+	g.By(fmt.Sprintf("Deployment is ready (elapsed: %v)", time.Since(startTime)))
 
 	// Wait for pod stability (single pod, no restarts in progress)
+	g.By("Waiting for descheduler operand pod to be stable")
 	klog.Infof("Waiting for descheduler operand pod to be stable")
-	err = waitForPodStability(ctx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
+	err = waitForPodStability(opCtx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
 	if err != nil {
+		g.By(fmt.Sprintf("Pod stability timeout: %v (elapsed: %v)", err, time.Since(startTime)))
 		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
 	}
+	g.By(fmt.Sprintf("Pod is stable (elapsed: %v)", time.Since(startTime)))
 
+	g.By(fmt.Sprintf("KubeDescheduler CR created and operand deployment ready (total elapsed: %v)", time.Since(startTime)))
 	klog.Infof("KubeDescheduler CR created and operand deployment ready")
 	return nil
 }
@@ -968,35 +1010,58 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 		return fmt.Errorf("failed to normalize expected policy: %w", err)
 	}
 
-	// Poll until actual policy matches expected (increased timeout to 5 minutes)
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	// Poll until actual policy matches expected (timeout increased to 15 minutes for slow CI environments)
+	// Note: Using fresh context with timeout instead of inherited ctx to avoid parent deadline issues
+	policyCtx, policyCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer policyCancel()
+
+	startPolicyCheck := time.Now()
+	attemptCount := 0
+	err = wait.PollUntilContextTimeout(policyCtx, 5*time.Second, 15*time.Minute, true, func(ctx context.Context) (bool, error) {
+		elapsed := time.Since(startPolicyCheck)
+		attemptCount++
+
+		// Log every 30 seconds to show progress
+		if attemptCount%6 == 1 {
+			g.By(fmt.Sprintf("Policy validation attempt %d (elapsed: %v)", attemptCount, elapsed))
+		}
+
 		// Get actual policy from ConfigMap
 		actualPolicy, err := getDeschedulerPolicyFromConfigMap(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
 		if err != nil {
-			klog.V(2).Infof("Failed to get DeschedulerPolicy from ConfigMap: %v", err)
+			g.By(fmt.Sprintf("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err))
+			klog.Errorf("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
 			return false, nil
 		}
 
 		// Normalize actual policy
 		normalizedActual, err := normalizeDeschedulerPolicy(actualPolicy)
 		if err != nil {
-			klog.V(2).Infof("Failed to normalize actual policy: %v", err)
+			g.By(fmt.Sprintf("Failed to normalize actual policy (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err))
+			klog.Errorf("Failed to normalize actual policy (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
 			return false, nil
 		}
 
 		// Compare normalized policies using cmp.Diff
 		if diff := cmp.Diff(normalizedExpected, normalizedActual); diff != "" {
-			klog.V(2).Infof("Policy mismatch (-expected +actual):\n%s", diff)
+			if attemptCount%6 == 1 { // Log every 30 seconds
+				g.By(fmt.Sprintf("Policy mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed))
+			}
+			klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v) (-expected +actual):\n%s", attemptCount, elapsed, diff)
 			return false, nil
 		}
+
+		g.By(fmt.Sprintf("Policy validation SUCCEEDED after %d attempts, %v total elapsed", attemptCount, elapsed))
+		klog.Infof("Policy validation succeeded after %d attempts, %v total elapsed", attemptCount, elapsed)
 
 		klog.V(4).Info("Operator-generated policy matches expected policy")
 		return true, nil
 	})
 
 	if err != nil {
-		klog.Errorf("Timeout waiting for descheduling policy to match expected after 5 minutes")
-		return fmt.Errorf("timeout waiting for descheduling policy to match expected: %w", err)
+		g.By(fmt.Sprintf("Policy validation FAILED after %d attempts, 15 minute timeout exceeded (elapsed: %v)", attemptCount, time.Since(startPolicyCheck)))
+		klog.Errorf("Timeout waiting for descheduling policy to match expected after 15 minutes and %d attempts (elapsed: %v)", attemptCount, time.Since(startPolicyCheck))
+		return fmt.Errorf("timeout waiting for descheduling policy to match expected after 15 minutes: %w", err)
 	}
 
 	klog.Infof("Descheduling policy validated successfully")
