@@ -1114,3 +1114,46 @@ func getDeschedulerPolicyFromConfigMap(ctx context.Context, kubeClient *k8sclien
 	klog.V(4).Infof("Successfully parsed DeschedulerPolicy from ConfigMap with %d profiles", len(policy.Profiles))
 	return policy, nil
 }
+
+// ensureNamespaceMonitoringLabel ensures namespace has cluster-monitoring label for Prometheus scraping
+func ensureNamespaceMonitoringLabel(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) error {
+	const labelKey = "openshift.io/cluster-monitoring"
+	const labelValue = "true"
+
+	ns, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
+	}
+
+	// Check if label already exists
+	if ns.Labels != nil && ns.Labels[labelKey] == labelValue {
+		klog.Infof("Namespace %s already has monitoring label %s=%s", namespace, labelKey, labelValue)
+		return nil
+	}
+
+	// Add label
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+	ns.Labels[labelKey] = labelValue
+
+	_, err = kubeClient.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to add monitoring label to namespace %s: %w", namespace, err)
+	}
+
+	klog.Infof("Added monitoring label to namespace %s", namespace)
+
+	// Verify label was applied
+	nsVerify, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to verify label on namespace %s: %w", namespace, err)
+	}
+
+	if nsVerify.Labels[labelKey] != labelValue {
+		return fmt.Errorf("label verification failed: expected %s=%s, got %s", labelKey, labelValue, nsVerify.Labels[labelKey])
+	}
+
+	klog.Infof("✓ Verified: namespace %s has monitoring label %s=%s", namespace, labelKey, labelValue)
+	return nil
+}

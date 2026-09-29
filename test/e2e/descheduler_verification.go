@@ -139,6 +139,12 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			klog.Infof("Operator already installed, skipping installation")
 			olmInstalled = true // Operator was installed via OLM (bundle)
 
+			// Ensure namespace has cluster-monitoring label for Prometheus scraping (required for metrics tests and policy generation)
+			labelErr := ensureNamespaceMonitoringLabel(ctx, kubeClient, operatorclient.OperatorNamespace)
+			if labelErr != nil {
+				klog.Warningf("Warning: Failed to ensure monitoring label on namespace: %v", labelErr)
+			}
+
 			// Check if CR exists before creating
 			_, crErr := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 			if apierrors.IsNotFound(crErr) {
@@ -162,7 +168,6 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		if err != nil {
 			klog.Warningf("Warning: Timeout waiting for pod stability in BeforeAll: %v", err)
 		}
-		time.Sleep(8 * time.Hour)
 	})
 
 	// ============================================================================
@@ -862,6 +867,24 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 		return
 	}
 	klog.Infof("Successfully deleted default KubeDescheduler CR")
+
+	// Wait for CR to actually be deleted (not just delete API call to succeed)
+	g.By("Waiting for KubeDescheduler CR to be removed from cluster")
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			klog.V(4).Info("KubeDescheduler CR fully deleted from cluster")
+			return true, nil
+		}
+		if err != nil {
+			return false, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		g.Fail(fmt.Sprintf("Timeout waiting for CR deletion: %v", err))
+		return
+	}
 
 	// Wait for deployment to be deleted
 	g.By("Waiting for descheduler deployment to be deleted")
