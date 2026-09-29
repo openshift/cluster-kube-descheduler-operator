@@ -4,7 +4,7 @@ maxNoOfPodsToEvictPerNode: 2
 maxNoOfPodsToEvictTotal: 5
 metricsProviders:
 - prometheus:
-    url: https://prometheus-k8s-openshift-monitoring.apps.example.com
+    url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
   source: Prometheus
 nodeSelector: kubevirt.io/schedulable=true
 profiles:
