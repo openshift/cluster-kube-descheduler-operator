@@ -168,6 +168,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		if err != nil {
 			klog.Warningf("Warning: Timeout waiting for pod stability in BeforeAll: %v", err)
 		}
+		time.Sleep(10 * time.Hour)
 	})
 
 	// ============================================================================
@@ -846,6 +847,21 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 		})
 		if err != nil {
 			g.Fail(fmt.Sprintf("Cleanup: Timeout waiting for deployment deletion: %v", err))
+		}
+
+		// Solution 1: Wait for operator ConfigMap to be cleaned up to prevent policy mismatch in next test
+		g.By("Cleanup: Waiting for operator ConfigMap to be cleaned up")
+		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+			_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+			if err != nil && strings.Contains(err.Error(), "not found") {
+				klog.Infof("ConfigMap cleaned up - preventing stale policy in next test")
+				return true, nil
+			}
+			klog.V(4).Infof("ConfigMap still exists, waiting for deletion")
+			return false, nil
+		})
+		if err != nil {
+			klog.Warningf("Cleanup: Warning - ConfigMap cleanup timeout (may cause policy validation failures in next test): %v", err)
 		}
 
 		// Restore the original "cluster" CR with saved spec

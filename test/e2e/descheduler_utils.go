@@ -1010,6 +1010,23 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 		return fmt.Errorf("failed to normalize expected policy: %w", err)
 	}
 
+	// This prevents policy mismatch when tests run in sequence where previous test's ConfigMap
+	// cleanup may still be in progress. We actively wait for the new ConfigMap to be created.
+	g.By("Waiting for operator to create/update ConfigMap (grace period)...")
+	graceCtx, graceCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	err = wait.PollUntilContextTimeout(graceCtx, 1*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+		if err == nil {
+			klog.Infof("ConfigMap exists - operator reconciliation in progress")
+			return true, nil
+		}
+		return false, nil
+	})
+	graceCancel()
+	if err != nil {
+		klog.Warningf("Timeout waiting for ConfigMap creation (will retry in policy validation): %v", err)
+	}
+
 	// Poll until actual policy matches expected (timeout increased to 15 minutes for slow CI environments)
 	// Note: Using fresh context with timeout instead of inherited ctx to avoid parent deadline issues
 	policyCtx, policyCancel := context.WithTimeout(context.Background(), 15*time.Minute)
