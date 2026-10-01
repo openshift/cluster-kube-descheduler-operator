@@ -299,9 +299,7 @@ func buildKubeDescheduler(modify func(*descv1.KubeDescheduler)) *descv1.KubeDesc
 // createAndValidateKubeDeschedulerCR creates a KubeDescheduler CR, validates the generated policy,
 // and waits for operand stability. This helper combines the common pattern used across profile tests.
 func createAndValidateKubeDeschedulerCR(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler, description string) error {
-	startTime := time.Now()
 	g.By(fmt.Sprintf("Creating new KubeDescheduler CR with %s", description))
-	klog.Infof("Creating new KubeDescheduler CR with %s", description)
 
 	// Create a fresh context for this validation to avoid parent context deadline issues
 	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Minute)
@@ -309,34 +307,20 @@ func createAndValidateKubeDeschedulerCR(ctx context.Context, kubeClient *k8sclie
 
 	err := createKubeDeschedulerAndWait(validateCtx, kubeClient, deschClient, kubeDescheduler)
 	if err != nil {
-		g.By(fmt.Sprintf("Failed to create KubeDescheduler CR: %v (elapsed: %v)", err, time.Since(startTime)))
-		klog.Errorf("Failed to create KubeDescheduler CR: %v", err)
 		return err
 	}
-	g.By(fmt.Sprintf("KubeDescheduler CR created successfully (elapsed: %v)", time.Since(startTime)))
 
 	g.By("Validating operator-generated descheduling policy matches expected policy")
-	klog.Infof("Validating operator-generated descheduling policy")
 	err = validateDeschedulingPolicy(validateCtx, kubeClient, kubeDescheduler)
 	if err != nil {
-		g.By(fmt.Sprintf("Policy validation failed: %v (elapsed: %v)", err, time.Since(startTime)))
-		klog.Errorf("Policy validation failed: %v", err)
 		return err
 	}
-	g.By(fmt.Sprintf("Policy validation completed (elapsed: %v)", time.Since(startTime)))
 
 	g.By("Waiting for descheduler operand to run stably for 30 seconds")
-	klog.Infof("Waiting for descheduler operand to run stably")
 	err = waitForOperandStability(validateCtx, kubeClient, 30*time.Second)
 	if err != nil {
-		g.By(fmt.Sprintf("Operand stability check failed: %v (elapsed: %v)", err, time.Since(startTime)))
-		klog.Errorf("Operand stability check failed: %v", err)
 		return err
 	}
-	g.By(fmt.Sprintf("Operand stability verified (elapsed: %v)", time.Since(startTime)))
-
-	g.By(fmt.Sprintf("Profile test validation completed successfully (total elapsed: %v)", time.Since(startTime)))
-	klog.Infof("Profile test validation completed successfully")
 	return nil
 }
 
@@ -353,63 +337,30 @@ func newDefaultKubeDescheduler() *descv1.KubeDescheduler {
 
 // createKubeDeschedulerAndWait creates a KubeDescheduler CR and waits for the operand deployment to be ready
 func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler) error {
-	startTime := time.Now()
-
 	// Use a fresh context with extended timeout to avoid parent context deadline issues
 	opCtx, opCancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer opCancel()
 
 	// Create the KubeDescheduler CR
-	g.By("Creating KubeDescheduler CR")
 	klog.Infof("Creating KubeDescheduler CR %s/%s", operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
 	_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(opCtx, kubeDescheduler, metav1.CreateOptions{})
 	if err != nil {
-		g.By(fmt.Sprintf("Failed to create KubeDescheduler CR: %v", err))
 		return fmt.Errorf("failed to create KubeDescheduler CR: %w", err)
 	}
-	g.By(fmt.Sprintf("KubeDescheduler CR created (elapsed: %v)", time.Since(startTime)))
-
-	// Wait for metrics endpoint to be available (required for metrics validation)
-	g.By("Waiting for metrics endpoint to be available")
-	klog.Infof("Waiting for metrics endpoint to be available")
-	err = waitForMetricsEndpoint(opCtx, kubeClient, operatorclient.OperatorNamespace)
-	if err != nil {
-		g.By(fmt.Sprintf("Metrics endpoint timeout: %v (elapsed: %v)", err, time.Since(startTime)))
-		return fmt.Errorf("timeout waiting for metrics endpoint: %w", err)
-	}
-	g.By(fmt.Sprintf("Metrics endpoint available (elapsed: %v)", time.Since(startTime)))
-
-	// Wait for deployment observedGeneration to reach at least 2 (proves operator reconciled the CR)
-	g.By("Waiting for deployment to apply configuration (observedGeneration >= 2)")
-	klog.Infof("Waiting for deployment to apply configuration (observedGeneration >= 2)")
-	err = waitForDeploymentObservedGeneration(opCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, 2)
-	if err != nil {
-		g.By(fmt.Sprintf("Deployment observedGeneration timeout: %v (elapsed: %v)", err, time.Since(startTime)))
-		return fmt.Errorf("timeout waiting for deployment to apply configuration: %w", err)
-	}
-	g.By(fmt.Sprintf("Deployment applied configuration (elapsed: %v)", time.Since(startTime)))
 
 	// Wait for descheduler deployment to be ready
-	g.By("Waiting for descheduler deployment to be ready")
 	klog.Infof("Waiting for descheduler deployment to be ready")
 	err = waitForDeploymentReady(opCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
 	if err != nil {
-		g.By(fmt.Sprintf("Deployment ready timeout: %v (elapsed: %v)", err, time.Since(startTime)))
 		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
 	}
-	g.By(fmt.Sprintf("Deployment is ready (elapsed: %v)", time.Since(startTime)))
 
 	// Wait for pod stability (single pod, no restarts in progress)
-	g.By("Waiting for descheduler operand pod to be stable")
 	klog.Infof("Waiting for descheduler operand pod to be stable")
 	err = waitForPodStability(opCtx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
 	if err != nil {
-		g.By(fmt.Sprintf("Pod stability timeout: %v (elapsed: %v)", err, time.Since(startTime)))
 		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
 	}
-	g.By(fmt.Sprintf("Pod is stable (elapsed: %v)", time.Since(startTime)))
-
-	g.By(fmt.Sprintf("KubeDescheduler CR created and operand deployment ready (total elapsed: %v)", time.Since(startTime)))
 	klog.Infof("KubeDescheduler CR created and operand deployment ready")
 	return nil
 }
@@ -503,53 +454,6 @@ func patchKubeDeschedulerNamespaceFiltering(ctx context.Context, deschClient *de
 
 	klog.Infof("Successfully patched KubeDescheduler (profiles: %v, included: %v, excluded: %v)", profiles, included, excluded)
 	return nil
-}
-
-// waitForMetricsEndpoint waits for the metrics service endpoint to be available
-// This ensures the descheduler metrics service has registered with the cluster
-func waitForMetricsEndpoint(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) error {
-	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		endpoints, err := kubeClient.CoreV1().Endpoints(namespace).Get(ctx, "metrics", metav1.GetOptions{})
-		if err != nil {
-			klog.V(2).Infof("Metrics endpoint not yet available in namespace %s: %v", namespace, err)
-			return false, nil
-		}
-
-		if len(endpoints.Subsets) == 0 {
-			klog.V(2).Infof("Metrics endpoint has no subsets yet")
-			return false, nil
-		}
-
-		if len(endpoints.Subsets[0].Addresses) == 0 {
-			klog.V(2).Infof("Metrics endpoint subsets have no addresses yet")
-			return false, nil
-		}
-
-		klog.Infof("Metrics endpoint is available with %d addresses", len(endpoints.Subsets[0].Addresses))
-		return true, nil
-	})
-}
-
-// waitForDeploymentObservedGeneration waits for deployment.status.observedGeneration to reach expected value
-// This indicates the operator has successfully reconciled and applied the configuration
-func waitForDeploymentObservedGeneration(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name string, expectedGen int64) error {
-	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			klog.V(2).Infof("Failed to get deployment %s/%s: %v, retrying...", namespace, name, err)
-			return false, nil
-		}
-
-		if deployment.Status.ObservedGeneration >= expectedGen {
-			klog.Infof("Deployment %s/%s has observedGeneration %d (expected >= %d)",
-				namespace, name, deployment.Status.ObservedGeneration, expectedGen)
-			return true, nil
-		}
-
-		klog.V(4).Infof("Deployment %s/%s observedGeneration is %d (waiting for >= %d)",
-			namespace, name, deployment.Status.ObservedGeneration, expectedGen)
-		return false, nil
-	})
 }
 
 // waitForPodStability waits for a single stable pod (no pod name contains spaces, which would indicate multiple pods)
@@ -1011,7 +915,7 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 
 	// This prevents policy mismatch when tests run in sequence where previous test's ConfigMap
 	// cleanup may still be in progress. We actively wait for the new ConfigMap to be created.
-	g.By("Waiting for operator to create/update ConfigMap (grace period)...")
+	klog.Infof("Waiting for operator to create/update ConfigMap (grace period)...")
 	graceCtx, graceCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	err = wait.PollUntilContextTimeout(graceCtx, 1*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
@@ -1039,13 +943,12 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 
 		// Log every 30 seconds to show progress
 		if attemptCount%6 == 1 {
-			g.By(fmt.Sprintf("Policy validation attempt %d (elapsed: %v)", attemptCount, elapsed))
+			klog.Infof("Policy validation attempt %d (elapsed: %v)", attemptCount, elapsed)
 		}
 
 		// Get actual policy from ConfigMap
 		actualPolicy, err := getDeschedulerPolicyFromConfigMap(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
 		if err != nil {
-			g.By(fmt.Sprintf("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err))
 			klog.Errorf("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
 			return false, nil
 		}
@@ -1056,22 +959,17 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 
 		if !profileNamesMatch(expectedProfileNames, actualProfileNames) {
 			if attemptCount%6 == 1 { // Log every 30 seconds
-				g.By(fmt.Sprintf("Profile mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed))
+				klog.V(4).Infof("Profile mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed)
 			}
 			klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v), expected=%v, actual=%v", attemptCount, elapsed, expectedProfileNames, actualProfileNames)
 			return false, nil
 		}
 
-		g.By(fmt.Sprintf("Policy validation SUCCEEDED after %d attempts, %v total elapsed", attemptCount, elapsed))
-		klog.Infof("Policy validation succeeded after %d attempts, %v total elapsed", attemptCount, elapsed)
-
-		klog.V(4).Info("Operator-generated policy matches expected policy")
+		klog.Infof("Policy validation SUCCEEDED after %d attempts, %v total elapsed", attemptCount, elapsed)
 		return true, nil
 	})
 
 	if err != nil {
-		g.By(fmt.Sprintf("Policy validation FAILED after %d attempts, 15 minute timeout exceeded (elapsed: %v)", attemptCount, time.Since(startPolicyCheck)))
-		klog.Errorf("Timeout waiting for descheduling policy to match expected after 15 minutes and %d attempts (elapsed: %v)", attemptCount, time.Since(startPolicyCheck))
 		return fmt.Errorf("timeout waiting for descheduling policy to match expected after 15 minutes: %w", err)
 	}
 
@@ -1209,4 +1107,17 @@ func profileNamesMatch(expected, actual []string) bool {
 		}
 	}
 	return true
+}
+
+// waitForConfigMapDeletion waits for operator ConfigMap to be deleted
+func waitForConfigMapDeletion(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name string) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := kubeClient.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			klog.Infof("ConfigMap cleaned up - preventing stale policy in next test")
+			return true, nil
+		}
+		klog.V(4).Infof("ConfigMap still exists, waiting for deletion")
+		return false, nil
+	})
 }

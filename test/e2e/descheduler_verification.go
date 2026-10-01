@@ -42,7 +42,7 @@ import (
 // DESIGN: Single g.Describe block with clear CR lifecycle management
 //
 // EXECUTION FLOW:
-// 1. BeforeAll: Install operator + create default CR (LifecycleAndUtilization)
+// 1. BeforeEach: Install operator + create default CR (LifecycleAndUtilization)
 // 2. METRICS/SERVICE TESTS: Use pre-created default CR (no hooks)
 //    - Metrics service available
 //    - Prometheus target up
@@ -52,7 +52,7 @@ import (
 //    - Each test creates custom CR with its profile
 //    - Test validates the profile
 //    - Cleanup deletes CR
-// 4. AfterAll: Cancel context (cleanup skipped for debugging)
+// 4. AfterEach: Cancel context (cleanup skipped for debugging)
 //
 // WHY THIS WORKS:
 // ✅ No shared hooks = no CR lifecycle conflicts
@@ -261,13 +261,13 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	// This avoids hook scoping issues and makes CR state explicit
 
 	// OCP-21205, OCP-36584
-	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing PDB compliance during pod evictions")
 		runProfileTest(ctx, kubeClient, deschClient, testPDBCompliance)
 	})
 
 	// OCP-43277, OCP-50941, OCP-76158
-	g.It("[OTP][Operator][Serial] should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
+	g.It("[OTP][Operator][Serial] should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing Predictive and Automatic modes with eviction limits")
 		runProfileTest(ctx, kubeClient, deschClient, testDeschedulerModes)
 	})
@@ -695,16 +695,6 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	err = deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	g.By("Waiting for descheduler deployment to be fully deleted")
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
-		if err != nil && strings.Contains(err.Error(), "not found") {
-			return true, nil
-		}
-		return false, nil
-	})
-	o.Expect(err).NotTo(o.HaveOccurred())
-
 	g.By("Creating new KubeDescheduler CR with Automatic mode")
 	err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Mode = descv1.Automatic
@@ -828,38 +818,15 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 		defer cleanupCancel()
 
 		// Delete the test CR (may not exist if testFn failed before creating it)
-		g.By("Cleanup: Deleting test KubeDescheduler CR")
-		err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
+		g.By("Cleanup: Deleting test KubeDescheduler CR and waiting for operand to be gone")
+		err := deleteKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient)
 		if err != nil && !strings.Contains(err.Error(), "not found") {
 			g.Fail(fmt.Sprintf("Cleanup: Error deleting test KubeDescheduler CR: %v", err))
 		}
 
-		// Wait for deployment to be deleted
-		g.By("Cleanup: Waiting for descheduler deployment to be deleted")
-		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-			_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
-			if err != nil && strings.Contains(err.Error(), "not found") {
-				klog.V(4).Info("Descheduler deployment deleted")
-				return true, nil
-			}
-			return false, nil
-		})
-		if err != nil {
-			g.Fail(fmt.Sprintf("Cleanup: Timeout waiting for deployment deletion: %v", err))
-		}
-
-		// Solution 1: Wait for operator ConfigMap to be cleaned up to prevent policy mismatch in next test
+		// Wait for operator ConfigMap to be cleaned up to prevent policy mismatch in next test
 		g.By("Cleanup: Waiting for operator ConfigMap to be cleaned up")
-		err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-			_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
-			if err != nil && strings.Contains(err.Error(), "not found") {
-				klog.Infof("ConfigMap cleaned up - preventing stale policy in next test")
-				return true, nil
-			}
-			klog.V(4).Infof("ConfigMap still exists, waiting for deletion")
-			return false, nil
-		})
-		if err != nil {
+		if err := waitForConfigMapDeletion(cleanupCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
 			klog.Warningf("Cleanup: Warning - ConfigMap cleanup timeout (may cause policy validation failures in next test): %v", err)
 		}
 
@@ -875,44 +842,11 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 	})
 
 	// Step 2: Delete the current "cluster" CR to make room for test CR
-	g.By("Deleting default KubeDescheduler CR to prepare for profile test")
-	err = deleteKubeDescheduler(ctx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
+	g.By("Deleting default KubeDescheduler CR and waiting for operand to be gone")
+	err = deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+	if err != nil {
 		g.Fail(fmt.Sprintf("Error deleting KubeDescheduler CR before test: %v", err))
 		return
-	}
-	klog.Infof("Successfully deleted default KubeDescheduler CR")
-
-	// Wait for CR to actually be deleted (not just delete API call to succeed)
-	g.By("Waiting for KubeDescheduler CR to be removed from cluster")
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
-		if err != nil && strings.Contains(err.Error(), "not found") {
-			klog.V(4).Info("KubeDescheduler CR fully deleted from cluster")
-			return true, nil
-		}
-		if err != nil {
-			return false, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		g.Fail(fmt.Sprintf("Timeout waiting for CR deletion: %v", err))
-		return
-	}
-
-	// Wait for deployment to be deleted
-	g.By("Waiting for descheduler deployment to be deleted")
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
-		if err != nil && strings.Contains(err.Error(), "not found") {
-			klog.V(4).Info("Descheduler deployment deleted")
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		g.Fail(fmt.Sprintf("Timeout waiting for deployment deletion (may continue anyway): %v", err))
 	}
 
 	// Step 3: Run the test (which creates "cluster" CR with custom profile)

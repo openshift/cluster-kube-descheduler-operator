@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	"github.com/openshift/cluster-kube-descheduler-operator/pkg/softtainter"
@@ -229,7 +228,6 @@ func setupOperator(
 	}
 
 	// create required resources, e.g. namespace, crd, roles
-	g.By("Creating required operator resources")
 	o.Eventually(func() bool {
 		for _, asset := range assets {
 			klog.Infof("Creating %v", asset.path)
@@ -242,7 +240,6 @@ func setupOperator(
 	}).WithTimeout(10*time.Second).WithPolling(1*time.Second).Should(o.BeTrue(), "Unable to create Descheduler operator resources")
 
 	// apply base CR for the operator
-	g.By("Applying base CR for the operator")
 	err := operatorConfigsAppliers[baseConf](ctx, deschClient)
 	if err != nil {
 		klog.Errorf("Unable to apply a CR for Descheduler operator: %v", err)
@@ -250,7 +247,6 @@ func setupOperator(
 	}
 
 	// wait for descheduler operator pod to be running
-	g.By("Waiting for descheduler operator pod to be running")
 	deschOpPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName+"-operator", "")
 	if err != nil {
 		klog.Errorf("Unable to wait for the Descheduler operator pod to run")
@@ -259,7 +255,6 @@ func setupOperator(
 	klog.Infof("Descheduler operator pod running in %v", deschOpPod.Name)
 
 	// wait for descheduler pod to be running
-	g.By("Waiting for descheduler (operand) pod to be running")
 	deschPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
 	if err != nil {
 		klog.Errorf("Unable to wait for the Descheduler pod to run")
@@ -268,7 +263,6 @@ func setupOperator(
 	klog.Infof("Descheduler (operand) pod running in %v", deschPod.Name)
 
 	// ensure that all the descheduler operand objects are there
-	g.By("Validating all descheduler operand objects")
 	if err = checkDeschedulerOperandObjects(ctx, kubeClient, operatorclient.OperatorNamespace, true); err != nil {
 		klog.Errorf("Missing expected descheduler operand object: %v", err)
 		return fmt.Errorf("Missing expected descheduler operand object: %v", err)
@@ -281,11 +275,9 @@ func setupOperator(
 // testSoftTainterController tests the soft tainter controller lifecycle.
 // This function works with both standard Go testing and Ginkgo.
 func testSoftTainterController(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
-	g.By("Testing soft tainter controller lifecycle")
 	deschClient := GetDeschedulerClient()
 
 	// ensure that softtainter additional objects are not there
-	g.By("Verifying soft tainter objects not initially present")
 	if err := checkSoftTainterObjects(ctx, kubeClient, operatorclient.OperatorNamespace, false); err != nil {
 		t.Fatalf("Unexpected softTainter object: %v", err)
 	}
@@ -1267,7 +1259,6 @@ func testPrometheusTargetUp(t testing.TB, ctx context.Context, kubeClient *k8scl
 	routeClient := GetRouteClient()
 
 	// Query Prometheus targets API
-	g.By("Querying Prometheus for descheduler target status")
 	klog.Infof("Querying Prometheus for descheduler target status")
 
 	o.Eventually(func() bool {
@@ -1346,7 +1337,6 @@ func testPrometheusTargetUp(t testing.TB, ctx context.Context, kubeClient *k8scl
 
 // testMetricsDataAvailable verifies that specific metrics are available and have data
 func testMetricsDataAvailable(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, podLabels map[string]string) {
-	g.By("Verifying metrics data is available")
 	klog.Infof("Verifying metrics data is available")
 
 	// Get the Prometheus token for authentication
@@ -1359,7 +1349,6 @@ func testMetricsDataAvailable(t testing.TB, ctx context.Context, kubeClient *k8s
 	// Query for the specific metric
 	metricQuery := `descheduler_descheduler_loop_duration_seconds_bucket`
 
-	g.By(fmt.Sprintf("Querying Prometheus for metric: %s", metricQuery))
 	klog.Infof("Querying Prometheus for metric: %s", metricQuery)
 
 	o.Eventually(func() bool {
