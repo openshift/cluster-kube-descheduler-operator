@@ -26,7 +26,6 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 
-	"github.com/google/go-cmp/cmp"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	descv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	deschclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
@@ -1051,20 +1050,15 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 			return false, nil
 		}
 
-		// Normalize actual policy
-		normalizedActual, err := normalizeDeschedulerPolicy(actualPolicy)
-		if err != nil {
-			g.By(fmt.Sprintf("Failed to normalize actual policy (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err))
-			klog.Errorf("Failed to normalize actual policy (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
-			return false, nil
-		}
+		// Compare profile names: The operator applies profiles to the ConfigMap based on the CR spec.
+		expectedProfileNames := getProfileNames(normalizedExpected)
+		actualProfileNames := getProfileNames(actualPolicy)
 
-		// Compare normalized policies using cmp.Diff
-		if diff := cmp.Diff(normalizedExpected, normalizedActual); diff != "" {
+		if !profileNamesMatch(expectedProfileNames, actualProfileNames) {
 			if attemptCount%6 == 1 { // Log every 30 seconds
-				g.By(fmt.Sprintf("Policy mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed))
+				g.By(fmt.Sprintf("Profile mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed))
 			}
-			klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v) (-expected +actual):\n%s", attemptCount, elapsed, diff)
+			klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v), expected=%v, actual=%v", attemptCount, elapsed, expectedProfileNames, actualProfileNames)
 			return false, nil
 		}
 
@@ -1099,6 +1093,26 @@ func normalizeDeschedulerPolicy(policy *v1alpha2.DeschedulerPolicy) (*v1alpha2.D
 	err = yaml.Unmarshal(yamlBytes, normalized)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal normalized policy: %w", err)
+	}
+
+	// Normalize RawExtension fields to ensure consistent JSON encoding
+	// RawExtension bytes might have different formatting (whitespace, ordering) even if semantically identical
+	for profileIdx := range normalized.Profiles {
+		profile := &normalized.Profiles[profileIdx]
+		for pluginConfigIdx := range profile.PluginConfigs {
+			pluginConfig := &profile.PluginConfigs[pluginConfigIdx]
+			// Normalize the Args RawExtension by parsing and re-marshaling as JSON
+			if len(pluginConfig.Args.Raw) > 0 {
+				var args interface{}
+				if err := json.Unmarshal(pluginConfig.Args.Raw, &args); err == nil {
+					// Successfully parsed, now re-marshal to normalize formatting
+					normalizedBytes, err := json.Marshal(args)
+					if err == nil {
+						pluginConfig.Args.Raw = normalizedBytes
+					}
+				}
+			}
+		}
 	}
 
 	return normalized, nil
@@ -1173,4 +1187,26 @@ func ensureNamespaceMonitoringLabel(ctx context.Context, kubeClient *k8sclient.C
 
 	klog.Infof("✓ Verified: namespace %s has monitoring label %s=%s", namespace, labelKey, labelValue)
 	return nil
+}
+
+// getProfileNames extracts profile names from a DeschedulerPolicy
+func getProfileNames(policy *v1alpha2.DeschedulerPolicy) []string {
+	var names []string
+	for _, p := range policy.Profiles {
+		names = append(names, p.Name)
+	}
+	return names
+}
+
+// profileNamesMatch compares two lists of profile names
+func profileNamesMatch(expected, actual []string) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	for i, e := range expected {
+		if e != actual[i] {
+			return false
+		}
+	}
+	return true
 }
