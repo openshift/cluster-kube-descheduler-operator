@@ -48,10 +48,10 @@ import (
 //    - Prometheus target up
 //    - Metrics data available
 //    - Plus other basic tests
-// 3. PROFILE/STRATEGY TESTS: Each test manages its own CR via runProfileTest()
+// 3. PROFILE/STRATEGY TESTS: Each test manages its own CR
 //    - Each test creates custom CR with its profile
 //    - Test validates the profile
-//    - Cleanup deletes CR
+//    - AfterEach cleanup deletes CR and restores default
 // 4. AfterEach: Cancel context (cleanup skipped for debugging)
 //
 // WHY THIS WORKS:
@@ -79,15 +79,26 @@ func isOperatorPreInstalled(ctx context.Context, kubeClient *k8sclient.Clientset
 	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, "descheduler-operator", metav1.GetOptions{})
 		if err != nil {
-			klog.V(2).Infof("isOperatorPreInstalled: deployment not found yet: %v", err)
+			if apierrors.IsNotFound(err) {
+				klog.V(2).Infof("isOperatorPreInstalled: deployment not found - operator not pre-installed")
+				return false, nil
+			}
+			// Transient API error - retry
+			klog.V(2).Infof("isOperatorPreInstalled: transient API error getting deployment: %v", err)
 			return false, nil
 		}
 
-		if deployment.Spec.Replicas == nil {
-			klog.V(2).Infof("isOperatorPreInstalled: deployment has nil Spec.Replicas")
+		// Require positive replica count (nil or <= 0 means not ready)
+		if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas <= 0 {
+			replicas := int32(0)
+			if deployment.Spec.Replicas != nil {
+				replicas = *deployment.Spec.Replicas
+			}
+			klog.V(2).Infof("isOperatorPreInstalled: deployment has invalid replica count: %d (nil: %v)", replicas, deployment.Spec.Replicas == nil)
 			return false, nil
 		}
 
+		// Check that we have the desired number of ready replicas
 		if deployment.Status.ReadyReplicas >= *deployment.Spec.Replicas {
 			klog.Infof("isOperatorPreInstalled: operator deployment is ready with %d/%d replicas",
 				deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
@@ -109,7 +120,7 @@ func isOperatorPreInstalled(ctx context.Context, kubeClient *k8sclient.Clientset
 }
 
 // Ginkgo test specs for migrated OTP tests
-var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", func() {
+var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Serial, func() {
 	var (
 		ctx           context.Context
 		cancelFnc     context.CancelFunc
@@ -145,15 +156,16 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 				klog.Warningf("Warning: Failed to ensure monitoring label on namespace: %v", labelErr)
 			}
 
-			// Check if CR exists before creating
-			_, crErr := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
-			if apierrors.IsNotFound(crErr) {
-				// CR doesn't exist, create it
-				kdCR := newDefaultKubeDescheduler()
-				err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kdCR)
-			} else if crErr != nil {
-				err = crErr
+			// Delete any existing CR and recreate default (ensures clean state for each test)
+			_ = deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+
+			// Wait for operator ConfigMap to be cleaned up to prevent policy mismatch in this test
+			if err := waitForConfigMapDeletion(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+				klog.Warningf("BeforeEach: Warning - ConfigMap cleanup timeout: %v", err)
 			}
+
+			kdCR := newDefaultKubeDescheduler()
+			err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kdCR)
 		} else {
 			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
 			olmInstalled = true // Operator will be installed via OLM
@@ -179,9 +191,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	// OCP-76194
 	g.It("[OTP][Operator][Serial] should validate profile conflict validation [Slow][Timeout:15m]", func() {
 		g.By("Testing profile conflict validation")
-		conflictCtx, conflictCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer conflictCancel()
-		testProfileConflicts(g.GinkgoTB(), conflictCtx, kubeClient, deschClient)
+		testProfileConflicts(g.GinkgoTB(), ctx, kubeClient, deschClient)
 	})
 
 	// OCP-83032
@@ -190,9 +200,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		if !olmInstalled {
 			g.Skip("Skipping. The operator is not installed via OLM")
 		}
-		relatedImagesCtx, relatedImagesCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer relatedImagesCancel()
-		testRelatedImages(g.GinkgoTB(), relatedImagesCtx, kubeClient)
+		testRelatedImages(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	// OCP-45694
@@ -201,9 +209,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		if !olmInstalled {
 			g.Skip("Skipping. The operator is not installed via OLM")
 		}
-		mustGatherCtx, mustGatherCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer mustGatherCancel()
-		testOLMMustGatherData(g.GinkgoTB(), mustGatherCtx, kubeClient)
+		testOLMMustGatherData(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should create and remove soft tainter objects [Slow][Timeout:15m]", func() {
@@ -218,47 +224,34 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 
 	g.It("[OTP][Operator][Serial] should deschedule pods correctly [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing pod descheduling")
-		deschedulingCtx, deschedulingCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer deschedulingCancel()
-		testPodDescheduling(g.GinkgoTB(), deschedulingCtx, kubeClient)
+		testPodDescheduling(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should have metrics service available [Slow][Timeout:15m]", func() {
 		g.By("Testing metrics service")
-		metricsCtx, metricsCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer metricsCancel()
-		testMetricsService(g.GinkgoTB(), metricsCtx, kubeClient)
+		testMetricsService(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should have ServiceMonitor configured [Slow][Timeout:15m]", func() {
 		g.By("Testing ServiceMonitor")
-		monitorCtx, monitorCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer monitorCancel()
-		testServiceMonitor(g.GinkgoTB(), monitorCtx, kubeClient)
+		testServiceMonitor(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should have Prometheus target up [Slow][Timeout:15m]", func() {
 		g.By("Testing Prometheus target")
-		prometheusCtx, prometheusCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer prometheusCancel()
-		testPrometheusTarget(g.GinkgoTB(), prometheusCtx, kubeClient)
+		testPrometheusTarget(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should have metrics data available [Slow][Timeout:15m]", func() {
 		g.By("Testing metrics data")
-		dataCtx, dataCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer dataCancel()
-		testMetricsData(g.GinkgoTB(), dataCtx, kubeClient)
+		testMetricsData(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	// ============================================================================
 	// PROFILE/STRATEGY TESTS - Each test manages its own CR
 	// ============================================================================
-	// Each test explicitly manages CR lifecycle via runProfileTest():
-	// - Test function creates custom CR with its specific profile
-	// - Test validates the profile behavior
-	// - Cleanup deletes CR after test completes
-	// This avoids hook scoping issues and makes CR state explicit
+	// Each test creates custom CR with its specific profile and validates behavior.
+	// AfterEach handles CR restoration and cleanup automatically.
 
 	// OCP-21205, OCP-36584
 	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:15m]", func() {
@@ -316,74 +309,42 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	g.AfterEach(func() {
-		g.By("AfterEach: Skipping operator cleanup to preserve test environment")
+		// Cancel the test context
 		if cancelFnc != nil {
 			cancelFnc()
 		}
-		// TODO: Implement proper cleanup when needed
-		// Original cleanup logic commented below for reference:
-		/*
+
+		// IMPORTANT: Do NOT delete the operator namespace if it was pre-installed (OLM bundle)
+		// Only delete operator/subscription/operatorgroup if we installed them non-OLM
+		if !olmInstalled {
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cleanupCancel()
 
+			g.By("AfterEach: Cleaning up non-OLM operator installation")
 
-				if olmInstalled {
-					g.By("Cleaning up operator installation")
+			if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+				klog.Warningf("AfterEach: Failed to delete KubeDescheduler: %v", err)
+			}
 
-					og := &operatorsv1.OperatorGroup{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "descheduler-og",
-							Namespace: operatorclient.OperatorNamespace,
-						},
-					}
-					sub, err := packagemanifestKDO(cleanupCtx, dynamicClient, "cluster-kube-descheduler-operator", operatorclient.OperatorNamespace, []string{"redhat-operators"})
-					if err != nil {
-						klog.Warningf("Failed to get packagemanifest for cleanup: %v", err)
-					}
+			// Delete the operator namespace only if we created it
+			g.By("AfterEach: Deleting operator namespace (non-OLM only)")
+			err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
+			if err != nil && !strings.Contains(err.Error(), "not found") {
+				klog.Warningf("AfterEach: Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
+			}
 
-					if err := deleteKubeDescheduler(cleanupCtx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
-						klog.Warningf("Failed to delete KubeDescheduler: %v", err)
-					}
-					if sub != nil {
-						if err := deleteSubscription(cleanupCtx, dynamicClient, sub); err != nil {
-							klog.Warningf("Failed to delete Subscription: %v", err)
-						}
-					}
-					if err := deleteOperatorGroup(cleanupCtx, dynamicClient, og); err != nil {
-						klog.Warningf("Failed to delete OperatorGroup: %v", err)
-					}
+			g.By("AfterEach: Ensuring namespace is fully deleted")
+			wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+				_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+				if err != nil && strings.Contains(err.Error(), "not found") {
+					klog.Infof("AfterEach: Namespace %s successfully deleted", operatorclient.OperatorNamespace)
+					return true, nil
 				}
+				return false, nil
+			})
+		}
 
-
-					g.By("Deleting operator namespace")
-					err := kubeClient.CoreV1().Namespaces().Delete(cleanupCtx, operatorclient.OperatorNamespace, metav1.DeleteOptions{})
-					if err != nil {
-						klog.Warningf("Failed to delete namespace %s: %v", operatorclient.OperatorNamespace, err)
-					}
-
-					g.By("Ensuring namespace is fully deleted")
-					err = wait.PollUntilContextTimeout(cleanupCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-						_, err := kubeClient.CoreV1().Namespaces().Get(ctx, operatorclient.OperatorNamespace, metav1.GetOptions{})
-						if err != nil {
-							if strings.Contains(err.Error(), "not found") {
-								klog.Infof("Namespace %s successfully deleted", operatorclient.OperatorNamespace)
-								return true, nil
-							}
-							klog.Warningf("Error checking namespace: %v", err)
-							return false, nil
-						}
-						klog.Infof("Waiting for namespace %s to be fully deleted...", operatorclient.OperatorNamespace)
-						return false, nil
-					})
-					if err != nil {
-						klog.Warningf("Timeout waiting for namespace deletion: %v", err)
-					}
-
-					if cancelFnc != nil {
-						cancelFnc()
-					}
-		*/
-
+		klog.Infof("AfterEach: Cleanup completed")
 	})
 })
 
@@ -794,27 +755,15 @@ func testRemoveDuplicatesStrategy(t testing.TB, ctx context.Context, kubeClient 
 }
 
 // runProfileTest manages CR lifecycle for profile tests:
-// 1. Save the default "cluster" CR spec
-// 2. Delete the current "cluster" CR
-// 3. Run the test (which creates "cluster" CR with custom profile)
-// 4. Validate the profile
-// 5. Delete the test CR
-// 6. Recreate the default "cluster" CR with saved spec
-// 7. Wait for deployment readiness
+// 1. Delete the current "cluster" CR
+// 2. Run the test (which creates "cluster" CR with custom profile)
+// 3. Delete the test CR in cleanup
+// 4. Recreate the default "cluster" CR
 func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, testFn func(testing.TB, context.Context, *k8sclient.Clientset, *deschclient.Clientset)) {
-	// Step 1: Save the current default "cluster" CR spec
-	g.By("Saving default KubeDescheduler CR spec before profile test")
-	originalCR, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting original KubeDescheduler CR: %v", err)
-		return
-	}
-	savedSpec := originalCR.Spec
-
-	// Register cleanup BEFORE mutations - runs even if testFn fails with fatal assertion
-	// Uses fresh timeout context independent of test ctx
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	g.DeferCleanup(func() {
+		// Create cleanup context inside the deferred callback so the timeout starts when cleanup actually begins,
+		// not when the test starts. This ensures cleanup always has a full 10 minutes regardless of test duration.
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cleanupCancel()
 
 		// Delete the test CR (may not exist if testFn failed before creating it)
@@ -830,30 +779,28 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 			klog.Warningf("Cleanup: Warning - ConfigMap cleanup timeout (may cause policy validation failures in next test): %v", err)
 		}
 
-		// Restore the original "cluster" CR with saved spec
+		// Recreate the default "cluster" CR
 		g.By("Cleanup: Recreating default KubeDescheduler CR")
-		restoredCR := buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
-			kd.Spec = savedSpec
-		})
-		err = createKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient, restoredCR)
+		defaultCR := newDefaultKubeDescheduler()
+		err = createKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient, defaultCR)
 		if err != nil {
 			g.Fail(fmt.Sprintf("Cleanup: Error recreating default KubeDescheduler CR: %v", err))
 		}
 	})
 
-	// Step 2: Delete the current "cluster" CR to make room for test CR
+	// Delete the current "cluster" CR to make room for test CR
 	g.By("Deleting default KubeDescheduler CR and waiting for operand to be gone")
-	err = deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
+	err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
 	if err != nil {
 		g.Fail(fmt.Sprintf("Error deleting KubeDescheduler CR before test: %v", err))
 		return
 	}
 
-	// Step 3: Run the test (which creates "cluster" CR with custom profile)
-	// Use fresh context with extended timeout for the test to avoid parent context deadline
-	testCtx, testCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	defer testCancel()
+	// Wait for operator ConfigMap to be cleaned up to prevent policy mismatch in this test
+	if err := waitForConfigMapDeletion(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
+		klog.Warningf("Warning - ConfigMap cleanup timeout: %v", err)
+	}
 
-	g.By("Running profile test with fresh 15-minute context")
-	testFn(g.GinkgoTB(), testCtx, kubeClient, deschClient)
+	g.By("Running profile test")
+	testFn(g.GinkgoTB(), ctx, kubeClient, deschClient)
 }

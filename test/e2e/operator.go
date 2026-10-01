@@ -452,21 +452,43 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		t.Fatalf("Need at least 2 worker nodes, got %d", len(workerNodes))
 	}
 
-	// Step 1: Cordon ALL worker nodes
+	// Save original schedulable states BEFORE any mutations
+	originalStates := make(map[string]bool)
 	for _, node := range workerNodes {
-		patch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":true}]`)
-		if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, types.JSONPatchType, patch, metav1.PatchOptions{}); err != nil {
-			t.Fatalf("Unable to cordon node %s: %v", node.Name, err)
-		}
+		originalStates[node.Name] = node.Spec.Unschedulable
 	}
 
-	// Defer: Uncordon all nodes after test
+	// Track nodes actually changed for restoration
+	changedNodes := []string{}
+
+	// Register deferred restoration BEFORE any mutations
 	defer func() {
-		for _, node := range workerNodes {
-			patch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":false}]`)
-			_, _ = kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, types.JSONPatchType, patch, metav1.PatchOptions{})
+		// Use fresh cleanup context independent of test context
+		// so restoration can complete even if test context times out
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cleanupCancel()
+
+		// Only restore nodes that were actually changed
+		for _, nodeName := range changedNodes {
+			patch := []byte(fmt.Sprintf(`[{"op":"replace","path":"/spec/unschedulable","value":%v}]`, originalStates[nodeName]))
+			if _, err := kubeClient.CoreV1().Nodes().Patch(cleanupCtx, nodeName, types.JSONPatchType, patch, metav1.PatchOptions{}); err != nil {
+				t.Errorf("Cleanup: Failed to restore node %s to original state: %v", nodeName, err)
+			} else {
+				klog.Infof("Cleanup: Restored node %s to original schedulable state: %v", nodeName, !originalStates[nodeName])
+			}
 		}
 	}()
+
+	// Step 1: Cordon ALL worker nodes
+	for _, node := range workerNodes {
+		if !node.Spec.Unschedulable {
+			patch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":true}]`)
+			if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, types.JSONPatchType, patch, metav1.PatchOptions{}); err != nil {
+				t.Fatalf("Unable to cordon node %s: %v", node.Name, err)
+			}
+			changedNodes = append(changedNodes, node.Name)
+		}
+	}
 
 	// Step 2: Uncordon node0 so pods can schedule there
 	uncordonPatch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":false}]`)
@@ -771,24 +793,24 @@ func waitForPodsRunning(ctx context.Context, t testing.TB, clientSet *k8sclient.
 			return false
 		}
 		if len(podList.Items) != desireRunningPodNum {
-			klog.Infof("Waiting for %v pods to be running, got %v instead", desireRunningPodNum, len(podList.Items))
+			t.Logf("Waiting for %v pods to be running, got %v instead", desireRunningPodNum, len(podList.Items))
 			return false
 		}
 
 		notRunning := 0
 		for _, pod := range podList.Items {
 			if pod.Status.Phase != v1.PodRunning {
-				klog.Infof("Pod %v not running yet, is %v instead. Conditions: %v", pod.Name, pod.Status.Phase, pod.Status.Conditions)
+				t.Logf("Pod %v not running yet, is %v instead. Conditions: %v", pod.Name, pod.Status.Phase, pod.Status.Conditions)
 				notRunning++
 			}
 		}
 
 		if notRunning > 0 {
-			klog.Infof("%d pods not yet Running, waiting...", notRunning)
+			t.Logf("%d pods not yet Running, waiting...", notRunning)
 			return false
 		}
 
-		klog.Infof("All %d pods are now Running", desireRunningPodNum)
+		t.Logf("All %d pods are now Running", desireRunningPodNum)
 		return true
 	}).WithTimeout(2*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(), "Not all pods reached Running state within 5 minutes - test namespace may not have enough resources")
 }

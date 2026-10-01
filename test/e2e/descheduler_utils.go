@@ -26,6 +26,7 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 
+	"github.com/google/go-cmp/cmp"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	descv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	deschclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
@@ -300,24 +301,19 @@ func buildKubeDescheduler(modify func(*descv1.KubeDescheduler)) *descv1.KubeDesc
 // and waits for operand stability. This helper combines the common pattern used across profile tests.
 func createAndValidateKubeDeschedulerCR(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler, description string) error {
 	g.By(fmt.Sprintf("Creating new KubeDescheduler CR with %s", description))
-
-	// Create a fresh context for this validation to avoid parent context deadline issues
-	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	defer validateCancel()
-
-	err := createKubeDeschedulerAndWait(validateCtx, kubeClient, deschClient, kubeDescheduler)
+	err := createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kubeDescheduler)
 	if err != nil {
 		return err
 	}
 
 	g.By("Validating operator-generated descheduling policy matches expected policy")
-	err = validateDeschedulingPolicy(validateCtx, kubeClient, kubeDescheduler)
+	err = validateDeschedulingPolicy(ctx, kubeClient, kubeDescheduler)
 	if err != nil {
 		return err
 	}
 
 	g.By("Waiting for descheduler operand to run stably for 30 seconds")
-	err = waitForOperandStability(validateCtx, kubeClient, 30*time.Second)
+	err = waitForOperandStability(ctx, kubeClient, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -337,27 +333,23 @@ func newDefaultKubeDescheduler() *descv1.KubeDescheduler {
 
 // createKubeDeschedulerAndWait creates a KubeDescheduler CR and waits for the operand deployment to be ready
 func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler) error {
-	// Use a fresh context with extended timeout to avoid parent context deadline issues
-	opCtx, opCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	defer opCancel()
-
 	// Create the KubeDescheduler CR
 	klog.Infof("Creating KubeDescheduler CR %s/%s", operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
-	_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(opCtx, kubeDescheduler, metav1.CreateOptions{})
+	_, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kubeDescheduler, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to create KubeDescheduler CR: %w", err)
 	}
 
 	// Wait for descheduler deployment to be ready
 	klog.Infof("Waiting for descheduler deployment to be ready")
-	err = waitForDeploymentReady(opCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
+	err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
 	}
 
 	// Wait for pod stability (single pod, no restarts in progress)
 	klog.Infof("Waiting for descheduler operand pod to be stable")
-	err = waitForPodStability(opCtx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
+	err = waitForPodStability(ctx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
 	}
@@ -916,23 +908,23 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 	// This prevents policy mismatch when tests run in sequence where previous test's ConfigMap
 	// cleanup may still be in progress. We actively wait for the new ConfigMap to be created.
 	klog.Infof("Waiting for operator to create/update ConfigMap (grace period)...")
-	graceCtx, graceCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	err = wait.PollUntilContextTimeout(graceCtx, 1*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	graceCtx, graceCancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer graceCancel()
+	err = wait.PollUntilContextTimeout(graceCtx, 1*time.Second, 2*time.Minute, true, func(pollCtx context.Context) (bool, error) {
+		_, err := kubeClient.CoreV1().ConfigMaps(operatorclient.OperatorNamespace).Get(pollCtx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 		if err == nil {
 			klog.Infof("ConfigMap exists - operator reconciliation in progress")
 			return true, nil
 		}
 		return false, nil
 	})
-	graceCancel()
 	if err != nil {
 		klog.Warningf("Timeout waiting for ConfigMap creation (will retry in policy validation): %v", err)
 	}
 
 	// Poll until actual policy matches expected (timeout increased to 15 minutes for slow CI environments)
-	// Note: Using fresh context with timeout instead of inherited ctx to avoid parent deadline issues
-	policyCtx, policyCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	// Derived from caller context to respect cancellation propagation
+	policyCtx, policyCancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer policyCancel()
 
 	startPolicyCheck := time.Now()
@@ -949,23 +941,27 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 		// Get actual policy from ConfigMap
 		actualPolicy, err := getDeschedulerPolicyFromConfigMap(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
 		if err != nil {
-			klog.Errorf("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
+			klog.V(2).Infof("Failed to get DeschedulerPolicy from ConfigMap (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
 			return false, nil
 		}
 
-		// Compare profile names: The operator applies profiles to the ConfigMap based on the CR spec.
-		expectedProfileNames := getProfileNames(normalizedExpected)
-		actualProfileNames := getProfileNames(actualPolicy)
+		// Normalize actual policy to ensure consistent comparison with RawExtension formatting
+		normalizedActual, err := normalizeDeschedulerPolicy(actualPolicy)
+		if err != nil {
+			klog.V(2).Infof("Failed to normalize actual policy (attempt %d, elapsed: %v): %v", attemptCount, elapsed, err)
+			return false, nil
+		}
 
-		if !profileNamesMatch(expectedProfileNames, actualProfileNames) {
+		// Compare full normalized policies (including profile names, plugins, and arguments)
+		if diff := cmp.Diff(normalizedExpected, normalizedActual); diff != "" {
 			if attemptCount%6 == 1 { // Log every 30 seconds
-				klog.V(4).Infof("Profile mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed)
+				klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v), retrying...", attemptCount, elapsed)
 			}
-			klog.V(4).Infof("Policy mismatch (attempt %d, elapsed: %v), expected=%v, actual=%v", attemptCount, elapsed, expectedProfileNames, actualProfileNames)
+			klog.V(4).Infof("Policy mismatch (-expected +actual):\n%s", diff)
 			return false, nil
 		}
 
-		klog.Infof("Policy validation SUCCEEDED after %d attempts, %v total elapsed", attemptCount, elapsed)
+		klog.V(4).Infof("Policy validation SUCCEEDED after %d attempts, %v total elapsed", attemptCount, elapsed)
 		return true, nil
 	})
 
@@ -1085,28 +1081,6 @@ func ensureNamespaceMonitoringLabel(ctx context.Context, kubeClient *k8sclient.C
 
 	klog.Infof("✓ Verified: namespace %s has monitoring label %s=%s", namespace, labelKey, labelValue)
 	return nil
-}
-
-// getProfileNames extracts profile names from a DeschedulerPolicy
-func getProfileNames(policy *v1alpha2.DeschedulerPolicy) []string {
-	var names []string
-	for _, p := range policy.Profiles {
-		names = append(names, p.Name)
-	}
-	return names
-}
-
-// profileNamesMatch compares two lists of profile names
-func profileNamesMatch(expected, actual []string) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for i, e := range expected {
-		if e != actual[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // waitForConfigMapDeletion waits for operator ConfigMap to be deleted
