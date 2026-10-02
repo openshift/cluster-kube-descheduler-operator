@@ -13,7 +13,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
-	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -37,8 +36,6 @@ import (
 
 	fakeconfigv1client "github.com/openshift/client-go/config/clientset/versioned/fake"
 	configv1informers "github.com/openshift/client-go/config/informers/externalversions"
-	fakeroutev1client "github.com/openshift/client-go/route/clientset/versioned/fake"
-	routev1informers "github.com/openshift/client-go/route/informers/externalversions"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	operatorconfigclient "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned"
 	operatorconfigclientfake "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/fake"
@@ -70,7 +67,7 @@ var configHighNodeUtilization = &configv1.Scheduler{
 	},
 }
 
-func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configObjects, routesObjects, deschedulerObjects []runtime.Object) (*TargetConfigReconciler, operatorconfigclient.Interface) {
+func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configObjects, deschedulerObjects []runtime.Object) (*TargetConfigReconciler, operatorconfigclient.Interface) {
 	fakeKubeClient := fake.NewSimpleClientset(kubeClientObjects...)
 
 	// Add a reactor to handle UpdateScale and update the deployment using the tracker
@@ -106,8 +103,6 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	}
 	openshiftConfigClient := fakeconfigv1client.NewSimpleClientset(configObjects...)
 	configInformers := configv1informers.NewSharedInformerFactory(openshiftConfigClient, 10*time.Minute)
-	openshiftRouteClient := fakeroutev1client.NewSimpleClientset(routesObjects...)
-	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
 		fakeKubeClient,
@@ -126,7 +121,6 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 		fakeKubeClient,
 		dynamicfake.NewSimpleDynamicClient(scheme),
 		configInformers,
-		routeInformers,
 		coreInformers,
 		kubeInformersForNamespaces,
 		NewFakeRecorder(1024),
@@ -134,13 +128,11 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 
 	operatorConfigInformers.Start(ctx.Done())
 	configInformers.Start(ctx.Done())
-	routeInformers.Start(ctx.Done())
 	coreInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
 
 	operatorConfigInformers.WaitForCacheSync(ctx.Done())
 	configInformers.WaitForCacheSync(ctx.Done())
-	routeInformers.WaitForCacheSync(ctx.Done())
 	coreInformers.WaitForCacheSync(ctx.Done())
 	kubeInformersForNamespaces.WaitForCacheSync(ctx.Done())
 
@@ -196,24 +188,6 @@ func makeKubeVirtNodes() []runtime.Object {
 	}
 }
 
-// makePrometheusRoute creates a prometheus-k8s route for testing.
-func makePrometheusRoute() []runtime.Object {
-	return []runtime.Object{
-		&routev1.Route{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "openshift-monitoring",
-				Name:      "prometheus-k8s",
-			},
-			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-				{
-					Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-				},
-			},
-			},
-		},
-	}
-}
-
 // fakeSyncContext implements factory.SyncContext for testing
 type fakeSyncContext struct {
 	recorder events.Recorder
@@ -248,7 +222,6 @@ func TestManageConfigMap(t *testing.T) {
 		schedulerConfig *configv1.Scheduler
 		want            *corev1.ConfigMap
 		descheduler     *deschedulerv1.KubeDescheduler
-		routes          []runtime.Object
 		nodes           []runtime.Object
 		err             error
 		forceDeployment bool
@@ -260,9 +233,8 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = nil
 			}),
-			want:   makeConfigMap("assets/relieveAndMigrateDefaults.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
+			want:  makeConfigMap("assets/relieveAndMigrateDefaults.yaml"),
+			nodes: makeKubeVirtNodes(),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutKubeVirt",
@@ -273,7 +245,6 @@ func TestManageConfigMap(t *testing.T) {
 					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
 				}
 			}),
-			routes: makePrometheusRoute(),
 			nodes: []runtime.Object{
 				&corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
@@ -295,21 +266,9 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			routes:          makePrometheusRoute(),
 			nodes:           makeKubeVirtNodes(),
 			missingPSI:      true,
 			err:             fmt.Errorf("profile DevKubeVirtRelieveAndMigrate can only be used when PSI metrics are enabled for the worker nodes"),
-			forceDeployment: true,
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateWithoutPrometheusRoute",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
-			}),
-			routes:          []runtime.Object{},
-			nodes:           makeKubeVirtNodes(),
-			err:             fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: route.route.openshift.io \"prometheus-k8s\" not found"),
 			forceDeployment: true,
 		},
 	}
@@ -351,7 +310,7 @@ func TestManageConfigMap(t *testing.T) {
 				testPSIPath = path.Join(tempPSIPath, "MISSING")
 			}
 
-			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, objects, []runtime.Object{tt.schedulerConfig}, tt.routes, nil)
+			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, objects, []runtime.Object{tt.schedulerConfig}, nil)
 			targetConfigReconciler.psiPath = testPSIPath
 
 			got, forceDeployment, err := targetConfigReconciler.manageConfigMap(tt.descheduler)
@@ -882,7 +841,7 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 				t.Fatalf("Test setup error: invalid descheduler configuration: %v", err)
 			}
 
-			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, tt.objects, nil, nil, nil)
+			targetConfigReconciler, _ := initTargetConfigReconciler(ctx, tt.objects, nil, nil)
 			if tt.psiAvailable {
 				targetConfigReconciler.psiPath = tempPSIPath
 			} else {
@@ -929,7 +888,6 @@ func TestSync(t *testing.T) {
 		name                   string
 		targetConfigReconciler *TargetConfigReconciler
 		descheduler            *deschedulerv1.KubeDescheduler
-		routes                 []runtime.Object
 		err                    error
 		condition              *operatorv1.OperatorCondition
 	}{
@@ -967,20 +925,6 @@ func TestSync(t *testing.T) {
 				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 			}),
-			routes: []runtime.Object{
-				&routev1.Route{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "openshift-monitoring",
-						Name:      "prometheus-k8s",
-					},
-					Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{
-						{
-							Host: "prometheus-k8s-openshift-monitoring.apps.example.com",
-						},
-					},
-					},
-				},
-			},
 			condition: &operatorv1.OperatorCondition{
 				Type:   "TargetConfigControllerDegraded",
 				Status: operatorv1.ConditionTrue,
@@ -1020,7 +964,6 @@ func TestSync(t *testing.T) {
 					},
 				},
 				[]runtime.Object{configLowNodeUtilization},
-				tt.routes,
 				[]runtime.Object{tt.descheduler},
 			)
 
@@ -1154,7 +1097,6 @@ func TestDeploymentScaling(t *testing.T) {
 	tests := []struct {
 		name             string
 		descheduler      *deschedulerv1.KubeDescheduler
-		routes           []runtime.Object
 		nodes            []runtime.Object
 		expectedReplicas int32
 		expectError      bool
@@ -1226,7 +1168,6 @@ func TestDeploymentScaling(t *testing.T) {
 				ctx,
 				objects,
 				[]runtime.Object{configLowNodeUtilization},
-				tt.routes,
 				[]runtime.Object{tt.descheduler},
 			)
 
@@ -1413,7 +1354,6 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 		fakeKubeClient,
 		dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()),
 		configInformers,
-		routev1informers.NewSharedInformerFactory(fakeroutev1client.NewSimpleClientset(), 10*time.Minute),
 		coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute),
 		kubeInformersForNamespaces,
 		eventRecorder,

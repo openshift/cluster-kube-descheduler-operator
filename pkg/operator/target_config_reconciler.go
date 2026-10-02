@@ -15,8 +15,6 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	configlistersv1 "github.com/openshift/client-go/config/listers/config/v1"
-	routeinformers "github.com/openshift/client-go/route/informers/externalversions"
-	routelistersv1 "github.com/openshift/client-go/route/listers/route/v1"
 	"github.com/openshift/cluster-kube-descheduler-operator/bindata"
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
 	operatorconfigclientv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/clientset/versioned/typed/descheduler/v1"
@@ -87,7 +85,6 @@ type TargetConfigReconciler struct {
 	queue                    workqueue.RateLimitingInterface
 	protectedNamespaces      []string
 	configSchedulerLister    configlistersv1.SchedulerLister
-	routeRouteLister         routelistersv1.RouteLister
 	namespaceLister          corev1listers.NamespaceLister
 	nodeLister               corev1listers.NodeLister
 	cache                    resourceapply.ResourceCache
@@ -104,7 +101,6 @@ func NewTargetConfigReconciler(
 	kubeClient kubernetes.Interface,
 	dynamicClient dynamic.Interface,
 	configInformer configinformers.SharedInformerFactory,
-	routeInformers routeinformers.SharedInformerFactory,
 	coreInformers coreinformers.SharedInformerFactory,
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	eventRecorder events.Recorder,
@@ -134,7 +130,6 @@ func NewTargetConfigReconciler(
 		deschedulerImagePullSpec: deschedulerImagePullSpec,
 		softtainterImagePullSpec: softTainterImagePullSpec,
 		configSchedulerLister:    configInformer.Config().V1().Schedulers().Lister(),
-		routeRouteLister:         routeInformers.Route().V1().Routes().Lister(),
 		namespaceLister:          coreInformers.Core().V1().Namespaces().Lister(),
 		nodeLister:               coreInformers.Core().V1().Nodes().Lister(),
 		cache:                    resourceapply.NewResourceCache(),
@@ -142,7 +137,6 @@ func NewTargetConfigReconciler(
 	}
 
 	configInformer.Config().V1().Schedulers().Informer().AddEventHandler(c.eventHandler())
-	routeInformers.Route().V1().Routes().Informer().AddEventHandler(c.eventHandler())
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 	coreInformers.Core().V1().Nodes().Informer().AddEventHandler(c.eventHandler())
 	coreInformers.Core().V1().Namespaces().Informer().AddEventHandler(c.eventHandler())
@@ -914,23 +908,12 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 
 	var prometheusHost string
 	if c.isPrometheusAsMetricsProviderForProfiles(descheduler) {
-		// detect the prometheus server url
-		route, err := c.routeRouteLister.Routes("openshift-monitoring").Get("prometheus-k8s")
-		if err != nil {
-			return nil, true, fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: %v", err)
-		}
-		if len(route.Status.Ingress) == 0 {
-			return nil, true, fmt.Errorf("No ingress found in openshift-monitoring/prometheus-k8s route")
-		}
-		if route.Status.Ingress[0].Host == "" {
-			return nil, true, fmt.Errorf("Host for status.ingress[0] in openshift-monitoring/prometheus-k8s route is empty")
-		}
 		err = c.checkNamespaceMonitoringLabel()
 		if err != nil {
 			return nil, false, err
 		}
-		prometheusHost = route.Status.Ingress[0].Host
-		klog.InfoS("Detecting prometheus server url", "url", prometheusHost)
+		prometheusHost = ThanosQuerierHost
+		klog.InfoS("Using in-cluster Prometheus server")
 	}
 
 	policy, err := operatorprofiles.BuildDeschedulingPolicy(descheduler, c.protectedNamespaces, prometheusHost)

@@ -39,7 +39,7 @@ import (
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-var K8sPodCAFilePath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+var K8sPodCAFilePath = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
 
 func createConfig(clientConnection componentbaseconfig.ClientConnectionConfiguration, userAgt string) (*rest.Config, error) {
 	var cfg *rest.Config
@@ -123,7 +123,7 @@ func loadCAFile(filepath string) (*x509.CertPool, error) {
 }
 
 func CreatePrometheusClient(prometheusURL, authToken string) (promapi.Client, *http.Transport, error) {
-	// Retrieve Pod CA cert
+	// Retrieve the OpenShift service CA certificate.
 	caCertPool, err := loadCAFile(K8sPodCAFilePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error loading CA file: %v", err)
@@ -145,7 +145,7 @@ func CreatePrometheusClient(prometheusURL, authToken string) (promapi.Client, *h
 		TLSHandshakeTimeout: 10 * time.Second,
 		TLSClientConfig: &tls.Config{
 			RootCAs:    caCertPool,
-			ServerName: u.Host,
+			ServerName: u.Hostname(),
 		},
 	}
 	roundTripper := transport.NewBearerAuthRoundTripper(
