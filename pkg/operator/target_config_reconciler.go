@@ -37,6 +37,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -79,6 +80,12 @@ const defaultKVParallelMigrationsPerCluster = 5
 const defaultKVParallelOutboundMigrationsPerNode = 2
 const kubevirtMigrationAwarePluginName = "KubevirtMigrationAware"
 
+const (
+	allowNetworkPolicyOperandName     = "descheduler-operand"
+	allowNetworkPolicySoftTainterName = "softtainter-operand"
+	softTainterAppLabel               = "softtainer"
+)
+
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
 // compatibility with 3.11
 var DeschedulerCommand = []string{"/bin/descheduler", "--policy-config-file", "/policy-dir/policy.yaml", "--v", "2"}
@@ -114,6 +121,7 @@ func NewTargetConfigReconciler(
 	configInformer configinformers.SharedInformerFactory,
 	routeInformers routeinformers.SharedInformerFactory,
 	coreInformers coreinformers.SharedInformerFactory,
+	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
 	// make sure our list of excluded system namespaces is up to date
@@ -153,6 +161,16 @@ func NewTargetConfigReconciler(
 	operatorClientInformer.Informer().AddEventHandler(c.eventHandler())
 	coreInformers.Core().V1().Nodes().Informer().AddEventHandler(c.eventHandler())
 	coreInformers.Core().V1().Namespaces().Informer().AddEventHandler(c.eventHandler())
+
+	// Watch NetworkPolicies in the operator namespace so create/update/delete
+	// requeues immediately. Operand resources (including NetworkPolicies) live
+	// in the same namespace as the KubeDescheduler CR.
+	_, err = kubeInformersForNamespaces.InformersFor(operatorclient.OperatorNamespace).Networking().V1().NetworkPolicies().Informer().AddEventHandler(c.eventHandler())
+	if err != nil {
+		klog.ErrorS(err, "error watching NetworkPolicies")
+		return nil
+	}
+
 	return c
 }
 
@@ -423,6 +441,26 @@ func (c TargetConfigReconciler) sync() error {
 
 	if _, err := c.manageServiceMonitor(descheduler); err != nil {
 		return err
+	}
+
+	if np, _, err := c.manageOperandNetworkPolicyAllow(descheduler); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if np != nil {
+			resourceVersion = np.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["networkpolicies/"+allowNetworkPolicyOperandName] = resourceVersion
+	}
+
+	if stnp, _, err := c.manageSoftTainterNetworkPolicyAllow(descheduler, isSoftTainterNeeded); err != nil {
+		return err
+	} else {
+		resourceVersion := "0"
+		if stnp != nil {
+			resourceVersion = stnp.ObjectMeta.ResourceVersion
+		}
+		specAnnotations["networkpolicies/"+allowNetworkPolicySoftTainterName] = resourceVersion
 	}
 
 	deschedulerDeployment, _, err := c.manageDeschedulerDeployment(descheduler, specAnnotations)
@@ -788,6 +826,45 @@ func (c *TargetConfigReconciler) manageServiceMonitor(descheduler *deschedulerv1
 	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/servicemonitor.yaml"))
 	_, changed, err := resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
 	return changed, err
+}
+
+// manageOperandNetworkPolicyAllow manages the allow network policy for the descheduler operand pods.
+func (c *TargetConfigReconciler) manageOperandNetworkPolicyAllow(descheduler *deschedulerv1.KubeDescheduler) (*networkingv1.NetworkPolicy, bool, error) {
+	required := resourceread.ReadNetworkPolicyV1OrDie(bindata.MustAsset("assets/kube-descheduler/networkpolicy-operand-allow.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+
+	return resourceapply.ApplyNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, required, c.cache)
+}
+
+// manageSoftTainterNetworkPolicyAllow manages the allow network policy for the softtainter operand pods.
+// The policy is applied only while the softtainter operand is deployed and deleted otherwise.
+func (c *TargetConfigReconciler) manageSoftTainterNetworkPolicyAllow(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*networkingv1.NetworkPolicy, bool, error) {
+	required := resourceread.ReadNetworkPolicyV1OrDie(bindata.MustAsset("assets/kube-descheduler/networkpolicy-operand-softtainter-allow.yaml"))
+	required.Namespace = descheduler.Namespace
+	ownerReference := metav1.OwnerReference{
+		APIVersion: "operator.openshift.io/v1",
+		Kind:       "KubeDescheduler",
+		Name:       descheduler.Name,
+		UID:        descheduler.UID,
+	}
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	controller.EnsureOwnerRef(required, ownerReference)
+	if stEnabled {
+		return resourceapply.ApplyNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, required, c.cache)
+	}
+	return resourceapply.DeleteNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, required)
 }
 
 func defaultEvictorOverrides(profileCustomizations *deschedulerv1.ProfileCustomizations, pluginConfig *v1alpha2.PluginConfig) error {
