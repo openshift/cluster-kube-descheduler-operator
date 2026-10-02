@@ -922,14 +922,13 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 		klog.Warningf("Timeout waiting for ConfigMap creation (will retry in policy validation): %v", err)
 	}
 
-	// Poll until actual policy matches expected (timeout increased to 15 minutes for slow CI environments)
-	// Derived from caller context to respect cancellation propagation
-	policyCtx, policyCancel := context.WithTimeout(ctx, 15*time.Minute)
+	// Poll until actual policy matches expected
+	policyCtx, policyCancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer policyCancel()
 
 	startPolicyCheck := time.Now()
 	attemptCount := 0
-	err = wait.PollUntilContextTimeout(policyCtx, 5*time.Second, 15*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(policyCtx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		elapsed := time.Since(startPolicyCheck)
 		attemptCount++
 
@@ -966,7 +965,7 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 	})
 
 	if err != nil {
-		return fmt.Errorf("timeout waiting for descheduling policy to match expected after 15 minutes: %w", err)
+		return fmt.Errorf("timeout waiting for descheduling policy to match expected: %w", err)
 	}
 
 	klog.Infof("Descheduling policy validated successfully")
@@ -997,9 +996,14 @@ func normalizeDeschedulerPolicy(policy *v1alpha2.DeschedulerPolicy) (*v1alpha2.D
 			pluginConfig := &profile.PluginConfigs[pluginConfigIdx]
 			// Normalize the Args RawExtension by parsing and re-marshaling as JSON
 			if len(pluginConfig.Args.Raw) > 0 {
-				var args interface{}
+				var args map[string]interface{}
 				if err := json.Unmarshal(pluginConfig.Args.Raw, &args); err == nil {
-					// Successfully parsed, now re-marshal to normalize formatting
+					// Strip "namespaces" from comparison: the operator caches its
+					// protectedNamespaces list at startup, so the excluded namespace
+					// set in its policy may differ from what the test observes at
+					// validation time (openshift-* namespaces are created/deleted
+					// during test execution). Everything else is deterministic.
+					delete(args, "namespaces")
 					normalizedBytes, err := json.Marshal(args)
 					if err == nil {
 						pluginConfig.Args.Raw = normalizedBytes

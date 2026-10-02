@@ -758,7 +758,6 @@ func testRemoveDuplicatesStrategy(t testing.TB, ctx context.Context, kubeClient 
 // 1. Delete the current "cluster" CR
 // 2. Run the test (which creates "cluster" CR with custom profile)
 // 3. Delete the test CR in cleanup
-// 4. Recreate the default "cluster" CR
 func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, testFn func(testing.TB, context.Context, *k8sclient.Clientset, *deschclient.Clientset)) {
 	g.DeferCleanup(func() {
 		// Create cleanup context inside the deferred callback so the timeout starts when cleanup actually begins,
@@ -777,14 +776,6 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 		g.By("Cleanup: Waiting for operator ConfigMap to be cleaned up")
 		if err := waitForConfigMapDeletion(cleanupCtx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName); err != nil {
 			klog.Warningf("Cleanup: Warning - ConfigMap cleanup timeout (may cause policy validation failures in next test): %v", err)
-		}
-
-		// Recreate the default "cluster" CR
-		g.By("Cleanup: Recreating default KubeDescheduler CR")
-		defaultCR := newDefaultKubeDescheduler()
-		err = createKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient, defaultCR)
-		if err != nil {
-			g.Fail(fmt.Sprintf("Cleanup: Error recreating default KubeDescheduler CR: %v", err))
 		}
 	})
 
