@@ -71,52 +71,29 @@ func isOperatorOLMInstallationEnabled() bool {
 }
 
 // isOperatorPreInstalled checks if the operator was already installed
-// by checking if the operator Deployment is running and ready in the namespace.
-// This is more reliable than checking for CSV which is created asynchronously.
-func isOperatorPreInstalled(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) bool {
-	klog.Infof("isOperatorPreInstalled: checking if operator deployment is ready in namespace %s", namespace)
+// (e.g., via operator-sdk run bundle in CI) by looking for an existing CSV.
+// Retries for up to 30 seconds to handle transient connection issues.
+func isOperatorPreInstalled(ctx context.Context, dynamicClient dynamic.Interface, namespace string) bool {
+	var csvName string
+	var lastErr error
 
-	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-		deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, "descheduler-operator", metav1.GetOptions{})
+	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 30*time.Second, true, func(pollCtx context.Context) (bool, error) {
+		var err error
+		csvName, err = getCSVName(pollCtx, dynamicClient, namespace, "")
 		if err != nil {
-			if apierrors.IsNotFound(err) {
-				klog.V(2).Infof("isOperatorPreInstalled: deployment not found - operator not pre-installed")
-				return false, nil
-			}
-			// Transient API error - retry
-			klog.V(2).Infof("isOperatorPreInstalled: transient API error getting deployment: %v", err)
+			lastErr = err
+			klog.V(2).Infof("Failed to get CSV name, retrying: %v", err)
 			return false, nil
 		}
-
-		// Require positive replica count (nil or <= 0 means not ready)
-		if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas <= 0 {
-			replicas := int32(0)
-			if deployment.Spec.Replicas != nil {
-				replicas = *deployment.Spec.Replicas
-			}
-			klog.V(2).Infof("isOperatorPreInstalled: deployment has invalid replica count: %d (nil: %v)", replicas, deployment.Spec.Replicas == nil)
-			return false, nil
-		}
-
-		// Check that we have the desired number of ready replicas
-		if deployment.Status.ReadyReplicas >= *deployment.Spec.Replicas {
-			klog.Infof("isOperatorPreInstalled: operator deployment is ready with %d/%d replicas",
-				deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
-			return true, nil
-		}
-
-		klog.V(2).Infof("isOperatorPreInstalled: operator deployment not yet ready: %d/%d replicas",
-			deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
-		return false, nil
+		return true, nil
 	})
 
 	if err != nil {
-		klog.Warningf("isOperatorPreInstalled: timed out waiting for operator deployment: %v", err)
+		klog.Warningf("Timeout checking for pre-installed operator after 30s: %v", lastErr)
 		return false
 	}
 
-	klog.Infof("isOperatorPreInstalled: returning true - operator is pre-installed")
-	return true
+	return csvName != ""
 }
 
 // Ginkgo test specs for migrated OTP tests
@@ -144,7 +121,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
 			olmInstalled = false // Operator will be installed non-OLM way
 			err = setupOperator(ctx, kubeClient, deschClient, apiExtClient)
-		} else if isOperatorPreInstalled(ctx, kubeClient, operatorclient.OperatorNamespace) {
+		} else if isOperatorPreInstalled(ctx, dynamicClient, operatorclient.OperatorNamespace) {
 			// Bundle-based CI installation (operator-sdk run bundle) pre-installs the operator;
 			// only the KubeDescheduler CR and operand readiness are needed.
 			klog.Infof("Operator already installed, skipping installation")
@@ -176,9 +153,9 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		// Wait for descheduler pod to stabilize before any tests run
 		// This ensures Prometheus has time to discover the ServiceMonitor
 		g.By("Waiting for descheduler pod to stabilize before tests")
-		err = waitForPodStability(ctx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 30*time.Second)
+		err = waitForOperandStability(ctx, kubeClient, 30*time.Second)
 		if err != nil {
-			klog.Warningf("Warning: Timeout waiting for pod stability in BeforeAll: %v", err)
+			klog.Warningf("Warning: Timeout waiting for pod stability in BeforeEach: %v", err)
 		}
 	})
 
@@ -765,11 +742,16 @@ func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschC
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cleanupCancel()
 
-		// Delete the test CR (may not exist if testFn failed before creating it)
-		g.By("Cleanup: Deleting test KubeDescheduler CR and waiting for operand to be gone")
-		err := deleteKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient)
-		if err != nil && !strings.Contains(err.Error(), "not found") {
-			g.Fail(fmt.Sprintf("Cleanup: Error deleting test KubeDescheduler CR: %v", err))
+		// If the namespace was already deleted (non-OLM AfterEach), skip cleanup
+		_, nsErr := kubeClient.CoreV1().Namespaces().Get(cleanupCtx, operatorclient.OperatorNamespace, metav1.GetOptions{})
+		if apierrors.IsNotFound(nsErr) {
+			klog.Infof("Cleanup: Namespace %s already deleted, skipping CR restore", operatorclient.OperatorNamespace)
+			return
+		}
+
+		g.By("Cleanup: Deleting KubeDescheduler CR")
+		if err := deleteKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient); err != nil {
+			klog.Warningf("Cleanup: Failed to delete KubeDescheduler: %v", err)
 		}
 
 		// Wait for operator ConfigMap to be cleaned up to prevent policy mismatch in next test

@@ -349,7 +349,7 @@ func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Cli
 
 	// Wait for pod stability (single pod, no restarts in progress)
 	klog.Infof("Waiting for descheduler operand pod to be stable")
-	err = waitForPodStability(ctx, kubeClient, operatorclient.OperatorNamespace, deschedulerLabel, 3*time.Minute)
+	err = waitForOperandStability(ctx, kubeClient, 3*time.Minute)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
 	}
@@ -446,52 +446,6 @@ func patchKubeDeschedulerNamespaceFiltering(ctx context.Context, deschClient *de
 
 	klog.Infof("Successfully patched KubeDescheduler (profiles: %v, included: %v, excluded: %v)", profiles, included, excluded)
 	return nil
-}
-
-// waitForPodStability waits for a single stable pod (no pod name contains spaces, which would indicate multiple pods)
-// Multiple pods in the list indicates pod churn/restarts
-func waitForPodStability(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, labelSelector string, duration time.Duration) error {
-	return wait.PollUntilContextTimeout(ctx, 5*time.Second, duration, true, func(ctx context.Context) (bool, error) {
-		pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-			LabelSelector: labelSelector,
-		})
-		if err != nil {
-			klog.V(2).Infof("Failed to list pods with label %s: %v, retrying...", labelSelector, err)
-			return false, nil
-		}
-
-		if len(pods.Items) == 0 {
-			klog.V(2).Infof("No pods found with label %s, retrying...", labelSelector)
-			return false, nil
-		}
-
-		// Get single pod name - if multiple pods, names will be space-separated (old pattern from kubectl)
-		if len(pods.Items) > 1 {
-			podNames := make([]string, len(pods.Items))
-			for i, pod := range pods.Items {
-				podNames[i] = pod.Name
-			}
-			klog.V(2).Infof("Found %d pods with label %s (not yet stable): %v", len(pods.Items), labelSelector, podNames)
-			return false, nil
-		}
-
-		pod := pods.Items[0]
-		if pod.Status.Phase != corev1.PodRunning {
-			klog.V(2).Infof("Pod %s is not running (phase: %s), retrying...", pod.Name, pod.Status.Phase)
-			return false, nil
-		}
-
-		// Check for container readiness
-		for _, containerStatus := range pod.Status.ContainerStatuses {
-			if !containerStatus.Ready {
-				klog.V(2).Infof("Container %s in pod %s is not ready, retrying...", containerStatus.Name, pod.Name)
-				return false, nil
-			}
-		}
-
-		klog.Infof("Pod %s with label %s is stable and running", pod.Name, labelSelector)
-		return true, nil
-	})
 }
 
 // waitForDeploymentReady waits for a deployment to have the expected number of ready replicas

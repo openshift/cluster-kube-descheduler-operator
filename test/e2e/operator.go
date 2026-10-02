@@ -416,7 +416,6 @@ func testSoftTainterControllerWithVAP(t testing.TB, ctx context.Context, kubeCli
 }
 
 // testPodDescheduling tests that descheduler respects PDB (Pod Disruption Budget) constraints.
-// Follows Red Hat's exact test pattern (from kube_descheduler_operator.go):
 // 1. Cordon all nodes
 // 2. Uncordon node0 (pods schedule there)
 // 3. Create 12 test pods
@@ -433,13 +432,11 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 	}
 	defer cleanupTestNamespace(t, ctx, kubeClient, testNamespace.Name)
 
-	// Get all worker nodes only (filter out control planes)
 	allNodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("Unable to get nodes: %v", err)
 	}
 
-	// Filter to only worker nodes
 	var workerNodes []corev1.Node
 	for _, node := range allNodes.Items {
 		_, isWorker := node.Labels["node-role.kubernetes.io/worker"]
@@ -452,16 +449,13 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		t.Fatalf("Need at least 2 worker nodes, got %d", len(workerNodes))
 	}
 
-	// Save original schedulable states BEFORE any mutations
 	originalStates := make(map[string]bool)
 	for _, node := range workerNodes {
 		originalStates[node.Name] = node.Spec.Unschedulable
 	}
 
-	// Track nodes actually changed for restoration
 	changedNodes := []string{}
 
-	// Register deferred restoration BEFORE any mutations
 	defer func() {
 		// Use fresh cleanup context independent of test context
 		// so restoration can complete even if test context times out
@@ -479,7 +473,6 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		}
 	}()
 
-	// Step 1: Cordon ALL worker nodes
 	for _, node := range workerNodes {
 		if !node.Spec.Unschedulable {
 			patch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":true}]`)
@@ -490,13 +483,11 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		}
 	}
 
-	// Step 2: Uncordon node0 so pods can schedule there
 	uncordonPatch := []byte(`[{"op":"replace","path":"/spec/unschedulable","value":false}]`)
 	if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, workerNodes[0].Name, types.JSONPatchType, uncordonPatch, metav1.PatchOptions{}); err != nil {
 		t.Fatalf("Unable to uncordon node %s: %v", workerNodes[0].Name, err)
 	}
 
-	// Verify node0 is actually uncordoned and ready before creating pods
 	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		node, err := kubeClient.CoreV1().Nodes().Get(ctx, workerNodes[0].Name, metav1.GetOptions{})
 		if err != nil {
@@ -508,7 +499,6 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		t.Fatalf("Timeout waiting for node %s to be uncordoned", workerNodes[0].Name)
 	}
 
-	// Step 3: Create deployment with 12 replicas
 	deploymentObj := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testNamespace.Name,
@@ -554,10 +544,8 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 	}
 	defer kubeClient.AppsV1().Deployments(testNamespace.Name).Delete(ctx, deploymentObj.Name, metav1.DeleteOptions{})
 
-	// Wait for all 12 replicas to be running
 	waitForPodsRunning(ctx, t, kubeClient, map[string]string{"app": "test-pdb-pods"}, 12, testNamespace.Name)
 
-	// Step 4: Create PDB with min-available=11 (equivalent to max-unavailable=1)
 	minAvailable := intstr.FromInt(11)
 	pdbObj := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
@@ -576,7 +564,6 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 	}
 	defer kubeClient.PolicyV1().PodDisruptionBudgets(testNamespace.Name).Delete(ctx, pdbObj.Name, metav1.DeleteOptions{})
 
-	// Step 5: Patch descheduler mode to Automatic
 	kdCR, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Unable to get KubeDescheduler CR: %v", err)
@@ -592,17 +579,14 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		_, _ = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, kdCR, metav1.UpdateOptions{})
 	}()
 
-	// Step 6: Uncordon node1 (forces eviction attempts - descheduler tries to move pods)
 	if len(workerNodes) > 1 {
 		if _, err := kubeClient.CoreV1().Nodes().Patch(ctx, workerNodes[1].Name, types.JSONPatchType, uncordonPatch, metav1.PatchOptions{}); err != nil {
 			t.Logf("Warning: Unable to uncordon node %s: %v", workerNodes[1].Name, err)
 		}
 	}
 
-	// Wait for descheduler to attempt evictions
 	time.Sleep(40 * time.Second)
 
-	// Step 7: Check descheduler logs for PDB prevention error
 	o.Eventually(func() bool {
 		t.Logf("Checking descheduler pod logs for PDB prevention error")
 
@@ -629,7 +613,6 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		}
 		defer logs.Close()
 
-		// Read all logs using io.ReadAll to get complete messages
 		logBytes, err := io.ReadAll(logs)
 		if err != nil {
 			klog.Warningf("Failed to read all logs: %v", err)
@@ -637,7 +620,6 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		}
 		logContent := string(logBytes)
 
-		// Check for PDB-related messages (less strict matching)
 		hasError := strings.Contains(logContent, "Error evicting pod") || strings.Contains(logContent, "error evicting")
 		hasPDB := strings.Contains(logContent, "Cannot evict pod") || strings.Contains(logContent, "disruption budget")
 
@@ -761,29 +743,6 @@ func waitForPodRunningByNamePrefix(ctx context.Context, kubeClient *k8sclient.Cl
 	return expectedPod, nil
 }
 
-func getPodNames(pods []v1.Pod) []string {
-	names := []string{}
-	for _, pod := range pods {
-		names = append(names, pod.Name)
-	}
-	return names
-}
-
-func intersectStrings(lista, listb []string) []string {
-	commonNames := []string{}
-
-	for _, stra := range lista {
-		for _, strb := range listb {
-			if stra == strb {
-				commonNames = append(commonNames, stra)
-				break
-			}
-		}
-	}
-
-	return commonNames
-}
-
 func waitForPodsRunning(ctx context.Context, t testing.TB, clientSet *k8sclient.Clientset, labelMap map[string]string, desireRunningPodNum int, namespace string) {
 	o.Eventually(func() bool {
 		podList, err := clientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
@@ -812,7 +771,7 @@ func waitForPodsRunning(ctx context.Context, t testing.TB, clientSet *k8sclient.
 
 		t.Logf("All %d pods are now Running", desireRunningPodNum)
 		return true
-	}).WithTimeout(2*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(), "Not all pods reached Running state within 5 minutes - test namespace may not have enough resources")
+	}).WithTimeout(2*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(), "Not all pods reached Running state within timeout")
 }
 
 func waitForPodGoneByNamePrefix(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, nameprefix, excludedprefix string) error {
