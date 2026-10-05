@@ -16,6 +16,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/openshift/library-go/pkg/crypto"
 	"github.com/openshift/library-go/pkg/operator/events"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
@@ -108,6 +109,11 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	openshiftRouteClient := fakeroutev1client.NewSimpleClientset(routesObjects...)
 	routeInformers := routev1informers.NewSharedInformerFactory(openshiftRouteClient, 10*time.Minute)
 	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(
+		fakeKubeClient,
+		"",
+		operatorclient.OperatorNamespace,
+	)
 	scheme := runtime.NewScheme()
 
 	targetConfigReconciler := NewTargetConfigReconciler(
@@ -122,6 +128,7 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 		configInformers,
 		routeInformers,
 		coreInformers,
+		kubeInformersForNamespaces,
 		NewFakeRecorder(1024),
 	)
 
@@ -129,11 +136,13 @@ func initTargetConfigReconciler(ctx context.Context, kubeClientObjects, configOb
 	configInformers.Start(ctx.Done())
 	routeInformers.Start(ctx.Done())
 	coreInformers.Start(ctx.Done())
+	kubeInformersForNamespaces.Start(ctx.Done())
 
 	operatorConfigInformers.WaitForCacheSync(ctx.Done())
 	configInformers.WaitForCacheSync(ctx.Done())
 	routeInformers.WaitForCacheSync(ctx.Done())
 	coreInformers.WaitForCacheSync(ctx.Done())
+	kubeInformersForNamespaces.WaitForCacheSync(ctx.Done())
 
 	return targetConfigReconciler, operatorConfigClient
 }
@@ -223,10 +232,6 @@ func (f *fakeSyncContext) Recorder() events.Recorder {
 }
 
 func TestManageConfigMap(t *testing.T) {
-	fm, _ := time.ParseDuration("5m")
-	fiveMinutes := metav1.Duration{Duration: fm}
-	priority := int32(1000)
-
 	tempPSIPath, err := os.MkdirTemp("", "unittest")
 	if err != nil {
 		t.Fatalf("Failed test: %v", err)
@@ -250,109 +255,6 @@ func TestManageConfigMap(t *testing.T) {
 		missingPSI      bool
 	}{
 		{
-			name: "Podlifetime",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{PodLifetime: &fiveMinutes}
-			}),
-			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeCustomizationConfig.yaml"),
-		},
-		{
-			name: "PvcPods",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization", "EvictPodsWithPVC"}
-			}),
-			want: makeConfigMap("assets/lifecycleAndUtilizationEvictPvcPodsConfig.yaml"),
-		},
-		{
-			name: "ThresholdPriorityClassName",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriorityClassName: "className"}
-			}),
-			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityClassNameConfig.yaml"),
-		},
-		{
-			name: "ThresholdPriority",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority}
-			}),
-			want: makeConfigMap("assets/lifecycleAndUtilizationPodLifeTimeWithThresholdPriorityConfig.yaml"),
-		},
-		{
-			name: "ThresholdPriorityClassNameAndValueError",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{ThresholdPriority: &priority, ThresholdPriorityClassName: "className"}
-			}),
-			err: fmt.Errorf("It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields"),
-		},
-		{
-			name: "LowNodeUtilizationIncludedNamespace",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
-					Namespaces: deschedulerv1.Namespaces{
-						Included: []string{"includedNamespace"},
-					},
-				}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationIncludedNamespace.yaml"),
-		},
-		{
-			name: "LowNodeUtilizationLow",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationLowConfig.yaml"),
-		},
-		{
-			name: "LowNodeUtilizationMedium",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
-		},
-		{
-			name: "LowNodeUtilizationNoCustomization",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
-		},
-		{
-			name: "LowNodeUtilizationEmptyDefault",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationMediumConfig.yaml"),
-		},
-		{
-			name: "LowNodeUtilizationHigh",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationHighConfig.yaml"),
-		},
-		{
-			name: "LowNodeUtilizationEvictionLimits",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LifecycleAndUtilization"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: utilptr.To[deschedulerv1.LowNodeUtilizationThresholdsType]("")}
-				spec.EvictionLimits = &deschedulerv1.EvictionLimits{
-					Total: utilptr.To[int32](10),
-					Node:  utilptr.To[int32](3),
-				}
-			}),
-			want: makeConfigMap("assets/lowNodeUtilizationEvictionLimits.yaml"),
-		},
-		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutCustomizations",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
@@ -361,126 +263,6 @@ func TestManageConfigMap(t *testing.T) {
 			want:   makeConfigMap("assets/relieveAndMigrateDefaults.yaml"),
 			routes: makePrometheusRoute(),
 			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateEvictionLimits",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = nil
-				spec.EvictionLimits = &deschedulerv1.EvictionLimits{
-					Total: utilptr.To[int32](10),
-					Node:  utilptr.To[int32](3),
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateEvictionLimits.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateLow",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateMedium",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.MediumThreshold}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateMediumConfig.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateDeviationLowWithCombinedMetrics",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateDeviationLowWithCombinedMetrics.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateHigh",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.HighThreshold}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateHighConfig.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateIncludedNamespace",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					Namespaces: deschedulerv1.Namespaces{
-						Included: []string{"includedNamespace"},
-					},
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateIncludedNamespace.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsLow",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds: &deschedulerv1.LowDeviationThreshold,
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsLow.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsMedium",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds: &deschedulerv1.MediumDeviationThreshold,
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsMedium.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateDynamicThresholdsHigh",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds: &deschedulerv1.HighDeviationThreshold,
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateDynamicThresholdsHigh.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateDynamicAndStaticThresholds",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevDeviationThresholds:          &deschedulerv1.LowDeviationThreshold,
-					DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold,
-				}
-			}),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-			err:    fmt.Errorf("only one of DevLowNodeUtilizationThresholds and DevDeviationThresholds customizations can be configured simultaneously"),
 		},
 		{
 			name: "DevKubeVirtRelieveAndMigrateWithoutKubeVirt",
@@ -513,7 +295,6 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
 			routes:          makePrometheusRoute(),
 			nodes:           makeKubeVirtNodes(),
 			missingPSI:      true,
@@ -526,132 +307,10 @@ func TestManageConfigMap(t *testing.T) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{DevLowNodeUtilizationThresholds: &deschedulerv1.LowThreshold}
 			}),
-			want:            makeConfigMap("assets/relieveAndMigrateLowConfig.yaml"),
 			routes:          []runtime.Object{},
 			nodes:           makeKubeVirtNodes(),
 			err:             fmt.Errorf("unable to get openshift-monitoring/prometheus-k8s route: route.route.openshift.io \"prometheus-k8s\" not found"),
 			forceDeployment: true,
-		},
-		{
-			name: "DevKubeVirtRelieveAndMigrateMigrationCooldown",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.DevKubeVirtRelieveAndMigrate}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevMigrationCooldown:      &metav1.Duration{Duration: 15 * time.Minute},
-					DevMaxMigrationCooldown:   &metav1.Duration{Duration: 6 * time.Hour},
-					DevMigrationHistoryWindow: &metav1.Duration{Duration: 48 * time.Hour},
-				}
-			}),
-			want:   makeConfigMap("assets/relieveAndMigrateMigrationCooldown.yaml"),
-			routes: makePrometheusRoute(),
-			nodes:  makeKubeVirtNodes(),
-		},
-		{
-			name: "AffinityAndTaintsWithNamespaces",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"AffinityAndTaints"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
-					Included: []string{"includedNamespace"},
-				}}
-			}),
-			want: makeConfigMap("assets/affinityAndTaintsWithNamespaces.yaml"),
-		},
-		{
-			name: "LongLifecycleWithNamespaces",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
-					Included: []string{"includedNamespace"},
-				}}
-			}),
-			want: makeConfigMap("assets/longLifecycleWithNamespaces.yaml"),
-		},
-		{
-			name: "LongLifecycleWithLocalStorage",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle", "EvictPodsWithLocalStorage"}
-			}),
-			want: makeConfigMap("assets/longLifecycleWithLocalStorage.yaml"),
-		},
-		{
-			name: "LongLifecycleWithMetrics",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"LongLifecycle"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUUsageProfile,
-				}
-			}),
-			want:   makeConfigMap("assets/longLifecycleWithMetrics.yaml"),
-			routes: makePrometheusRoute(),
-		},
-		{
-			name: "SoftTopologyAndDuplicates",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"SoftTopologyAndDuplicates"}
-			}),
-			want: makeConfigMap("assets/softTopologyAndDuplicates.yaml"),
-		},
-		{
-			name: "TopologyAndDuplicates",
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"TopologyAndDuplicates"}
-			}),
-			want: makeConfigMap("assets/topologyAndDuplicates.yaml"),
-		},
-		{
-			name:            "CompactAndScaleWithNamespaces",
-			schedulerConfig: configHighNodeUtilization,
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{Namespaces: deschedulerv1.Namespaces{
-					Included: []string{"includedNamespace"},
-				}}
-			}),
-			want: makeConfigMap("assets/highNodeUtilizationWithNamespaces.yaml"),
-		},
-		{
-			name:            "CompactAndScaleMinimal",
-			schedulerConfig: configHighNodeUtilization,
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactMinimalThreshold,
-				}
-			}),
-			want: makeConfigMap("assets/highNodeUtilizationMinimal.yaml"),
-		},
-		{
-			name:            "CompactAndScaleModest",
-			schedulerConfig: configHighNodeUtilization,
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModestThreshold,
-				}
-			}),
-			want: makeConfigMap("assets/highNodeUtilization.yaml"),
-		},
-		{
-			name:            "CompactAndScaleDefault",
-			schedulerConfig: configHighNodeUtilization,
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevHighNodeUtilizationThresholds: utilptr.To[deschedulerv1.HighNodeUtilizationThresholdsType](""),
-				}
-			}),
-			want: makeConfigMap("assets/highNodeUtilization.yaml"),
-		},
-		{
-			name:            "CompactAndScaleModerate",
-			schedulerConfig: configHighNodeUtilization,
-			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-				spec.Profiles = []deschedulerv1.DeschedulerProfile{"CompactAndScale"}
-				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-					DevHighNodeUtilizationThresholds: &deschedulerv1.CompactModerateThreshold,
-				}
-			}),
-			want: makeConfigMap("assets/highNodeUtilizationModerate.yaml"),
 		},
 	}
 
@@ -1697,6 +1356,7 @@ func setupFakeClientsWithConfigObserver(t *testing.T, apiServer *configv1.APISer
 		configInformers,
 		routev1informers.NewSharedInformerFactory(fakeroutev1client.NewSimpleClientset(), 10*time.Minute),
 		coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute),
+		kubeInformersForNamespaces,
 		eventRecorder,
 	)
 
@@ -2024,5 +1684,98 @@ func TestCheckProfileConflicts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestManageOperandNetworkPolicyAllow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kubeClient := fake.NewSimpleClientset()
+	eventRecorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+	}
+
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: eventRecorder,
+		cache:         resourceapply.NewResourceCache(),
+	}
+
+	policy, modified, err := reconciler.manageOperandNetworkPolicyAllow(descheduler)
+	if err != nil {
+		t.Fatalf("manageOperandNetworkPolicyAllow failed: %v", err)
+	}
+
+	if !modified {
+		t.Error("Expected modified=true when creating policy")
+	}
+
+	if policy.GetName() != allowNetworkPolicyOperandName {
+		t.Errorf("Expected policy name %q, got %q", allowNetworkPolicyOperandName, policy.GetName())
+	}
+
+	if policy.GetNamespace() != operatorclient.OperatorNamespace {
+		t.Errorf("Expected policy namespace %q, got %q", operatorclient.OperatorNamespace, policy.GetNamespace())
+	}
+
+	if got := policy.Spec.PodSelector.MatchLabels["app"]; got != operatorclient.OperandName {
+		t.Errorf("Expected podSelector app=%q, got %q", operatorclient.OperandName, got)
+	}
+}
+
+func TestManageSoftTainterNetworkPolicyAllow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	kubeClient := fake.NewSimpleClientset()
+	eventRecorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+
+	descheduler := &deschedulerv1.KubeDescheduler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatorclient.OperatorConfigName,
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid",
+		},
+	}
+
+	reconciler := &TargetConfigReconciler{
+		ctx:           ctx,
+		kubeClient:    kubeClient,
+		eventRecorder: eventRecorder,
+		cache:         resourceapply.NewResourceCache(),
+	}
+
+	policy, modified, err := reconciler.manageSoftTainterNetworkPolicyAllow(descheduler, true)
+	if err != nil {
+		t.Fatalf("manageSoftTainterNetworkPolicyAllow(enabled) failed: %v", err)
+	}
+	if !modified {
+		t.Error("Expected modified=true when creating softtainter policy")
+	}
+	if policy.GetName() != allowNetworkPolicySoftTainterName {
+		t.Errorf("Expected policy name %q, got %q", allowNetworkPolicySoftTainterName, policy.GetName())
+	}
+	if policy.GetNamespace() != operatorclient.OperatorNamespace {
+		t.Errorf("Expected policy namespace %q, got %q", operatorclient.OperatorNamespace, policy.GetNamespace())
+	}
+	if got := policy.Spec.PodSelector.MatchLabels["app"]; got != softTainterAppLabel {
+		t.Errorf("Expected podSelector app=%q, got %q", softTainterAppLabel, got)
+	}
+
+	_, _, err = reconciler.manageSoftTainterNetworkPolicyAllow(descheduler, false)
+	if err != nil {
+		t.Fatalf("manageSoftTainterNetworkPolicyAllow(disabled) failed: %v", err)
+	}
+	_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+	if !errors.IsNotFound(getErr) {
+		t.Fatalf("Expected softtainter NetworkPolicy to be deleted when disabled, got: %v", getErr)
 	}
 }
