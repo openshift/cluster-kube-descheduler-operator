@@ -46,4 +46,4 @@ var defaultDeschedulerFeatureGates = map[featuregate.Feature]featuregate.Feature
 // Tests that need to modify feature gates for the duration of their test should use:
 //
 //	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.<FeatureName>, <value>)()
-var DefaultMutableFeatureGate featuregate.MutableFeatureGate = featuregate.NewFeatureGate()
+var DefaultMutableFeatureGate featuregate.MutableVersionedFeatureGate = featuregate.NewFeatureGate()

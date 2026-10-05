@@ -95,6 +95,18 @@ func ReadyNodesFromInterfaces(nodeInterfaces []interface{}) ([]*v1.Node, error) 
 	return readyNodes, nil
 }
 
+// nodeConditionLog is the structured-log shape used for the "nodeCondition"
+// field. Nesting it under a single field prevents collisions with field names,
+// such as "status", that might be reserved by downstream log processors.
+type nodeConditionLog struct {
+	Type   v1.NodeConditionType `json:"type"`
+	Status v1.ConditionStatus   `json:"status"`
+}
+
+func newNodeConditionLog(cond *v1.NodeCondition) nodeConditionLog {
+	return nodeConditionLog{Type: cond.Type, Status: cond.Status}
+}
+
 // IsReady checks if the descheduler could run against given node.
 func IsReady(node *v1.Node) bool {
 	for i := range node.Status.Conditions {
@@ -104,19 +116,19 @@ func IsReady(node *v1.Node) bool {
 		// - NodeOutOfDisk condition status is ConditionFalse,
 		// - NodeNetworkUnavailable condition status is ConditionFalse.
 		if cond.Type == v1.NodeReady && cond.Status != v1.ConditionTrue {
-			klog.V(1).InfoS("Ignoring node", "node", klog.KObj(node), "condition", cond.Type, "status", cond.Status)
+			klog.V(4).InfoS("Ignoring node", "node", klog.KObj(node), "nodeCondition", newNodeConditionLog(cond))
 			return false
 		} /*else if cond.Type == v1.NodeOutOfDisk && cond.Status != v1.ConditionFalse {
-			klog.V(4).InfoS("Ignoring node with condition status", "node", klog.KObj(node.Name), "condition", cond.Type, "status", cond.Status)
+			klog.V(4).InfoS("Ignoring node with condition status", "node", klog.KObj(node), "nodeCondition", newNodeConditionLog(cond))
 			return false
 		} else if cond.Type == v1.NodeNetworkUnavailable && cond.Status != v1.ConditionFalse {
-			klog.V(4).InfoS("Ignoring node with condition status", "node", klog.KObj(node.Name), "condition", cond.Type, "status", cond.Status)
+			klog.V(4).InfoS("Ignoring node with condition status", "node", klog.KObj(node), "nodeCondition", newNodeConditionLog(cond))
 			return false
 		}*/
 	}
 	// Ignore nodes that are marked unschedulable
 	/*if node.Spec.Unschedulable {
-		klog.V(4).InfoS("Ignoring node since it is unschedulable", "node", klog.KObj(node.Name))
+		klog.V(4).InfoS("Ignoring node since it is unschedulable", "node", klog.KObj(node))
 		return false
 	}*/
 	return true
