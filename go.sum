@@ -207,8 +207,8 @@ github.com/openshift/build-machinery-go v0.0.0-20260629141115-154a2b810491 h1:P/
 github.com/openshift/build-machinery-go v0.0.0-20260629141115-154a2b810491/go.mod h1:8jcm8UPtg2mCAsxfqKil1xrmRMI3a+XU2TZ9fF8A7TE=
 github.com/openshift/client-go v0.0.0-20260810202730-ddca5e0b7146 h1:fX/gaOPiS2vrYGSAFSeqqoWjj32H+NbMmB5RDjwhCnU=
 github.com/openshift/client-go v0.0.0-20260810202730-ddca5e0b7146/go.mod h1:bhbP5y308NNbImrgArOc9611HIDAMcNWdCCO4tq5ob4=
-github.com/openshift/descheduler v0.5.1-0.20260817085140-13b43896adec h1:cmaklxjdNpTbOTkVbCegbPawfdcTiZS2u3TR6ktdnN4=
-github.com/openshift/descheduler v0.5.1-0.20260817085140-13b43896adec/go.mod h1:4PDGMUKd3R0LhYfg4hi8t1lqmTejCQEP7gUiFF/zAns=
+github.com/openshift/descheduler v0.5.1-0.20261001192034-498b6f9e5395 h1:OTG5BCswT9YWcDaSr6ifLFlMEwJ+1tqfY6mkc1uO9tk=
+github.com/openshift/descheduler v0.5.1-0.20261001192034-498b6f9e5395/go.mod h1:4PDGMUKd3R0LhYfg4hi8t1lqmTejCQEP7gUiFF/zAns=
 github.com/openshift/library-go v0.0.0-20260814203017-a0584a625d6d h1:LQ9jGH1GkmNFnFDBHeNLN5fmm/lyTgtzGNqHN1NG/dw=
 github.com/openshift/library-go v0.0.0-20260814203017-a0584a625d6d/go.mod h1:IrZbEK+wVUMEd+aXzYR2DCCh0p5IaQ7DvycYGP7qIYM=
 github.com/openshift/onsi-ginkgo/v2 v2.6.1-0.20251001123353-fd5b1fb35db1 h1:PMTgifBcBRLJJiM+LgSzPDTk9/Rx4qS09OUrfpY6GBQ=

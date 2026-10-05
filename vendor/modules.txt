@@ -431,19 +431,11 @@ github.com/openshift/client-go/config/listers/config/v1alpha1
 github.com/openshift/client-go/config/listers/config/v1alpha2
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1
-github.com/openshift/client-go/route/applyconfigurations
 github.com/openshift/client-go/route/applyconfigurations/internal
 github.com/openshift/client-go/route/applyconfigurations/route/v1
 github.com/openshift/client-go/route/clientset/versioned
-github.com/openshift/client-go/route/clientset/versioned/fake
 github.com/openshift/client-go/route/clientset/versioned/scheme
 github.com/openshift/client-go/route/clientset/versioned/typed/route/v1
-github.com/openshift/client-go/route/clientset/versioned/typed/route/v1/fake
-github.com/openshift/client-go/route/informers/externalversions
-github.com/openshift/client-go/route/informers/externalversions/internalinterfaces
-github.com/openshift/client-go/route/informers/externalversions/route
-github.com/openshift/client-go/route/informers/externalversions/route/v1
-github.com/openshift/client-go/route/listers/route/v1
 # github.com/openshift/library-go v0.0.0-20260814203017-a0584a625d6d
 ## explicit; go 1.26.0
 github.com/openshift/library-go/pkg/apiserver/jsonpatch
@@ -1864,7 +1856,7 @@ sigs.k8s.io/controller-tools/pkg/schemapatcher
 sigs.k8s.io/controller-tools/pkg/schemapatcher/internal/yaml
 sigs.k8s.io/controller-tools/pkg/version
 sigs.k8s.io/controller-tools/pkg/webhook
-# sigs.k8s.io/descheduler v0.36.1-0.20260811120714-4233637de9bd => github.com/openshift/descheduler v0.5.1-0.20260817085140-13b43896adec
+# sigs.k8s.io/descheduler v0.36.1-0.20260811120714-4233637de9bd => github.com/openshift/descheduler v0.5.1-0.20261001192034-498b6f9e5395
 ## explicit; go 1.26.0
 sigs.k8s.io/descheduler/cmd/descheduler/app/options
 sigs.k8s.io/descheduler/metrics
@@ -2003,6 +1995,6 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/kyaml
-# sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20260817085140-13b43896adec
+# sigs.k8s.io/descheduler => github.com/openshift/descheduler v0.5.1-0.20261001192034-498b6f9e5395
 # k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 # github.com/onsi/ginkgo/v2 => github.com/openshift/onsi-ginkgo/v2 v2.6.1-0.20251001123353-fd5b1fb35db1

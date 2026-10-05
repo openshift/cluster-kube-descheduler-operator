@@ -186,14 +186,6 @@ rules:
       - watch
       - list
   - apiGroups:
-      - route.openshift.io
-    resources:
-      - routes
-    verbs:
-      - get
-      - watch
-      - list
-  - apiGroups:
       - ""
     resources:
       - endpoints
