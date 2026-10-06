@@ -1838,3 +1838,62 @@ func TestManageSoftTainterNetworkPolicyAllow(t *testing.T) {
 		t.Fatalf("Expected softtainter NetworkPolicy to be deleted when disabled, got: %v", getErr)
 	}
 }
+
+func TestManageSoftTainterDeployment_NameMigration(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	defer cancelFunc()
+
+	// Create old deployment with typo NAME "softtainer"
+	oldDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "softtainer", // OLD NAME with typo
+			Namespace: operatorclient.OperatorNamespace,
+			UID:       "test-uid-123",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: utilptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "softtainer"},
+			},
+		},
+	}
+
+	descheduler := buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+		spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.AffinityAndTaints}
+	})
+
+	objects := []runtime.Object{oldDeployment}
+	reconciler, _ := initTargetConfigReconciler(ctx, objects, nil, nil, []runtime.Object{descheduler})
+
+	// First call should detect old deployment "softtainer" and delete it, then requeue
+	_, _, err := reconciler.manageSoftTainterDeployment(descheduler, map[string]string{}, true)
+	if err == nil {
+		t.Error("Expected requeue error on first sync (name migration), got nil")
+	}
+	if !strings.Contains(err.Error(), "old deployment name migration") {
+		t.Errorf("Expected name migration error, got: %v", err)
+	}
+
+	// Verify old deployment was deleted
+	_, err = reconciler.kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, "softtainer", metav1.GetOptions{})
+	if !errors.IsNotFound(err) {
+		t.Errorf("Expected old deployment 'softtainer' to be deleted, got error: %v", err)
+	}
+
+	// Second call should create new deployment with correct name "softtainter"
+	newDep, _, err := reconciler.manageSoftTainterDeployment(descheduler, map[string]string{}, true)
+	if err != nil {
+		t.Fatalf("Expected no error on second sync, got: %v", err)
+	}
+	if newDep == nil {
+		t.Fatal("Expected new deployment to be created")
+	}
+	if newDep.Name != "softtainter" {
+		t.Errorf("New deployment name = %q, want %q", newDep.Name, "softtainter")
+	}
+
+	expectedSelector := map[string]string{"app": "softtainter"}
+	if !apiequality.Semantic.DeepEqual(newDep.Spec.Selector.MatchLabels, expectedSelector) {
+		t.Errorf("New deployment selector = %v, want %v", newDep.Spec.Selector.MatchLabels, expectedSelector)
+	}
+}

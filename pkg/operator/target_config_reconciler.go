@@ -1176,6 +1176,42 @@ func (c *TargetConfigReconciler) manageSoftTainterDeployment(descheduler *desche
 	required.Name = operatorclient.SoftTainterOperandName
 	required.Namespace = descheduler.Namespace
 	if stEnabled {
+		// Handle deployment NAME migration (softtainer -> softtainter typo fix)
+		const oldDeploymentName = "softtainer"
+		oldDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, oldDeploymentName, metav1.GetOptions{})
+		if err == nil {
+			// Old deployment with typo name exists, delete it
+			klog.InfoS("Found old deployment with typo name, deleting it",
+				"namespace", required.Namespace, "oldName", oldDeploymentName, "newName", required.Name)
+
+			uid := oldDeployment.UID
+			propagationPolicy := metav1.DeletePropagationForeground
+			preconditions := metav1.Preconditions{UID: &uid}
+			deleteOptions := metav1.DeleteOptions{
+				PropagationPolicy: &propagationPolicy,
+				Preconditions:     &preconditions,
+			}
+
+			if err := c.kubeClient.AppsV1().Deployments(required.Namespace).Delete(c.ctx, oldDeploymentName, deleteOptions); err != nil {
+				if !errors.IsNotFound(err) && !errors.IsConflict(err) {
+					return nil, false, fmt.Errorf("failed to delete old deployment %s: %w", oldDeploymentName, err)
+				}
+			}
+
+			waitErr := wait.PollUntilContextTimeout(c.ctx, 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+				_, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(ctx, oldDeploymentName, metav1.GetOptions{})
+				return errors.IsNotFound(err), nil
+			})
+			if waitErr != nil && !wait.Interrupted(waitErr) {
+				return nil, false, fmt.Errorf("error waiting for old deployment deletion: %w", waitErr)
+			}
+
+			klog.InfoS("Old deployment deleted, requeuing to create new deployment",
+				"namespace", required.Namespace, "oldName", oldDeploymentName, "newName", required.Name)
+			return nil, false, fmt.Errorf("old deployment name migration completed, requeuing")
+		}
+		// Old deployment not found - migration not needed or already completed
+
 		return c.manageDeployment(required, descheduler, targetImageKey, c.softtainterImagePullSpec, specAnnotations)
 	}
 	return resourceapply.DeleteDeployment(c.ctx, c.kubeClient.AppsV1(), c.eventRecorder, required)
