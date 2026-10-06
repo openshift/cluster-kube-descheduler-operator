@@ -1,3 +1,5 @@
+# Used by the manifests GitHub Actions workflow (.github/workflows/manifests.yaml).
+# Three-node cluster without topology zone labels; not used by e2e tests.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:

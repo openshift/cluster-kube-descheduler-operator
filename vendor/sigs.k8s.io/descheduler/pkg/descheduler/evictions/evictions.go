@@ -478,12 +478,6 @@ func (pe *PodEvictor) evictionRequestsPerNamespace(ns string) uint {
 	}
 }
 
-func (pe *PodEvictor) EvictionRequests(node *v1.Node) uint {
-	pe.mu.RLock()
-	defer pe.mu.RUnlock()
-	return pe.evictionRequestsTotal()
-}
-
 func (pe *PodEvictor) TotalEvictionRequests() uint {
 	pe.mu.RLock()
 	defer pe.mu.RUnlock()

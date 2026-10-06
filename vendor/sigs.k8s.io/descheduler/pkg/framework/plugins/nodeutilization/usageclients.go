@@ -50,7 +50,7 @@ type notSupportedError struct {
 }
 
 func (e notSupportedError) Error() string {
-	return "maximum number of evicted pods per node reached"
+	return "pod usage quantification is not supported by this usage client"
 }
 
 func newNotSupportedError(usageClientType UsageClientType) *notSupportedError {
