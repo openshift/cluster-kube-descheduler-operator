@@ -68,7 +68,7 @@ const EXPERIMENTAL_DISABLE_PSI_CHECK = "EXPERIMENTAL_DISABLE_PSI_CHECK"
 const (
 	allowNetworkPolicyOperandName     = "descheduler-operand"
 	allowNetworkPolicySoftTainterName = "softtainter-operand"
-	softTainterAppLabel               = "softtainer"
+	softTainterAppLabel               = "softtainter"
 )
 
 // deschedulerCommand provides descheduler command with policyconfigfile mounted as volume and log-level for backwards
@@ -1175,43 +1175,56 @@ func (c *TargetConfigReconciler) manageSoftTainterDeployment(descheduler *desche
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kube-descheduler/softtainterdeployment.yaml"))
 	required.Name = operatorclient.SoftTainterOperandName
 	required.Namespace = descheduler.Namespace
-	if stEnabled {
-		// Handle deployment NAME migration (softtainer -> softtainter typo fix)
-		const oldDeploymentName = "softtainer"
-		oldDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, oldDeploymentName, metav1.GetOptions{})
-		if err == nil {
-			// Old deployment with typo name exists, delete it
-			klog.InfoS("Found old deployment with typo name, deleting it",
-				"namespace", required.Namespace, "oldName", oldDeploymentName, "newName", required.Name)
 
-			uid := oldDeployment.UID
-			propagationPolicy := metav1.DeletePropagationForeground
-			preconditions := metav1.Preconditions{UID: &uid}
-			deleteOptions := metav1.DeleteOptions{
-				PropagationPolicy: &propagationPolicy,
-				Preconditions:     &preconditions,
-			}
-
-			if err := c.kubeClient.AppsV1().Deployments(required.Namespace).Delete(c.ctx, oldDeploymentName, deleteOptions); err != nil {
-				if !errors.IsNotFound(err) && !errors.IsConflict(err) {
-					return nil, false, fmt.Errorf("failed to delete old deployment %s: %w", oldDeploymentName, err)
-				}
-			}
-
-			waitErr := wait.PollUntilContextTimeout(c.ctx, 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
-				_, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(ctx, oldDeploymentName, metav1.GetOptions{})
-				return errors.IsNotFound(err), nil
-			})
-			if waitErr != nil && !wait.Interrupted(waitErr) {
-				return nil, false, fmt.Errorf("error waiting for old deployment deletion: %w", waitErr)
-			}
-
-			klog.InfoS("Old deployment deleted, requeuing to create new deployment",
-				"namespace", required.Namespace, "oldName", oldDeploymentName, "newName", required.Name)
-			return nil, false, fmt.Errorf("old deployment name migration completed, requeuing")
+	// Handle legacy deployment NAME migration (softtainer -> softtainter typo fix)
+	// Clean up old deployment regardless of whether softtainter is enabled, so it's removed
+	// when the soft tainter is disabled or the profile is removed.
+	const oldDeploymentName = "softtainer"
+	oldDeployment, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(c.ctx, oldDeploymentName, metav1.GetOptions{})
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, false, fmt.Errorf("failed to get old deployment %s: %w", oldDeploymentName, err)
 		}
-		// Old deployment not found - migration not needed or already completed
+	} else {
+		// Old deployment with typo name exists, delete it
+		klog.InfoS("Found old deployment with typo name, deleting it",
+			"namespace", required.Namespace, "oldName", oldDeploymentName, "newName", required.Name)
 
+		uid := oldDeployment.UID
+		propagationPolicy := metav1.DeletePropagationForeground
+		preconditions := metav1.Preconditions{UID: &uid}
+		deleteOptions := metav1.DeleteOptions{
+			PropagationPolicy: &propagationPolicy,
+			Preconditions:     &preconditions,
+		}
+
+		if err := c.kubeClient.AppsV1().Deployments(required.Namespace).Delete(c.ctx, oldDeploymentName, deleteOptions); err != nil {
+			if !errors.IsNotFound(err) && !errors.IsConflict(err) {
+				return nil, false, fmt.Errorf("failed to delete old deployment %s: %w", oldDeploymentName, err)
+			}
+		}
+
+		waitErr := wait.PollUntilContextTimeout(c.ctx, 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+			_, err := c.kubeClient.AppsV1().Deployments(required.Namespace).Get(ctx, oldDeploymentName, metav1.GetOptions{})
+			if err != nil {
+				if errors.IsNotFound(err) {
+					return true, nil // Successfully deleted
+				}
+				return false, err // Non-NotFound error, stop polling and return error
+			}
+			return false, nil // Still exists, keep polling
+		})
+		if waitErr != nil && !wait.Interrupted(waitErr) {
+			return nil, false, fmt.Errorf("error waiting for old deployment deletion: %w", waitErr)
+		}
+
+		klog.InfoS("Old deployment deleted, requeuing to create new deployment",
+			"namespace", required.Namespace, "oldName", oldDeploymentName, "newName", required.Name)
+		return nil, false, fmt.Errorf("old deployment name migration completed, requeuing")
+	}
+	// Old deployment not found - migration not needed or already completed
+
+	if stEnabled {
 		return c.manageDeployment(required, descheduler, targetImageKey, c.softtainterImagePullSpec, specAnnotations)
 	}
 	return resourceapply.DeleteDeployment(c.ctx, c.kubeClient.AppsV1(), c.eventRecorder, required)

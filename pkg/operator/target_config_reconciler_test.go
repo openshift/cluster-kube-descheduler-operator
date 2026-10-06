@@ -705,42 +705,42 @@ func TestManageSoftTainterDeployment(t *testing.T) {
 			expectEnabled:          true,
 			want:                   expectedSoftTainterDeployment,
 		},
-	{
-		name: "KubeVirtRelieveAndMigrate without PSI",
-		descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-			spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
-			spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-				DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-				DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-			}
-			spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
-		}),
-		objects: []runtime.Object{
-			&corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "node1",
-					Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+		{
+			name: "KubeVirtRelieveAndMigrate without PSI",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
+			objects: []runtime.Object{
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "node1",
+						Labels: map[string]string{"kubevirt.io/schedulable": "true"},
+					},
 				},
 			},
+			psiAvailable:  false,
+			expectEnabled: false,
 		},
-		psiAvailable:  false,
-		expectEnabled: false,
-	},
-	{
-		name: "KubeVirtRelieveAndMigrate without KubeVirt",
-		descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
-			spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
-			spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
-				DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
-				DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
-			}
-			spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
-		}),
-		psiAvailable:  true,
-		expectEnabled: false,
-	},
-	{
-		name: "LifecycleAndUtilization (without the softtainter) and no leftovers on existing nodes",
+		{
+			name: "KubeVirtRelieveAndMigrate without KubeVirt",
+			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.KubeVirtRelieveAndMigrate}
+				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
+					DevDeviationThresholds:      &deschedulerv1.LowDeviationThreshold,
+					DevActualUtilizationProfile: deschedulerv1.PrometheusCPUCombinedProfile,
+				}
+				spec.DeschedulingIntervalSeconds = utilptr.To[int32](10)
+			}),
+			psiAvailable:  true,
+			expectEnabled: false,
+		},
+		{
+			name: "LifecycleAndUtilization (without the softtainter) and no leftovers on existing nodes",
 			descheduler: buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
 				spec.Profiles = []deschedulerv1.DeschedulerProfile{deschedulerv1.LifecycleAndUtilization}
 				spec.ProfileCustomizations = &deschedulerv1.ProfileCustomizations{
