@@ -117,6 +117,28 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		apiExtClient = GetApiExtensionClient()
 		ctx, cancelFnc = context.WithCancel(context.TODO())
 
+		g.By("Reading operator and operand images from SHARED_DIR")
+		sharedDir := os.Getenv("SHARED_DIR")
+		if sharedDir != "" {
+			// Read OPERATOR_IMAGE from file
+			if operatorImageBytes, err := os.ReadFile(sharedDir + "/operator-image"); err == nil {
+				operatorImage := strings.TrimSpace(string(operatorImageBytes))
+				g.By(fmt.Sprintf("OPERATOR_IMAGE from SHARED_DIR: %s", operatorImage))
+			} else {
+				g.By(fmt.Sprintf("Could not read operator-image file: %v", err))
+			}
+
+			// Read OPERAND_IMAGE from file
+			if operandImageBytes, err := os.ReadFile(sharedDir + "/operand-image"); err == nil {
+				operandImage := strings.TrimSpace(string(operandImageBytes))
+				g.By(fmt.Sprintf("OPERAND_IMAGE from SHARED_DIR: %s", operandImage))
+			} else {
+				g.By(fmt.Sprintf("Could not read operand-image file: %v", err))
+			}
+		} else {
+			g.By("SHARED_DIR not set, skipping operator/operand image reading")
+		}
+
 		if !isOperatorOLMInstallationEnabled() {
 			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
 			olmInstalled = false // Operator will be installed non-OLM way
