@@ -297,27 +297,45 @@ func buildKubeDescheduler(modify func(*descv1.KubeDescheduler)) *descv1.KubeDesc
 	return kd
 }
 
-// createAndValidateKubeDeschedulerCR creates a KubeDescheduler CR, validates the generated policy,
-// and waits for operand stability. This helper combines the common pattern used across profile tests.
+// createAndValidateKubeDeschedulerCR applies a KubeDescheduler CR (update in-place if it
+// already exists, otherwise create), validates the generated policy, and waits for operand
+// stability. In-place update preserves UID and avoids owner-ref GC churn.
 func createAndValidateKubeDeschedulerCR(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler, description string) error {
-	g.By(fmt.Sprintf("Creating new KubeDescheduler CR with %s", description))
-	err := createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kubeDescheduler)
-	if err != nil {
+	g.By(fmt.Sprintf("Applying KubeDescheduler CR with %s", description))
+	if err := updateKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kubeDescheduler); err != nil {
 		return err
 	}
 
 	g.By("Validating operator-generated descheduling policy matches expected policy")
-	err = validateDeschedulingPolicy(ctx, kubeClient, kubeDescheduler)
-	if err != nil {
+	if err := validateDeschedulingPolicy(ctx, kubeClient, kubeDescheduler); err != nil {
 		return err
 	}
 
 	g.By("Waiting for descheduler operand to run stably for 30 seconds")
-	err = waitForOperandStability(ctx, kubeClient, 30*time.Second)
+	return waitForOperandStability(ctx, kubeClient, 30*time.Second)
+}
+
+// updateKubeDeschedulerAndWait updates the KubeDescheduler CR spec in-place and waits
+// for the operand deployment to be ready. Creates the CR if it does not exist.
+func updateKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, kubeDescheduler *descv1.KubeDescheduler) error {
+	existing, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, kubeDescheduler)
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get KubeDescheduler CR: %w", err)
 	}
 
+	existing.Spec = kubeDescheduler.Spec
+	klog.Infof("Updating KubeDescheduler CR %s/%s in-place", operatorclient.OperatorNamespace, operatorclient.OperatorConfigName)
+	_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, existing, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update KubeDescheduler CR: %w", err)
+	}
+
+	if err := waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName); err != nil {
+		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
+	}
 	return nil
 }
 

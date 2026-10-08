@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	deschedulerOperatorLabel = "app=descheduler-operator"
+	deschedulerOperatorLabel = "name=descheduler-operator"
 	deschedulerLabel         = "app=descheduler"
 )
 
@@ -46,28 +46,41 @@ func isOperatorOLMInstallationEnabled() bool {
 
 // isOperatorPreInstalled checks if the operator was already installed
 // (e.g., via operator-sdk run bundle in CI) by looking for an existing CSV.
+// Retries briefly for transient API errors (OTE bundle install path).
 func isOperatorPreInstalled(ctx context.Context, dynamicClient dynamic.Interface, namespace string) bool {
-	csvName, err := getCSVName(ctx, dynamicClient, namespace, "")
+	var csvName string
+	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 30*time.Second, true, func(pollCtx context.Context) (bool, error) {
+		var getErr error
+		csvName, getErr = getCSVName(pollCtx, dynamicClient, namespace, "")
+		if getErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
 		return false
 	}
 	return csvName != ""
 }
 
-// Ginkgo test specs for migrated OTP tests
-var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Ordered, g.Serial, func() {
+// Ginkgo test specs for migrated OTP tests.
+// Not Ordered (BeforeAll/AfterAll require Ordered and one failure skips the rest).
+// Use BeforeEach/AfterEach so specs stay independent under OTE serial.
+var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Serial, func() {
 	var (
-		ctx           context.Context
-		cancelFnc     context.CancelFunc
-		kubeClient    *k8sclient.Clientset
-		dynamicClient dynamic.Interface
-		deschClient   *deschclient.Clientset
-		apiExtClient  *apiextclientv1.Clientset
+		ctx                  context.Context
+		cancelFnc            context.CancelFunc
+		operatorPreInstalled bool
+		kubeClient           *k8sclient.Clientset
+		dynamicClient        dynamic.Interface
+		deschClient          *deschclient.Clientset
+		apiExtClient         *apiextclientv1.Clientset
 	)
 
-	g.BeforeAll(func() {
+	g.BeforeEach(func() {
 		g.By("Setting up test environment")
 		var err error
+		operatorPreInstalled = false
 		kubeClient = GetKubeClient()
 		dynamicClient = GetDynamicClient()
 		deschClient = GetDeschedulerClient()
@@ -78,9 +91,10 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			// Bundle-based CI installation (operator-sdk run bundle) pre-installs the operator;
 			// only the KubeDescheduler CR and operand readiness are needed.
 			klog.Infof("Operator already installed, skipping installation")
+			operatorPreInstalled = true
 			kdCR := newDefaultKubeDescheduler()
 			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kdCR, metav1.CreateOptions{})
-			if err != nil && !strings.Contains(err.Error(), "already exists") {
+			if err != nil && !apierrors.IsAlreadyExists(err) {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 			err = waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName)
@@ -94,7 +108,15 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.AfterAll(func() {
+	g.AfterEach(func() {
+		if cancelFnc != nil {
+			cancelFnc()
+		}
+		// OTE installs via operator-sdk run bundle; do not tear down that namespace.
+		if operatorPreInstalled {
+			return
+		}
+
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cleanupCancel()
 
@@ -147,10 +169,6 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		})
 		if err != nil {
 			klog.Warningf("Timeout waiting for namespace deletion: %v", err)
-		}
-
-		if cancelFnc != nil {
-			cancelFnc()
 		}
 	})
 
@@ -213,92 +231,69 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		testMetricsData(g.GinkgoTB(), ctx, kubeClient)
 	})
 
-	// NOTE: This validates that the operator correctly translates the KubeDescheduler CR's
-	// profile configuration into the descheduler's policy ConfigMap.
-	// The actual behavior is tested in the upstream descheduler e2e test suite:
-	// https://github.com/kubernetes-sigs/descheduler/blob/master/test/e2e/e2e_test.go
-	g.Describe("for Profiles", func() {
-		g.BeforeEach(func() {
-			g.By("Deleting existing KubeDescheduler CR and waiting for operand to be gone")
-			err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		})
+	// Profile/strategy tests: update CR in-place (preserve UID) via runProfileTest.
+	// Nested Describe BeforeEach/AfterEach was removed to avoid double hooks under OTE.
+	// OCP-21205, OCP-36584
+	g.It("should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing PDB compliance during pod evictions")
+		runProfileTest(ctx, kubeClient, deschClient, testPDBCompliance)
+	})
 
-		g.AfterEach(func() {
-			g.By("Deleting test KubeDescheduler CR and waiting for operand to be gone")
-			err := deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
-			if err != nil {
-				klog.Errorf("Error deleting the KubeDescheduler CR: %v", err)
-			}
+	// OCP-43277, OCP-50941, OCP-76158
+	g.It("should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing Predictive and Automatic modes with eviction limits")
+		runProfileTest(ctx, kubeClient, deschClient, testDeschedulerModes)
+	})
 
-			g.By("Recreating default KubeDescheduler CR")
-			defaultKD := newDefaultKubeDescheduler()
-			err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, defaultKD)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		})
+	// OCP-37463, OCP-40055
+	g.It("should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
+		runProfileTest(ctx, kubeClient, deschClient, testAffinityAndTopologyProfiles)
+	})
 
-		// OCP-21205, OCP-36584
-		g.It("should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing PDB compliance during pod evictions")
-			testPDBCompliance(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	// OCP-52303
+	g.It("should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing namespace include filtering")
+		runProfileTest(ctx, kubeClient, deschClient, testNamespaceIncludeFiltering)
+	})
 
-		// OCP-43277, OCP-50941, OCP-76158
-		g.It("should validate descheduler modes and eviction limits [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing Predictive and Automatic modes with eviction limits")
-			testDeschedulerModes(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	// OCP-53058
+	g.It("should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing namespace exclude filtering")
+		runProfileTest(ctx, kubeClient, deschClient, testNamespaceExcludeFiltering)
+	})
 
-		// OCP-37463, OCP-40055
-		g.It("should validate AffinityAndTaints and TopologyAndDuplicates profiles [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing AffinityAndTaints and TopologyAndDuplicates profiles")
-			testAffinityAndTopologyProfiles(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	// OCP-76422
+	g.It("should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing LongLifecycle profile behavior")
+		runProfileTest(ctx, kubeClient, deschClient, testLongLifecycleProfile)
+	})
 
-		// OCP-52303
-		g.It("should validate namespace include filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace include filtering")
-			testNamespaceIncludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	g.It("should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing NodeAffinity strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testNodeAffinityStrategy)
+	})
 
-		// OCP-53058
-		g.It("should validate namespace exclude filtering [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing namespace exclude filtering")
-			testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	g.It("should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing NodeTaint strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
+	})
 
-		// OCP-76422
-		g.It("should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing LongLifecycle profile behavior")
-			testLongLifecycleProfile(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	g.It("should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing InterPodAntiAffinity strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
+	})
 
-		g.It("should validate NodeAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeAffinity strategy")
-			testNodeAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate NodeTaint strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing NodeTaint strategy")
-			testNodeTaintStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing InterPodAntiAffinity strategy")
-			testInterPodAntiAffinityStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
-
-		g.It("should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
-			g.By("Testing RemoveDuplicates strategy")
-			testRemoveDuplicatesStrategy(g.GinkgoTB(), ctx, kubeClient, deschClient)
-		})
+	g.It("should validate RemoveDuplicates strategy [Disruptive][Slow][Timeout:5m]", func() {
+		g.By("Testing RemoveDuplicates strategy")
+		runProfileTest(ctx, kubeClient, deschClient, testRemoveDuplicatesStrategy)
 	})
 })
 
 // Test implementations
 
 // testPDBCompliance verifies that descheduler respects Pod Disruption Budgets
-func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testPDBCompliance(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	g.Skip("The validation needs to abstract from the descheduler logs first")
 
 	g.By("Checking for SNO cluster")
@@ -388,8 +383,8 @@ func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer kubeClient.PolicyV1().PodDisruptionBudgets(testNS.Name).Delete(ctx, pdb.Name, metav1.DeleteOptions{})
 
-	g.By("Creating KubeDescheduler CR with Automatic mode")
-	err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
+	g.By("Updating KubeDescheduler CR with Automatic mode")
+	err = updateKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Mode = descv1.Automatic
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LifecycleAndUtilization}
 	}))
@@ -410,7 +405,7 @@ func testPDBCompliance(t testing.TB, ctx context.Context, kubeClient *k8sclient.
 	klog.Infof("Descheduler correctly respects PDB")
 }
 
-func testAffinityAndTopologyProfiles(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testAffinityAndTopologyProfiles(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Mode = descv1.Automatic
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.AffinityAndTaints, descv1.TopologyAndDuplicates}
@@ -418,7 +413,7 @@ func testAffinityAndTopologyProfiles(t testing.TB, ctx context.Context, kubeClie
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testDeschedulerModes(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	checkDryRunFlag := func(ctx context.Context, kubeClient *k8sclient.Clientset, expectDryRun bool) (bool, error) {
 		deployment, err := kubeClient.AppsV1().Deployments(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperandName, metav1.GetOptions{})
 		if err != nil {
@@ -443,8 +438,8 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 		return true, nil
 	}
 
-	g.By("Creating new KubeDescheduler CR with Predictive mode")
-	err := createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
+	g.By("Updating KubeDescheduler CR with Predictive mode")
+	err := updateKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Mode = descv1.Predictive
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LifecycleAndUtilization}
 		kd.Spec.ProfileCustomizations = &descv1.ProfileCustomizations{
@@ -463,18 +458,8 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	err = waitForOperandStability(ctx, kubeClient, 30*time.Second)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	g.By("Deleting Predictive KubeDescheduler CR and waiting for operand to be gone")
-	err = deleteKubeDeschedulerAndWait(ctx, kubeClient, deschClient)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	g.By("Creating new KubeDescheduler CR with Automatic mode")
-	err = createKubeDeschedulerAndWait(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
-		kd.Spec.Mode = descv1.Automatic
-		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LifecycleAndUtilization}
-		kd.Spec.ProfileCustomizations = &descv1.ProfileCustomizations{
-			PodLifetime: &metav1.Duration{Duration: 10 * time.Second},
-		}
-	}))
+	g.By("Updating KubeDescheduler mode from Predictive to Automatic")
+	err = patchKubeDeschedulerMode(ctx, deschClient, operatorclient.OperatorNamespace, operatorclient.OperatorConfigName, string(descv1.Automatic))
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Validating Automatic mode configuration (no --dry-run)")
@@ -490,7 +475,7 @@ func testDeschedulerModes(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	klog.Infof("Descheduler modes validated successfully")
 }
 
-func testNamespaceIncludeFiltering(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testNamespaceIncludeFiltering(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LifecycleAndUtilization}
 		kd.Spec.ProfileCustomizations = &descv1.ProfileCustomizations{
@@ -505,7 +490,7 @@ func testNamespaceIncludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	klog.Infof("Namespace include filtering validated successfully")
 }
 
-func testNamespaceExcludeFiltering(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testNamespaceExcludeFiltering(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LifecycleAndUtilization}
 		kd.Spec.ProfileCustomizations = &descv1.ProfileCustomizations{
@@ -520,7 +505,7 @@ func testNamespaceExcludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	klog.Infof("Namespace exclude filtering validated successfully")
 }
 
-func testProfileConflicts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testProfileConflicts(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 
 	// Test 1: LongLifecycle + LifecycleAndUtilization should be rejected
 	g.By("Testing LongLifecycle + LifecycleAndUtilization conflict")
@@ -557,7 +542,7 @@ func testProfileConflicts(t testing.TB, ctx context.Context, kubeClient *k8sclie
 	klog.Infof("Profile conflict validation completed successfully")
 }
 
-func testLongLifecycleProfile(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testLongLifecycleProfile(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.LongLifecycle}
 	}), "LongLifecycle profile")
@@ -567,7 +552,7 @@ func testLongLifecycleProfile(t testing.TB, ctx context.Context, kubeClient *k8s
 }
 
 // testRelatedImages tests that CSV has relatedImages defined correctly
-func testRelatedImages(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+func testRelatedImages(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
 	dynamicClient := GetDynamicClient()
 
 	g.By("Getting CSV name for descheduler operator")
@@ -600,7 +585,7 @@ func testRelatedImages(t testing.TB, ctx context.Context, kubeClient *k8sclient.
 	klog.Infof("RelatedImages validation completed successfully - found %d images", len(relatedImages))
 }
 
-func testNodeAffinityStrategy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testNodeAffinityStrategy(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.AffinityAndTaints}
 	}), "AffinityAndTaints profile")
@@ -609,7 +594,7 @@ func testNodeAffinityStrategy(t testing.TB, ctx context.Context, kubeClient *k8s
 	klog.Infof("NodeAffinity strategy validated successfully")
 }
 
-func testNodeTaintStrategy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testNodeTaintStrategy(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.AffinityAndTaints}
 	}), "AffinityAndTaints profile")
@@ -618,7 +603,7 @@ func testNodeTaintStrategy(t testing.TB, ctx context.Context, kubeClient *k8scli
 	klog.Infof("NodeTaint strategy validated successfully")
 }
 
-func testInterPodAntiAffinityStrategy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testInterPodAntiAffinityStrategy(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.TopologyAndDuplicates}
 	}), "TopologyAndDuplicates profile")
@@ -627,7 +612,7 @@ func testInterPodAntiAffinityStrategy(t testing.TB, ctx context.Context, kubeCli
 	klog.Infof("InterPodAntiAffinity strategy validated successfully")
 }
 
-func testRemoveDuplicatesStrategy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+func testRemoveDuplicatesStrategy(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, buildKubeDescheduler(func(kd *descv1.KubeDescheduler) {
 		kd.Spec.Profiles = []descv1.DeschedulerProfile{descv1.TopologyAndDuplicates}
 	}), "TopologyAndDuplicates profile")
@@ -637,7 +622,7 @@ func testRemoveDuplicatesStrategy(t testing.TB, ctx context.Context, kubeClient 
 }
 
 // testOLMMustGatherData verifies that must-gather collects OLM data
-func testOLMMustGatherData(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+func testOLMMustGatherData(_ testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
 	dynamicClient := GetDynamicClient()
 
 	// Since BeforeAll already installed the operator, we just need to verify OLM resources exist
@@ -705,4 +690,21 @@ func testOLMMustGatherData(t testing.TB, ctx context.Context, kubeClient *k8scli
 	}
 
 	klog.Infof("OLM must-gather data validation completed successfully")
+}
+
+// runProfileTest runs a profile/strategy test and restores the default CR spec afterward.
+// Spec is updated in-place so the CR UID is preserved across OTE per-test processes.
+func runProfileTest(ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset, testFn func(testing.TB, context.Context, *k8sclient.Clientset, *deschclient.Clientset)) {
+	g.DeferCleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cleanupCancel()
+		if _, err := kubeClient.CoreV1().Namespaces().Get(cleanupCtx, operatorclient.OperatorNamespace, metav1.GetOptions{}); apierrors.IsNotFound(err) {
+			return
+		}
+		g.By("Cleanup: restoring default KubeDescheduler CR")
+		if err := updateKubeDeschedulerAndWait(cleanupCtx, kubeClient, deschClient, newDefaultKubeDescheduler()); err != nil {
+			klog.Warningf("Cleanup: failed to restore default KubeDescheduler: %v", err)
+		}
+	})
+	testFn(g.GinkgoTB(), ctx, kubeClient, deschClient)
 }
