@@ -39,26 +39,32 @@ import (
 // TEST SUITE DESIGN AND STRUCTURE
 // ============================================================================
 //
-// DESIGN: Single g.Describe block with clear CR lifecycle management
+// DESIGN: Single g.Describe with all tests organized by concern
+//
+// This architecture contains all operator tests in one Describe block:
+// - Metrics and Service Tests: 10 tests using default CR (no CR modification)
+// - Profile and Strategy Tests: 10 tests using runProfileTest() for CR lifecycle management
 //
 // EXECUTION FLOW:
 // 1. BeforeEach: Install operator + create default CR (LifecycleAndUtilization)
-// 2. METRICS/SERVICE TESTS: Use pre-created default CR (no hooks)
+// 2. METRICS/SERVICE TESTS: Use pre-created default CR directly
 //    - Metrics service available
 //    - Prometheus target up
 //    - Metrics data available
-//    - Plus other basic tests
-// 3. PROFILE/STRATEGY TESTS: Each test manages its own CR
-//    - Each test creates custom CR with its profile
-//    - Test validates the profile
-//    - AfterEach cleanup deletes CR and restores default
-// 4. AfterEach: Cancel context (cleanup skipped for debugging)
+//    - Plus other basic operator validation tests
+// 3. PROFILE/STRATEGY TESTS: Use runProfileTest() wrapper
+//    - Each test gets its own CR via runProfileTest()
+//    - Test creates custom CR with its specific profile
+//    - runProfileTest() uses g.DeferCleanup() to delete test CR after each test
+//    - No need to restore default CR between tests (handled via BeforeEach)
+// 4. AfterEach: Final cleanup (cancel context, delete namespace if non-OLM)
 //
 // WHY THIS WORKS:
-// ✅ No shared hooks = no CR lifecycle conflicts
-// ✅ Metrics tests use default CR = simple and predictable
-// ✅ Profile tests explicitly manage CRs = each test owns its state
-// ✅ Clear separation = easy to understand and maintain
+// ✅ All tests in single Describe = unified setup/teardown
+// ✅ Metrics tests use default CR directly = simple and predictable
+// ✅ Profile tests use runProfileTest() = handles CR lifecycle internally
+// ✅ No duplicate setup code = single BeforeEach/AfterEach
+// ✅ Clear organization = metrics tests first, then profile tests
 //
 
 const (
@@ -97,11 +103,18 @@ func isOperatorPreInstalled(ctx context.Context, dynamicClient dynamic.Interface
 }
 
 // Ginkgo test specs for migrated OTP tests
-var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality", g.Serial, func() {
+// Design: Two independent Describe blocks matching the component_proxy pattern
+// 1. Metrics and Service Tests - Full setup with default CR
+// 2. Profile and Strategy Tests - Full setup with CR lifecycle management
+
+// ============================================================================
+// DESCRIBE 1: Metrics and Service Tests - Full setup with default CR
+// ============================================================================
+var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator - Metrics and Service Tests", g.Serial, func() {
 	var (
 		ctx           context.Context
 		cancelFnc     context.CancelFunc
-		olmInstalled  bool // Flag: true if operator installed via OLM (bundle or CatalogSource), false if non-OLM
+		olmInstalled  bool // Flag: true if operator installed via OLM, false if non-OLM
 		kubeClient    *k8sclient.Clientset
 		dynamicClient dynamic.Interface
 		deschClient   *deschclient.Clientset
@@ -109,35 +122,14 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	)
 
 	g.BeforeEach(func() {
-		g.By("Setting up test environment")
+		g.By("Setting up test environment for metrics tests")
 		var err error
+		var operandImage string // Store operand image for later verification
 		kubeClient = GetKubeClient()
 		dynamicClient = GetDynamicClient()
 		deschClient = GetDeschedulerClient()
 		apiExtClient = GetApiExtensionClient()
 		ctx, cancelFnc = context.WithCancel(context.TODO())
-
-		g.By("Reading operator and operand images from SHARED_DIR")
-		sharedDir := os.Getenv("SHARED_DIR")
-		if sharedDir != "" {
-			// Read OPERATOR_IMAGE from file
-			if operatorImageBytes, err := os.ReadFile(sharedDir + "/operator-image"); err == nil {
-				operatorImage := strings.TrimSpace(string(operatorImageBytes))
-				g.By(fmt.Sprintf("OPERATOR_IMAGE from SHARED_DIR: %s", operatorImage))
-			} else {
-				g.By(fmt.Sprintf("Could not read operator-image file: %v", err))
-			}
-
-			// Read OPERAND_IMAGE from file
-			if operandImageBytes, err := os.ReadFile(sharedDir + "/operand-image"); err == nil {
-				operandImage := strings.TrimSpace(string(operandImageBytes))
-				g.By(fmt.Sprintf("OPERAND_IMAGE from SHARED_DIR: %s", operandImage))
-			} else {
-				g.By(fmt.Sprintf("Could not read operand-image file: %v", err))
-			}
-		} else {
-			g.By("SHARED_DIR not set, skipping operator/operand image reading")
-		}
 
 		if !isOperatorOLMInstallationEnabled() {
 			// Non-OLM path: install operator from deploy/ folder using OPERATOR_IMAGE/OPERAND_IMAGE
@@ -149,14 +141,55 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			klog.Infof("Operator already installed, skipping installation")
 			olmInstalled = true // Operator was installed via OLM (bundle)
 
-			// Ensure namespace has cluster-monitoring label for Prometheus scraping (required for metrics tests and policy generation)
-			labelErr := ensureNamespaceMonitoringLabel(ctx, kubeClient, operatorclient.OperatorNamespace)
-			if labelErr != nil {
-				klog.Warningf("Warning: Failed to ensure monitoring label on namespace: %v", labelErr)
+			// Read operator and operand images from SHARED_DIR (once, for reuse in patching and verification)
+			klog.Infof("Reading operand image from SHARED_DIR")
+			sharedDir := os.Getenv("SHARED_DIR")
+			if sharedDir != "" {
+				// Read OPERAND_IMAGE from file (store for later verification)
+				if operandImageBytes, err := os.ReadFile(sharedDir + "/operand-image"); err == nil {
+					operandImage = strings.TrimSpace(string(operandImageBytes))
+					klog.Infof("OPERAND_IMAGE from SHARED_DIR: %s", operandImage)
+				} else {
+					klog.Warningf("Could not read operand-image file: %v", err)
+				}
+			} else {
+				klog.V(2).Infof("SHARED_DIR not set, skipping operand image reading")
 			}
 
-			// Keep a default CR. Delete and recreate only when the spec is not the default.
-			// Create the default when the CR is missing.
+			// Check if CSV already has the operand image, only patch if needed
+			if operandImage != "" {
+				g.By("Checking if CSV already has the operand image")
+				verifyErr := verifyCSVHasImage(ctx, dynamicClient, operatorclient.OperatorNamespace, operandImage)
+				if verifyErr != nil {
+					// CSV doesn't have the operand image, apply the patch
+					g.By("Patching CSV with operand image from SHARED_DIR")
+					patchErr := patchCSVWithImages(ctx, dynamicClient, kubeClient, operatorclient.OperatorNamespace, operandImage)
+					if patchErr != nil {
+						klog.Warningf("Warning: Failed to patch CSV with images: %v (this is OK if not running in CI)", patchErr)
+					} else {
+						klog.Infof("✅ CSV patched successfully")
+
+						// Only after applying patch, verify operator deployment is ready with new images
+						g.By("Verifying operator deployment is ready with new images")
+						deployErr := waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, "descheduler-operator")
+						if deployErr != nil {
+							klog.Warningf("Warning: Failed to verify operator deployment: %v", deployErr)
+						}
+
+						// Ensure namespace has cluster-monitoring label for Prometheus scraping
+						g.By("Ensuring namespace has cluster-monitoring label")
+						labelErr := ensureNamespaceMonitoringLabel(ctx, kubeClient, operatorclient.OperatorNamespace)
+						if labelErr != nil {
+							klog.Warningf("Warning: Failed to ensure monitoring label on namespace: %v", labelErr)
+						}
+					}
+				} else {
+					klog.Infof("✅ CSV already has the operand image: %s (skipping patch and deployment checks)", operandImage)
+				}
+			}
+
+			// Ensure default KubeDescheduler CR exists
+			g.By("Ensuring default KubeDescheduler CR exists")
 			err = ensureDefaultKubeDescheduler(ctx, kubeClient, deschClient)
 		} else {
 			// OLM path: install via PackageManifest/Subscription (requires CatalogSource with KDO package)
@@ -205,13 +238,21 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	g.It("[OTP][Operator][Serial] should create and remove soft tainter objects [Slow][Timeout:15m]", func() {
+		// Skip this test if operator is pre-installed via bundle (to avoid recreating operator)
+		if olmInstalled {
+			g.Skip("Skipping test - operator is pre-installed via bundle")
+		}
 		g.By("Testing soft tainter controller lifecycle")
-		//testSoftTainterController(g.GinkgoTB(), ctx, kubeClient)
+		testSoftTainterController(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should validate soft tainter controller with VAP [Slow][Timeout:15m]", func() {
+		// Skip this test if operator is pre-installed via bundle (to avoid recreating operator)
+		if olmInstalled {
+			g.Skip("Skipping test - operator is pre-installed via bundle")
+		}
 		g.By("Testing soft tainter controller with VAP")
-		//testSoftTainterControllerWithVAP(g.GinkgoTB(), ctx, kubeClient)
+		testSoftTainterControllerWithVAP(g.GinkgoTB(), ctx, kubeClient)
 	})
 
 	g.It("[OTP][Operator][Serial] should deschedule pods correctly [Disruptive][Slow][Timeout:15m]", func() {
@@ -240,10 +281,10 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 	})
 
 	// ============================================================================
-	// PROFILE/STRATEGY TESTS - Each test manages its own CR
+	// PROFILE/STRATEGY TESTS - Each test manages its own CR lifecycle
 	// ============================================================================
-	// Each test creates custom CR with its specific profile and validates behavior.
-	// AfterEach handles CR restoration and cleanup automatically.
+	// Tests that modify the KubeDescheduler CR are managed by runProfileTest()
+	// which handles CR deletion/creation within g.DeferCleanup()
 
 	// OCP-21205, OCP-36584
 	g.It("[OTP][Operator][Serial] should validate PDB compliance during pod evictions [Disruptive][Slow][Timeout:15m]", func() {
@@ -290,6 +331,7 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		g.By("Testing NodeTaint strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testNodeTaintStrategy)
 	})
+
 	g.It("[OTP][Operator][Serial] should validate InterPodAntiAffinity strategy [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing InterPodAntiAffinity strategy")
 		runProfileTest(ctx, kubeClient, deschClient, testInterPodAntiAffinityStrategy)
@@ -335,13 +377,11 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 				return false, nil
 			})
 		}
-
 		klog.Infof("AfterEach: Cleanup completed")
 	})
 })
 
 // Test implementations
-
 // testProfileConflicts validates profile conflict validation
 func testProfileConflicts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
 

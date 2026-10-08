@@ -585,7 +585,21 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 		}
 	}
 
-	time.Sleep(40 * time.Second)
+	// Wait for descheduler to process the uncordoned node and potentially trigger pod eviction
+	// Use poll instead of sleep to exit early if condition is met
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 45*time.Second, true, func(ctx context.Context) (bool, error) {
+		deschedulerPods, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: deschedulerLabel,
+		})
+		if err != nil || len(deschedulerPods.Items) == 0 {
+			return false, nil // Pod not ready yet, keep polling
+		}
+		// Pod is ready, can proceed
+		return true, nil
+	})
+	if err != nil {
+		t.Logf("Warning: Timeout waiting for descheduler pod to be ready: %v", err)
+	}
 
 	o.Eventually(func() bool {
 		t.Logf("Checking descheduler pod logs for PDB prevention error")

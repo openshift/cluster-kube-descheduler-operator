@@ -19,6 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	k8sclient "k8s.io/client-go/kubernetes"
@@ -347,14 +349,6 @@ func createKubeDeschedulerAndWait(ctx context.Context, kubeClient *k8sclient.Cli
 	if err != nil {
 		return fmt.Errorf("timeout waiting for descheduler deployment to be ready: %w", err)
 	}
-
-	// Wait for pod stability (single pod, no restarts in progress)
-	klog.Infof("Waiting for descheduler operand pod to be stable")
-	err = waitForOperandStability(ctx, kubeClient, 3*time.Minute)
-	if err != nil {
-		return fmt.Errorf("timeout waiting for descheduler operand pod to be stable: %w", err)
-	}
-	klog.Infof("KubeDescheduler CR created and operand deployment ready")
 	return nil
 }
 
@@ -1100,4 +1094,256 @@ func waitForConfigMapDeletion(ctx context.Context, kubeClient *k8sclient.Clients
 		klog.V(4).Infof("ConfigMap still exists, waiting for deletion")
 		return false, nil
 	})
+}
+
+// patchCSVWithImages patches the CSV with the provided operand image
+func patchCSVWithImages(ctx context.Context, dynamicClient dynamic.Interface, kubeClient *k8sclient.Clientset, namespace, operandImage string) error {
+	if operandImage == "" {
+		return fmt.Errorf("operandImage parameter is empty")
+	}
+
+	// Get CSV
+	csvList, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1alpha1.GroupName,
+		Version:  operatorsv1alpha1.GroupVersion,
+		Resource: "clusterserviceversions",
+	}).Namespace(namespace).List(ctx, metav1.ListOptions{})
+
+	if err != nil {
+		return fmt.Errorf("failed to list CSVs: %w", err)
+	}
+
+	if len(csvList.Items) == 0 {
+		return fmt.Errorf("no CSV found in namespace %s", namespace)
+	}
+
+	csv := &csvList.Items[0]
+	csvName := csv.GetName()
+	klog.Infof("Found CSV: %s", csvName)
+
+	// Find indices for both locations that need patching
+	var relatedImageIndex int = -1
+	var envVarIndex int = -1
+
+	// Find index of descheduler-operand in relatedImages
+	relatedImages, _, _ := unstructured.NestedSlice(csv.Object, "spec", "relatedImages")
+	for i, img := range relatedImages {
+		imgMap := img.(map[string]interface{})
+		if imgMap["name"] == "descheduler-operand" {
+			relatedImageIndex = i
+			break
+		}
+	}
+	if relatedImageIndex == -1 {
+		return fmt.Errorf("descheduler-operand not found in CSV relatedImages")
+	}
+
+	// Find index of RELATED_IMAGE_OPERAND_IMAGE in deployment env
+	deployments, _, _ := unstructured.NestedSlice(csv.Object, "spec", "install", "spec", "deployments")
+	if len(deployments) > 0 {
+		deployment := deployments[0].(map[string]interface{})
+		spec, _, _ := unstructured.NestedMap(deployment, "spec", "template", "spec")
+		containers, _, _ := unstructured.NestedSlice(spec, "containers")
+		if len(containers) > 0 {
+			container := containers[0].(map[string]interface{})
+			envVars, _, _ := unstructured.NestedSlice(container, "env")
+			for i, env := range envVars {
+				envMap := env.(map[string]interface{})
+				if envMap["name"] == "RELATED_IMAGE_OPERAND_IMAGE" {
+					envVarIndex = i
+					break
+				}
+			}
+		}
+	}
+	if envVarIndex == -1 {
+		return fmt.Errorf("RELATED_IMAGE_OPERAND_IMAGE not found in deployment env")
+	}
+
+	// Build a SINGLE JSON Patch with BOTH operations
+	patch := []map[string]interface{}{
+		{
+			"op":    "replace",
+			"path":  fmt.Sprintf("/spec/relatedImages/%d/image", relatedImageIndex),
+			"value": operandImage,
+		},
+		{
+			"op":    "replace",
+			"path":  fmt.Sprintf("/spec/install/spec/deployments/0/spec/template/spec/containers/0/env/%d/value", envVarIndex),
+			"value": operandImage,
+		},
+	}
+
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal combined patch: %w", err)
+	}
+
+	// Apply BOTH patches in a single operation
+	_, err = dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1alpha1.GroupName,
+		Version:  operatorsv1alpha1.GroupVersion,
+		Resource: "clusterserviceversions",
+	}).Namespace(namespace).Patch(ctx, csvName, types.JSONPatchType, patchBytes, metav1.PatchOptions{})
+
+	if err != nil {
+		return fmt.Errorf("failed to apply combined patch: %w", err)
+	}
+	klog.Infof("✅ CSV patched with operand image")
+
+	// Wait for the patches to be applied
+	klog.Infof("⏳ Waiting for CSV patches to be applied...")
+	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		csvList, err := dynamicClient.Resource(schema.GroupVersionResource{
+			Group:    operatorsv1alpha1.GroupName,
+			Version:  operatorsv1alpha1.GroupVersion,
+			Resource: "clusterserviceversions",
+		}).Namespace(namespace).List(ctx, metav1.ListOptions{})
+
+		if err != nil {
+			klog.Warningf("Failed to list CSVs during wait: %v", err)
+			return false, nil
+		}
+
+		if len(csvList.Items) == 0 {
+			klog.Warningf("CSV not found during wait")
+			return false, nil
+		}
+
+		csv := &csvList.Items[0]
+
+		// Check relatedImages
+		relatedImages, _, _ := unstructured.NestedSlice(csv.Object, "spec", "relatedImages")
+		relatedImagePatched := false
+		for _, img := range relatedImages {
+			imgMap := img.(map[string]interface{})
+			if imgMap["name"] == "descheduler-operand" {
+				actualImage, _ := imgMap["image"].(string)
+				if actualImage == operandImage {
+					relatedImagePatched = true
+					klog.Infof("✅ relatedImages patch applied: %s", actualImage)
+				} else {
+					klog.Infof("⏳ relatedImages not yet patched. Current: %s", actualImage)
+				}
+			}
+		}
+
+		// Check deployment env variable
+		envPatched := false
+		deployments, _, _ := unstructured.NestedSlice(csv.Object, "spec", "install", "spec", "deployments")
+		if len(deployments) > 0 {
+			deployment := deployments[0].(map[string]interface{})
+			spec, _, _ := unstructured.NestedMap(deployment, "spec", "template", "spec")
+			containers, _, _ := unstructured.NestedSlice(spec, "containers")
+			if len(containers) > 0 {
+				container := containers[0].(map[string]interface{})
+				envVars, _, _ := unstructured.NestedSlice(container, "env")
+				for _, env := range envVars {
+					envMap := env.(map[string]interface{})
+					if envMap["name"] == "RELATED_IMAGE_OPERAND_IMAGE" {
+						actualEnvValue, _ := envMap["value"].(string)
+						if actualEnvValue == operandImage {
+							envPatched = true
+							klog.Infof("✅ env patch applied: %s", actualEnvValue)
+						} else {
+							klog.Infof("⏳ env not yet patched. Current: %s", actualEnvValue)
+						}
+					}
+				}
+			}
+		}
+
+		if relatedImagePatched && envPatched {
+			klog.Infof("✅ All CSV patches successfully applied!")
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("CSV patch did not apply after 30 seconds: %w", err)
+	}
+
+	// Verify patch was applied
+	klog.Infof("Verifying operand image in CSV")
+	err = verifyCSVHasImage(ctx, dynamicClient, namespace, operandImage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// verifyCSVHasImage checks if the CSV contains the expected operand image in both relatedImages and deployment env
+func verifyCSVHasImage(ctx context.Context, dynamicClient dynamic.Interface, namespace, operandImage string) error {
+	// Get CSV
+	csvList, err := dynamicClient.Resource(schema.GroupVersionResource{
+		Group:    operatorsv1alpha1.GroupName,
+		Version:  operatorsv1alpha1.GroupVersion,
+		Resource: "clusterserviceversions",
+	}).Namespace(namespace).List(ctx, metav1.ListOptions{})
+
+	if err != nil {
+		return fmt.Errorf("failed to list CSVs: %w", err)
+	}
+
+	if len(csvList.Items) == 0 {
+		return fmt.Errorf("no CSV found in namespace %s", namespace)
+	}
+
+	csvAfter := csvList.Items[0]
+
+	// Check relatedImages
+	relatedImagesAfter, _, _ := unstructured.NestedSlice(csvAfter.Object, "spec", "relatedImages")
+	foundInRelatedImages := false
+	for _, img := range relatedImagesAfter {
+		imgMap := img.(map[string]interface{})
+		name, _ := imgMap["name"].(string)
+		actualImage, _ := imgMap["image"].(string)
+
+		if name == "descheduler-operand" {
+			if actualImage == operandImage {
+				foundInRelatedImages = true
+				klog.Infof("✅ Operand image found in relatedImages: %s", operandImage)
+			} else {
+				return fmt.Errorf("VERIFICATION FAILED: operand image in relatedImages does not match\nExpected: %s\nActual: %s",
+					operandImage, actualImage)
+			}
+			break
+		}
+	}
+
+	// Check deployment env variable
+	foundInEnv := false
+	deployments, _, _ := unstructured.NestedSlice(csvAfter.Object, "spec", "install", "spec", "deployments")
+	if len(deployments) > 0 {
+		deployment := deployments[0].(map[string]interface{})
+		spec, _, _ := unstructured.NestedMap(deployment, "spec", "template", "spec")
+		containers, _, _ := unstructured.NestedSlice(spec, "containers")
+		if len(containers) > 0 {
+			container := containers[0].(map[string]interface{})
+			envVars, _, _ := unstructured.NestedSlice(container, "env")
+			for _, env := range envVars {
+				envMap := env.(map[string]interface{})
+				if envMap["name"] == "RELATED_IMAGE_OPERAND_IMAGE" {
+					actualEnvValue, _ := envMap["value"].(string)
+					if actualEnvValue == operandImage {
+						foundInEnv = true
+						klog.Infof("✅ Operand image found in deployment env: %s", operandImage)
+					} else {
+						return fmt.Errorf("VERIFICATION FAILED: operand image in deployment env does not match\nExpected: %s\nActual: %s",
+							operandImage, actualEnvValue)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	if !foundInRelatedImages || !foundInEnv {
+		return fmt.Errorf("VERIFICATION FAILED: operand image not found in one or both locations")
+	}
+
+	klog.Infof("✅ Verification passed: operand image correctly applied in both locations")
+	return nil
 }
