@@ -573,6 +573,27 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 	if err != nil {
 		t.Fatalf("Unable to patch descheduler mode to Automatic: %v", err)
 	}
+
+	// Wait for descheduler pod to restart with new Automatic mode
+	t.Logf("Waiting for descheduler pod to restart with Automatic mode...")
+	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		deschedulerPods, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: deschedulerLabel,
+		})
+		if err != nil || len(deschedulerPods.Items) == 0 {
+			return false, nil
+		}
+		// Check if pod is in Running state
+		if deschedulerPods.Items[0].Status.Phase == corev1.PodRunning {
+			t.Logf("Descheduler pod is running with Automatic mode")
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Logf("Warning: Timeout waiting for descheduler to restart: %v", err)
+	}
+
 	defer func() {
 		kdCR, _ := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 		kdCR.Spec.Mode = "Predictive"

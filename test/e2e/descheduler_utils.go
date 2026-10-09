@@ -984,6 +984,18 @@ func normalizeDeschedulerPolicy(policy *v1alpha2.DeschedulerPolicy) (*v1alpha2.D
 		return nil, fmt.Errorf("failed to unmarshal normalized policy: %w", err)
 	}
 
+	// System-protected namespaces that are created/deleted during test execution
+	// These should be stripped from comparison as they may differ between test runs
+	systemProtectedNamespaces := map[string]bool{
+		"openshift-kube-descheduler-operator": true,
+		"openshift-kube-apiserver":            true,
+		"openshift-kube-controller-manager":   true,
+		"openshift-kube-scheduler":            true,
+		"openshift-etcd":                      true,
+		"openshift-monitoring":                true,
+		"openshift":                           true,
+	}
+
 	// Normalize RawExtension fields to ensure consistent JSON encoding
 	// RawExtension bytes might have different formatting (whitespace, ordering) even if semantically identical
 	for profileIdx := range normalized.Profiles {
@@ -994,12 +1006,26 @@ func normalizeDeschedulerPolicy(policy *v1alpha2.DeschedulerPolicy) (*v1alpha2.D
 			if len(pluginConfig.Args.Raw) > 0 {
 				var args map[string]interface{}
 				if err := json.Unmarshal(pluginConfig.Args.Raw, &args); err == nil {
-					// Strip "namespaces" from comparison: the operator caches its
-					// protectedNamespaces list at startup, so the excluded namespace
-					// set in its policy may differ from what the test observes at
-					// validation time (openshift-* namespaces are created/deleted
-					// during test execution). Everything else is deterministic.
-					delete(args, "namespaces")
+					// Strip only system-protected namespaces from comparison:
+					// The operator caches its protectedNamespaces list at startup,
+					// so the excluded namespace set in its policy may differ from
+					// what the test observes at validation time. User-defined
+					// namespaces should still be compared.
+					if namespacesRaw, ok := args["namespaces"]; ok {
+						if namespacesList, ok := namespacesRaw.([]interface{}); ok {
+							var filteredNamespaces []string
+							for _, ns := range namespacesList {
+								if nsStr, ok := ns.(string); ok && !systemProtectedNamespaces[nsStr] {
+									filteredNamespaces = append(filteredNamespaces, nsStr)
+								}
+							}
+							if len(filteredNamespaces) == 0 {
+								delete(args, "namespaces")
+							} else {
+								args["namespaces"] = filteredNamespaces
+							}
+						}
+					}
 					normalizedBytes, err := json.Marshal(args)
 					if err == nil {
 						pluginConfig.Args.Raw = normalizedBytes
