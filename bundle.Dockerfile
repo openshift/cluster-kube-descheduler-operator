@@ -25,7 +25,7 @@ RUN hack/replace-image.sh manifests ${REPLACED_OPERAND_IMG} ${OPERAND_IMAGE}
 RUN hack/replace-image.sh manifests ${REPLACED_SOFTTAINER_IMG} ${SOFTTAINER_IMAGE}
 RUN sed -i "s/createdAt: \".*\"/createdAt: \"$(date -I)\"/" manifests/cluster-kube-descheduler-operator.clusterserviceversion.yaml
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:8fbe5ca09afa1990e9ff55fd8ee7cb073b823a7640c3c8381ece64f22401d2a2
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:c4c285d42941ebb2bd4da878479008e1e4536bb599aad1dbe568f89de9053661
 
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/manifests /manifests
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-descheduler-operator/metadata /metadata
