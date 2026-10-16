@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"testing"
@@ -15,6 +17,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -60,6 +63,14 @@ const (
 	softTainterClusterMonitoringViewClusterRoleBinding = "openshift-descheduler-softtainter-monitoring"
 	softTainterValidatingAdmissionPolicyName           = "openshift-descheduler-softtainter-vap"
 	softTainterValidatingAdmissionPolicyBindingName    = "openshift-descheduler-softtainter-vap-binding"
+	allowNetworkPolicyOperandName                      = "allow-all-egress-and-metrics-ingress-operand"
+	allowNetworkPolicySoftTainterName                  = "allow-all-egress-and-health-ingress-operand-softtainter"
+	softTainterAppLabel                                = "softtainer"
+	deschedulerMetricsPort                             = int32(10258)
+	softTainterHealthPort                              = int32(6060)
+	monitoringNamespace                                = "openshift-monitoring"
+	deschedulerMetricsURL                              = "https://metrics.openshift-kube-descheduler-operator.svc:10258/metrics"
+	networkPolicyCurlImage                             = "curlimages/curl:8.5.0"
 )
 
 var operatorConfigsAppliers = map[string]func(context.Context, *deschclient.Clientset) error{
@@ -526,6 +537,517 @@ func testServiceMonitor(t testing.TB, ctx context.Context, kubeClient *k8sclient
 	testServiceMonitorExists(t, ctx, kubeClient, serviceMonitor.Name, metricsService.Labels)
 }
 
+// testOperandNetworkPolicy verifies the descheduler operand NetworkPolicy exists with the
+// expected podSelector, egress allow-all, and metrics ingress on TCP 10258 from monitoring namespaces.
+func testOperandNetworkPolicy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	klog.Infof("Verifying operand NetworkPolicy %q", allowNetworkPolicyOperandName)
+
+	var policy *networkingv1.NetworkPolicy
+	o.Eventually(func(g o.Gomega) {
+		var err error
+		policy, err = kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+		g.Expect(err).NotTo(o.HaveOccurred(), "operand NetworkPolicy should exist")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	o.Expect(policy.Spec.PodSelector.MatchLabels).To(o.HaveKeyWithValue("app", operatorclient.OperandName))
+	o.Expect(policy.Spec.PolicyTypes).To(o.ContainElements(networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress))
+	o.Expect(policy.Spec.Egress).To(o.HaveLen(1), "operand NetworkPolicy should allow all egress")
+	o.Expect(policy.Spec.Egress[0].To).To(o.BeEmpty())
+	o.Expect(policy.Spec.Egress[0].Ports).To(o.BeEmpty())
+
+	o.Expect(policy.Spec.Ingress).To(o.HaveLen(1), "operand NetworkPolicy should have exactly one ingress rule")
+	rule := policy.Spec.Ingress[0]
+	o.Expect(rule.Ports).To(o.HaveLen(1), "operand ingress should allow a single port")
+	o.Expect(rule.Ports[0].Protocol).NotTo(o.BeNil())
+	o.Expect(*rule.Ports[0].Protocol).To(o.Equal(corev1.ProtocolTCP), "metrics ingress must be TCP")
+	o.Expect(rule.Ports[0].Port).NotTo(o.BeNil())
+	o.Expect(rule.Ports[0].Port.IntVal).To(o.Equal(deschedulerMetricsPort))
+
+	o.Expect(rule.From).To(o.HaveLen(3), "metrics ingress should allow exactly three monitoring namespace peers")
+	expectedNSSelectors := []map[string]string{
+		{"openshift.io/cluster-monitoring": "true"},
+		{"kubernetes.io/metadata.name": monitoringNamespace},
+		{"kubernetes.io/metadata.name": "openshift-user-workload-monitoring"},
+	}
+	for _, expected := range expectedNSSelectors {
+		o.Expect(hasNamespaceSelectorPeer(rule.From, expected)).To(o.BeTrue(),
+			"metrics ingress missing namespaceSelector %#v", expected)
+	}
+	for _, peer := range rule.From {
+		o.Expect(peer.NamespaceSelector).NotTo(o.BeNil(), "metrics peers must use namespaceSelector")
+		o.Expect(peer.IPBlock).To(o.BeNil(), "metrics peers must not use IPBlock")
+		// PodSelector-only peers are scoped to the NetworkPolicy namespace and do not
+		// prove access from monitoring namespaces.
+		if peer.PodSelector != nil {
+			o.Expect(peer.PodSelector.MatchLabels).To(o.BeEmpty())
+			o.Expect(peer.PodSelector.MatchExpressions).To(o.BeEmpty())
+		}
+	}
+
+	o.Expect(policy.OwnerReferences).NotTo(o.BeEmpty(), "operand NetworkPolicy should have owner reference")
+	o.Expect(policy.OwnerReferences[0].Kind).To(o.Equal("KubeDescheduler"))
+	o.Expect(policy.OwnerReferences[0].Name).To(o.Equal(operatorclient.OperatorConfigName))
+
+	klog.Infof("Operand NetworkPolicy verified successfully")
+}
+
+// testOperandNetworkPolicyAllowFromMonitoring verifies TCP 10258 metrics is reachable from openshift-monitoring.
+func testOperandNetworkPolicyAllowFromMonitoring(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	ensureDeschedulerOperandReady(t, ctx, kubeClient)
+
+	podName := "np-allow-metrics"
+	cleanup := createNetworkPolicyCurlPod(t, ctx, kubeClient, monitoringNamespace, podName)
+	defer cleanup()
+
+	assertHTTPSEndpointReachable(ctx, kubeClient, monitoringNamespace, podName, deschedulerMetricsURL,
+		"metrics scrape from monitoring namespace")
+	klog.Infof("Allow path from %s verified", monitoringNamespace)
+}
+
+// testOperandNetworkPolicyDenyFromNonMonitoring verifies TCP 10258 metrics is blocked outside monitoring namespaces.
+func testOperandNetworkPolicyDenyFromNonMonitoring(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	ensureDeschedulerOperandReady(t, ctx, kubeClient)
+
+	nsName := fmt.Sprintf("np-deny-%d", time.Now().Unix())
+	_, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+			Labels: map[string]string{
+				"pod-security.kubernetes.io/enforce": "baseline",
+			},
+		},
+	}, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should create deny test namespace")
+	defer func() {
+		if delErr := kubeClient.CoreV1().Namespaces().Delete(ctx, nsName, metav1.DeleteOptions{}); delErr != nil && !apierrors.IsNotFound(delErr) {
+			klog.Warningf("Failed to delete deny test namespace %s: %v", nsName, delErr)
+		}
+	}()
+
+	podName := "np-deny-metrics"
+	cleanup := createNetworkPolicyCurlPod(t, ctx, kubeClient, nsName, podName)
+	defer cleanup()
+
+	_, stderr, err := execCurlInPod(ctx, kubeClient, nsName, podName,
+		[]string{"curl", "-sk", "--connect-timeout", "5", "--max-time", "5", deschedulerMetricsURL})
+	assertNetworkPolicyBlocked(deschedulerMetricsPort, stderr, err)
+	klog.Infof("Deny path from namespace %s verified (err=%v)", nsName, err)
+}
+
+// testOperandNetworkPolicyDenyWrongPorts verifies non-10258 ports to the descheduler pod are blocked from monitoring.
+func testOperandNetworkPolicyDenyWrongPorts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	ensureDeschedulerOperandReady(t, ctx, kubeClient)
+
+	deschPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	o.Expect(err).NotTo(o.HaveOccurred(), "descheduler operand pod should be running")
+	o.Expect(deschPod.Status.PodIP).NotTo(o.BeEmpty(), "descheduler pod should have an IP")
+
+	podName := "np-deny-ports"
+	cleanup := createNetworkPolicyCurlPod(t, ctx, kubeClient, monitoringNamespace, podName)
+	defer cleanup()
+
+	// Probe non-metrics ports. NetworkPolicy drops should time out; "connection refused"
+	// means the packet reached the pod (closed port), so the policy is not blocking.
+	for _, port := range []int32{443, 8080, 8443, 10259} {
+		url := fmt.Sprintf("https://%s:%d/", deschPod.Status.PodIP, port)
+		_, stderr, curlErr := execCurlInPod(ctx, kubeClient, monitoringNamespace, podName,
+			[]string{"curl", "-sk", "--connect-timeout", "3", "--max-time", "3", url})
+		assertNetworkPolicyBlocked(port, stderr, curlErr)
+		klog.Infof("Deny path for port %d verified (err=%v)", port, curlErr)
+	}
+
+	// Sanity: correct metrics port still allowed via pod IP (HTTP status proves L4 allow).
+	metricsURL := fmt.Sprintf("https://%s:%d/metrics", deschPod.Status.PodIP, deschedulerMetricsPort)
+	assertHTTPSEndpointReachable(ctx, kubeClient, monitoringNamespace, podName, metricsURL,
+		fmt.Sprintf("port %d should remain allowed", deschedulerMetricsPort))
+	klog.Infof("Wrong-port deny path verified")
+}
+
+func ensureDeschedulerOperandReady(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	_, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.OperandName, operatorclient.OperandName+"-operator")
+	o.Expect(err).NotTo(o.HaveOccurred(), "descheduler operand should be running")
+
+	o.Eventually(func(g o.Gomega) {
+		_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred(), "operand NetworkPolicy should exist")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+}
+
+func createNetworkPolicyCurlPod(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, namespace, name string) func() {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			Containers: []corev1.Container{
+				{
+					Name:    "curl",
+					Image:   networkPolicyCurlImage,
+					Command: []string{"sleep", "3600"},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: utilpointer.Bool(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						RunAsNonRoot: utilpointer.Bool(true),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
+				},
+			},
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: utilpointer.Bool(true),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+		},
+	}
+
+	_, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should create curl pod %s/%s", namespace, name)
+
+	o.Eventually(func(g o.Gomega) {
+		p, getErr := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred())
+		g.Expect(p.Status.Phase).To(o.Equal(corev1.PodRunning), "curl pod should be Running")
+	}).WithTimeout(3 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	return func() {
+		if delErr := kubeClient.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{}); delErr != nil && !apierrors.IsNotFound(delErr) {
+			klog.Warningf("Failed to delete curl pod %s/%s: %v", namespace, name, delErr)
+		}
+	}
+}
+
+func execCurlInPod(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, podName string, command []string) (string, string, error) {
+	_ = kubeClient
+
+	args := []string{"exec", "-n", namespace, podName, "--"}
+	args = append(args, command...)
+
+	cmd := exec.CommandContext(ctx, "oc", args...)
+	if _, err := exec.LookPath("oc"); err != nil {
+		cmd = exec.CommandContext(ctx, "kubectl", args...)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return stdout.String(), stderr.String(), err
+}
+
+// assertHTTPSEndpointReachable checks that TCP/TLS to the URL succeeds.
+// Metrics endpoints may return 401/403 without a bearer token; any HTTP status
+// proves NetworkPolicy allowed the connection (unlike a connect failure).
+func assertHTTPSEndpointReachable(ctx context.Context, kubeClient *k8sclient.Clientset, namespace, podName, url, msg string) {
+	stdout, stderr, err := execCurlInPod(ctx, kubeClient, namespace, podName,
+		[]string{"curl", "-sk", "-o", "/tmp/np-curl-body", "-w", "%{http_code}",
+			"--connect-timeout", "5", "--max-time", "10", url})
+	o.Expect(err).NotTo(o.HaveOccurred(), "%s should connect: stderr=%s stdout=%s", msg, stderr, stdout)
+
+	code := strings.TrimSpace(stdout)
+	o.Expect(code).To(o.BeElementOf("200", "401", "403"),
+		"%s: expected HTTP 200/401/403 proving L4 allow, got %q (stderr=%s)", msg, code, stderr)
+
+	if code == "200" {
+		body, _, catErr := execCurlInPod(ctx, kubeClient, namespace, podName, []string{"cat", "/tmp/np-curl-body"})
+		o.Expect(catErr).NotTo(o.HaveOccurred(), "%s: should read response body", msg)
+		o.Expect(body).To(o.ContainSubstring("# HELP"), "%s: expected Prometheus metrics body", msg)
+	}
+}
+
+// assertNetworkPolicyBlocked requires a connect failure that is not "connection refused".
+// Connection refused means the packet reached a closed port (policy allowed it).
+func assertNetworkPolicyBlocked(port int32, stderr string, curlErr error) {
+	o.Expect(curlErr).To(o.HaveOccurred(), "port %d should be denied/unreachable: stderr=%s", port, stderr)
+	combined := strings.ToLower(stderr)
+	if curlErr != nil {
+		combined += " " + strings.ToLower(curlErr.Error())
+	}
+	o.Expect(combined).NotTo(o.ContainSubstring("connection refused"),
+		"port %d: connection refused means traffic reached the pod; expected NetworkPolicy drop/timeout (stderr=%s)", port, stderr)
+}
+
+func hasNamespaceSelectorPeer(peers []networkingv1.NetworkPolicyPeer, matchLabels map[string]string) bool {
+	for _, peer := range peers {
+		if peer.NamespaceSelector == nil {
+			continue
+		}
+		if mapsEqualStringString(peer.NamespaceSelector.MatchLabels, matchLabels) {
+			return true
+		}
+	}
+	return false
+}
+
+func mapsEqualStringString(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// testOperandNetworkPolicySelfHeal deletes the operand NetworkPolicy and asserts the operator recreates it.
+func testOperandNetworkPolicySelfHeal(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	klog.Infof("Verifying operand NetworkPolicy self-heal after deletion")
+
+	err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Delete(ctx, allowNetworkPolicyOperandName, metav1.DeleteOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should delete operand NetworkPolicy")
+
+	o.Eventually(func(g o.Gomega) {
+		_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred(), "operator should recreate operand NetworkPolicy")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	testOperandNetworkPolicy(t, ctx, kubeClient)
+	klog.Infof("Operand NetworkPolicy self-heal verified successfully")
+}
+
+// testOperandNetworkPolicySelfHealOnModification patches the operand NetworkPolicy and asserts the operator restores it.
+func testOperandNetworkPolicySelfHealOnModification(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	klog.Infof("Verifying operand NetworkPolicy self-heal after modification")
+
+	policy, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "operand NetworkPolicy should exist before patch")
+
+	patched := policy.DeepCopy()
+	patched.Spec.Egress = nil
+	_, err = kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Update(ctx, patched, metav1.UpdateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should patch operand NetworkPolicy egress")
+
+	o.Eventually(func(g o.Gomega) {
+		restored, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred())
+		g.Expect(restored.Spec.Egress).To(o.HaveLen(1), "operator should restore allow-all egress")
+		g.Expect(restored.Spec.Egress[0].To).To(o.BeEmpty())
+		g.Expect(restored.Spec.Egress[0].Ports).To(o.BeEmpty())
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	klog.Infof("Operand NetworkPolicy modification self-heal verified successfully")
+}
+
+// testSoftTainterNetworkPolicyConfigured verifies the softtainter NetworkPolicy exists with the
+// expected podSelector, egress allow-all, and health ingress on TCP 6060 from any source.
+func testSoftTainterNetworkPolicyConfigured(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	klog.Infof("Verifying softtainter NetworkPolicy %q", allowNetworkPolicySoftTainterName)
+
+	var policy *networkingv1.NetworkPolicy
+	o.Eventually(func(g o.Gomega) {
+		var err error
+		policy, err = kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+		g.Expect(err).NotTo(o.HaveOccurred(), "softtainter NetworkPolicy should exist")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	o.Expect(policy.Spec.PodSelector.MatchLabels).To(o.HaveKeyWithValue("app", softTainterAppLabel))
+	o.Expect(policy.Spec.PolicyTypes).To(o.ContainElements(networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress))
+	o.Expect(policy.Spec.Egress).To(o.HaveLen(1), "softtainter NetworkPolicy should allow all egress")
+	o.Expect(policy.Spec.Egress[0].To).To(o.BeEmpty())
+	o.Expect(policy.Spec.Egress[0].Ports).To(o.BeEmpty())
+
+	o.Expect(policy.Spec.Ingress).To(o.HaveLen(1), "softtainter NetworkPolicy should have exactly one ingress rule")
+	rule := policy.Spec.Ingress[0]
+	o.Expect(rule.From).To(o.BeEmpty(), "softtainter health ingress should not restrict sources")
+	o.Expect(rule.Ports).To(o.HaveLen(1), "softtainter ingress should allow a single port")
+	o.Expect(rule.Ports[0].Protocol).NotTo(o.BeNil())
+	o.Expect(*rule.Ports[0].Protocol).To(o.Equal(corev1.ProtocolTCP), "softtainter health ingress must be TCP")
+	o.Expect(rule.Ports[0].Port).NotTo(o.BeNil())
+	o.Expect(rule.Ports[0].Port.IntVal).To(o.Equal(softTainterHealthPort))
+
+	o.Expect(policy.OwnerReferences).NotTo(o.BeEmpty(), "softtainter NetworkPolicy should have owner reference")
+	o.Expect(policy.OwnerReferences[0].Kind).To(o.Equal("KubeDescheduler"))
+	o.Expect(policy.OwnerReferences[0].Name).To(o.Equal(operatorclient.OperatorConfigName))
+
+	klog.Infof("Softtainter NetworkPolicy configured verified successfully")
+}
+
+// testSoftTainterNetworkPolicyAllowHealth verifies TCP 6060 /livez is reachable from a non-operator namespace.
+func testSoftTainterNetworkPolicyAllowHealth(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	ensureSoftTainterOperandReady(t, ctx, kubeClient)
+
+	stPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.SoftTainterOperandName, "")
+	o.Expect(err).NotTo(o.HaveOccurred(), "softtainter pod should be running")
+	o.Expect(stPod.Status.PodIP).NotTo(o.BeEmpty(), "softtainter pod should have an IP")
+
+	nsName := fmt.Sprintf("np-st-allow-%d", time.Now().Unix())
+	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+			Labels: map[string]string{
+				"pod-security.kubernetes.io/enforce": "baseline",
+			},
+		},
+	}, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should create softtainter allow test namespace")
+	defer func() {
+		if delErr := kubeClient.CoreV1().Namespaces().Delete(ctx, nsName, metav1.DeleteOptions{}); delErr != nil && !apierrors.IsNotFound(delErr) {
+			klog.Warningf("Failed to delete softtainter allow test namespace %s: %v", nsName, delErr)
+		}
+	}()
+
+	podName := "np-st-allow-health"
+	cleanup := createNetworkPolicyCurlPod(t, ctx, kubeClient, nsName, podName)
+	defer cleanup()
+
+	healthURL := fmt.Sprintf("http://%s:%d/livez", stPod.Status.PodIP, softTainterHealthPort)
+	stdout, stderr, err := execCurlInPod(ctx, kubeClient, nsName, podName,
+		[]string{"curl", "-s", "--connect-timeout", "5", "--max-time", "10", healthURL})
+	o.Expect(err).NotTo(o.HaveOccurred(), "softtainter health from any namespace should succeed: stderr=%s stdout=%s", stderr, stdout)
+	klog.Infof("Softtainter allow health path from %s verified", nsName)
+}
+
+// testSoftTainterNetworkPolicyDenyWrongPorts verifies non-6060 ports to the softtainter pod are blocked.
+func testSoftTainterNetworkPolicyDenyWrongPorts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	ensureSoftTainterOperandReady(t, ctx, kubeClient)
+
+	stPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.SoftTainterOperandName, "")
+	o.Expect(err).NotTo(o.HaveOccurred(), "softtainter pod should be running")
+	o.Expect(stPod.Status.PodIP).NotTo(o.BeEmpty(), "softtainter pod should have an IP")
+
+	nsName := fmt.Sprintf("np-st-deny-%d", time.Now().Unix())
+	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+			Labels: map[string]string{
+				"pod-security.kubernetes.io/enforce": "baseline",
+			},
+		},
+	}, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should create softtainter deny test namespace")
+	defer func() {
+		if delErr := kubeClient.CoreV1().Namespaces().Delete(ctx, nsName, metav1.DeleteOptions{}); delErr != nil && !apierrors.IsNotFound(delErr) {
+			klog.Warningf("Failed to delete softtainter deny test namespace %s: %v", nsName, delErr)
+		}
+	}()
+
+	podName := "np-st-deny-ports"
+	cleanup := createNetworkPolicyCurlPod(t, ctx, kubeClient, nsName, podName)
+	defer cleanup()
+
+	for _, port := range []int32{443, 8080, 8443, 10258} {
+		url := fmt.Sprintf("http://%s:%d/", stPod.Status.PodIP, port)
+		_, stderr, curlErr := execCurlInPod(ctx, kubeClient, nsName, podName,
+			[]string{"curl", "-s", "--connect-timeout", "3", "--max-time", "3", url})
+		assertNetworkPolicyBlocked(port, stderr, curlErr)
+		klog.Infof("Softtainter deny path for port %d verified (err=%v)", port, curlErr)
+	}
+
+	// Sanity: health port still allowed.
+	healthURL := fmt.Sprintf("http://%s:%d/livez", stPod.Status.PodIP, softTainterHealthPort)
+	_, stderr, err := execCurlInPod(ctx, kubeClient, nsName, podName,
+		[]string{"curl", "-s", "--connect-timeout", "5", "--max-time", "10", healthURL})
+	o.Expect(err).NotTo(o.HaveOccurred(), "softtainter port %d should remain allowed: stderr=%s", softTainterHealthPort, stderr)
+	klog.Infof("Softtainter wrong-port deny path verified")
+}
+
+func ensureSoftTainterOperandReady(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	_, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.SoftTainterOperandName, "")
+	o.Expect(err).NotTo(o.HaveOccurred(), "softtainter operand should be running")
+
+	o.Eventually(func(g o.Gomega) {
+		_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred(), "softtainter NetworkPolicy should exist")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+}
+
+// testSoftTainterNetworkPolicySelfHeal deletes the softtainter NetworkPolicy and asserts the operator recreates it.
+func testSoftTainterNetworkPolicySelfHeal(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	klog.Infof("Verifying softtainter NetworkPolicy self-heal after deletion")
+	ensureSoftTainterOperandReady(t, ctx, kubeClient)
+
+	err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Delete(ctx, allowNetworkPolicySoftTainterName, metav1.DeleteOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should delete softtainter NetworkPolicy")
+
+	o.Eventually(func(g o.Gomega) {
+		_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred(), "operator should recreate softtainter NetworkPolicy")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	testSoftTainterNetworkPolicyConfigured(t, ctx, kubeClient)
+	klog.Infof("Softtainter NetworkPolicy self-heal verified successfully")
+}
+
+// testSoftTainterNetworkPolicySelfHealOnModification patches the softtainter NetworkPolicy and asserts the operator restores it.
+func testSoftTainterNetworkPolicySelfHealOnModification(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	klog.Infof("Verifying softtainter NetworkPolicy self-heal after modification")
+	ensureSoftTainterOperandReady(t, ctx, kubeClient)
+
+	policy, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "softtainter NetworkPolicy should exist before patch")
+
+	patched := policy.DeepCopy()
+	patched.Spec.Egress = nil
+	_, err = kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Update(ctx, patched, metav1.UpdateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "should patch softtainter NetworkPolicy egress")
+
+	o.Eventually(func(g o.Gomega) {
+		restored, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+		g.Expect(getErr).NotTo(o.HaveOccurred())
+		g.Expect(restored.Spec.Egress).To(o.HaveLen(1), "operator should restore allow-all egress")
+		g.Expect(restored.Spec.Egress[0].To).To(o.BeEmpty())
+		g.Expect(restored.Spec.Egress[0].Ports).To(o.BeEmpty())
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	klog.Infof("Softtainter NetworkPolicy modification self-heal verified successfully")
+}
+
+// testSoftTainterNetworkPolicy verifies softtainter NetworkPolicy lifecycle with the KubeVirt profile.
+func testSoftTainterNetworkPolicy(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	deschClient := GetDeschedulerClient()
+
+	// Softtainter NetworkPolicy must be absent with the base profile.
+	o.Eventually(func(g o.Gomega) {
+		_, err := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+		g.Expect(apierrors.IsNotFound(err)).To(o.BeTrue(), "softtainter NetworkPolicy should be absent before enable")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	cleanup := setupSoftTainterController(ctx, t, kubeClient, deschClient)
+	defer cleanup()
+
+	testSoftTainterNetworkPolicyConfigured(t, ctx, kubeClient)
+
+	// Revert to base profile and assert softtainter NetworkPolicy is deleted.
+	err := operatorConfigsAppliers[baseConf](ctx, deschClient)
+	o.Expect(err).NotTo(o.HaveOccurred(), "should restore base profile")
+
+	o.Eventually(func(g o.Gomega) {
+		_, getErr := kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+			Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+		g.Expect(apierrors.IsNotFound(getErr)).To(o.BeTrue(), "softtainter NetworkPolicy should be deleted when softtainter is disabled")
+	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.Succeed())
+
+	// Operand NetworkPolicy must remain.
+	_, err = kubeClient.NetworkingV1().NetworkPolicies(operatorclient.OperatorNamespace).
+		Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred(), "operand NetworkPolicy should remain after softtainter disable")
+
+	klog.Infof("Softtainter NetworkPolicy lifecycle verified successfully")
+}
+
 // testPrometheusTarget tests that the Prometheus target is up and running.
 // This function works with both standard Go testing and Ginkgo.
 func testPrometheusTarget(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
@@ -713,6 +1235,10 @@ func checkSoftTainterObjects(ctx context.Context, kubeClient *k8sclient.Clientse
 	if cerr := checkExpected(expected, obj, err); cerr != nil {
 		return cerr
 	}
+	obj, err = kubeClient.NetworkingV1().NetworkPolicies(namespace).Get(ctx, allowNetworkPolicySoftTainterName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
 
 	return nil
 
@@ -739,6 +1265,10 @@ func checkDeschedulerOperandObjects(ctx context.Context, kubeClient *k8sclient.C
 		return cerr
 	}
 	obj, err = kubeClient.RbacV1().RoleBindings(namespace).Get(ctx, deschedulerOperandRoleBindingName, metav1.GetOptions{})
+	if cerr := checkExpected(expected, obj, err); cerr != nil {
+		return cerr
+	}
+	obj, err = kubeClient.NetworkingV1().NetworkPolicies(namespace).Get(ctx, allowNetworkPolicyOperandName, metav1.GetOptions{})
 	if cerr := checkExpected(expected, obj, err); cerr != nil {
 		return cerr
 	}
@@ -1031,6 +1561,17 @@ func setupSoftTainterController(ctx context.Context, t testing.TB, kubeClient *k
 	}
 	klog.Infof("Descheduler pod running in %v", deschOpPod.Name)
 
+	// Capture the existing CR Spec so cleanup restores the caller's configuration
+	// instead of always overwriting with the base asset.
+	var previousSpec *descv1.KubeDeschedulerSpec
+	existingDesch, getErr := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if getErr == nil {
+		previousSpec = existingDesch.Spec.DeepCopy()
+	} else if !apierrors.IsNotFound(getErr) {
+		runCleanups()
+		t.Fatalf("Failed to get existing KubeDescheduler before softtainter setup: %v", getErr)
+	}
+
 	// apply devKubeVirtRelieveAndMigrate CR for the operator
 	if err := operatorConfigsAppliers[kubeVirtRelieveAndMigrateConf](ctx, deschClient); err != nil {
 		runCleanups()
@@ -1038,6 +1579,17 @@ func setupSoftTainterController(ctx context.Context, t testing.TB, kubeClient *k
 	}
 	klog.Infof("Descheduler operator is now configured with devKubeVirtRelieveAndMigrate profile")
 	cleanups = append(cleanups, func() {
+		current, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Failed to get KubeDescheduler during softtainter cleanup: %v", err)
+		}
+		if previousSpec != nil {
+			previousSpec.DeepCopyInto(&current.Spec)
+			if _, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, current, metav1.UpdateOptions{}); err != nil {
+				t.Fatalf("Failed restoring prior KubeDescheduler Spec: %v", err)
+			}
+			return
+		}
 		if err := operatorConfigsAppliers[baseConf](ctx, deschClient); err != nil {
 			t.Fatalf("Failed restoring base profile: %v", err)
 		}
