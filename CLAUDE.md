@@ -86,7 +86,7 @@ The operator RBAC permissions need to include permissions of both the deschedule
 
 Permissions (extra beyond operands):
 - ClusterRole: `openshift-descheduler` + CR binding
-  - Read only: `config.openshift.io/schedulers`, `config.openshift.io/infrastructures`, `config.openshift.io/apiservers`, `route.openshift.io/routes`, `endpoints`, `apps/replicasets`
+  - Read only: `config.openshift.io/schedulers`, `config.openshift.io/infrastructures`, `config.openshift.io/apiservers`, `endpoints`, `apps/replicasets`
   - `operator.openshift.io/kubedeschedulers`, `operator.openshift.io/kubedeschedulers/status`: get, watch, list, create, update, patch, delete, deletecollection
   - `monitoring.coreos.com/servicemonitors`, `monitoring.coreos.com/prometheusrules`: get, watch, list, create, update, patch, delete, deletecollection
   - `monitoring.coreos.com/prometheuses/api` (resourceName: `k8s`): get, create, update
