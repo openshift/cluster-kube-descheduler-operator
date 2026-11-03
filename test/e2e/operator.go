@@ -318,7 +318,7 @@ func testSoftTainterController(t testing.TB, ctx context.Context, kubeClient *k8
 	if err != nil {
 		t.Fatalf("Unable to wait for the softtainter pod to disappear")
 	}
-	klog.Infof("softtainer pod disappeared")
+	klog.Infof("softtainter pod disappeared")
 
 	// ensure that all the softtainter additional objects are gone
 	if err = checkSoftTainterObjects(ctx, kubeClient, operatorclient.OperatorNamespace, false); err != nil {
