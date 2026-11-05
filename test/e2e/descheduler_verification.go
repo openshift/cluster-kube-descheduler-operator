@@ -89,6 +89,45 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			// Bundle-based CI installation (operator-sdk run bundle) pre-installs the operator;
 			// only the KubeDescheduler CR and operand readiness are needed.
 			klog.Infof("Operator already installed, skipping installation")
+
+			// The bundle's CSV references the operand image from the internal registry,
+			// which is not pullable from the CI cluster. Patch the CSV with the operand
+			// image built by CI (shared via SHARED_DIR) so the operand can deploy.
+			operandImage := ""
+			if sharedDir := os.Getenv("SHARED_DIR"); sharedDir != "" {
+				if operandImageBytes, err := os.ReadFile(sharedDir + "/operand-image"); err == nil {
+					operandImage = strings.TrimSpace(string(operandImageBytes))
+					klog.Infof("OPERAND_IMAGE from SHARED_DIR: %s", operandImage)
+				} else {
+					klog.Warningf("Could not read operand-image file: %v", err)
+				}
+			} else {
+				klog.V(2).Infof("SHARED_DIR not set, skipping operand image patching")
+			}
+
+			if operandImage != "" {
+				g.By("Checking if CSV already has the operand image")
+				verifyErr := verifyCSVHasImage(ctx, dynamicClient, operatorclient.OperatorNamespace, operandImage)
+				if verifyErr != nil {
+					g.By("Patching CSV with operand image from SHARED_DIR")
+					patchErr := patchCSVWithImages(ctx, dynamicClient, operatorclient.OperatorNamespace, operandImage)
+					if patchErr != nil {
+						klog.Warningf("Failed to patch CSV with operand image: %v (this is OK if not running in CI)", patchErr)
+					} else {
+						klog.Infof("CSV patched successfully")
+
+						// The env change restarts the operator; wait for it to come back
+						g.By("Verifying operator deployment is ready with new images")
+						deployErr := waitForDeploymentReady(ctx, kubeClient, operatorclient.OperatorNamespace, "descheduler-operator")
+						if deployErr != nil {
+							klog.Warningf("Failed to verify operator deployment: %v", deployErr)
+						}
+					}
+				} else {
+					klog.Infof("CSV already has the operand image: %s (skipping patch)", operandImage)
+				}
+			}
+
 			kdCR := newDefaultKubeDescheduler()
 			_, err = deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Create(ctx, kdCR, metav1.CreateOptions{})
 			if err != nil && !strings.Contains(err.Error(), "already exists") {
