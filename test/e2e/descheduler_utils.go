@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	k8sclient "k8s.io/client-go/kubernetes"
@@ -933,4 +934,14 @@ func getDeschedulerPolicyFromConfigMap(ctx context.Context, kubeClient *k8sclien
 
 	klog.V(4).Infof("Successfully parsed DeschedulerPolicy from ConfigMap with %d profiles", len(policy.Profiles))
 	return policy, nil
+}
+
+// ensureNamespaceMonitoringLabel ensures the namespace carries the cluster-monitoring label
+func ensureNamespaceMonitoringLabel(ctx context.Context, kubeClient *k8sclient.Clientset, namespace string) error {
+	const patch = `{"metadata":{"labels":{"openshift.io/cluster-monitoring":"true"}}}`
+	if _, err := kubeClient.CoreV1().Namespaces().Patch(ctx, namespace, types.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("failed to apply cluster-monitoring label to namespace %s: %w", namespace, err)
+	}
+	klog.Infof("Ensured cluster-monitoring label on namespace %s", namespace)
+	return nil
 }
