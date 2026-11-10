@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1034,13 +1033,11 @@ func TestGetProtectedNamespaces(t *testing.T) {
 	}
 
 	protected := c.getProtectedNamespaces()
-	for _, name := range []string{"kube-system", "hypershift", "openshift", "openshift-kube-descheduler-operator"} {
-		if !slices.Contains(protected, name) {
-			t.Errorf("expected %q to be protected, got %v", name, protected)
-		}
-	}
-	if slices.Contains(protected, "default") || slices.Contains(protected, "kube-node-lease") {
-		t.Errorf("non-openshift namespaces must not be protected, got %v", protected)
+	// openshift-* names are sorted so the generated policy is stable across
+	// syncs regardless of the lister's map iteration order.
+	expected := []string{"kube-system", "hypershift", "openshift", "openshift-kube-descheduler-operator"}
+	if diff := cmp.Diff(expected, protected); diff != "" {
+		t.Errorf("unexpected protected namespaces (-expected +actual):\n%s", diff)
 	}
 
 	// Simulate an openshift-* namespace created after the operator started:
@@ -1050,8 +1047,9 @@ func TestGetProtectedNamespaces(t *testing.T) {
 		t.Fatalf("failed to add namespace openshift-adp: %v", err)
 	}
 	updated := c.getProtectedNamespaces()
-	if !slices.Contains(updated, "openshift-adp") {
-		t.Errorf("expected openshift-adp to be protected after creation, got %v", updated)
+	expected = []string{"kube-system", "hypershift", "openshift", "openshift-adp", "openshift-kube-descheduler-operator"}
+	if diff := cmp.Diff(expected, updated); diff != "" {
+		t.Errorf("expected openshift-adp to be protected after creation (-expected +actual):\n%s", diff)
 	}
 }
 

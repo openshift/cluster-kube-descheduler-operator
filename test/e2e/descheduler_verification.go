@@ -554,19 +554,17 @@ func testLateCreatedOpenshiftNamespaceExclusion(t testing.TB, ctx context.Contex
 	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, kubeDescheduler, "default configuration")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	lateNamespace := "openshift-late-created-e2e"
-	g.By(fmt.Sprintf("Creating openshift-* namespace %q after the operator is running", lateNamespace))
-	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: lateNamespace},
+	g.By("Creating a new openshift-* namespace after the operator is running")
+	lateNamespaceObj, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "openshift-late-created-e2e-"},
 	}, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	lateNamespace := lateNamespaceObj.Name
 	defer func() {
 		_ = kubeClient.CoreV1().Namespaces().Delete(ctx, lateNamespace, metav1.DeleteOptions{})
 	}()
 
-	g.By("Validating the generated policy excludes the newly created openshift-* namespace")
+	g.By(fmt.Sprintf("Validating the generated policy excludes the newly created openshift-* namespace %q", lateNamespace))
 	err = validateDeschedulingPolicy(ctx, kubeClient, kubeDescheduler)
 	o.Expect(err).NotTo(o.HaveOccurred())
 

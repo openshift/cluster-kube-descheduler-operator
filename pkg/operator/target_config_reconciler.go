@@ -1220,12 +1220,17 @@ func (c *TargetConfigReconciler) getProtectedNamespaces() []string {
 		klog.ErrorS(err, "error listing namespaces from cache")
 		return protectedNamespaces
 	}
+	// The lister is backed by a map, so sort the names to keep the generated
+	// policy (and thus the ConfigMap content) stable across syncs when the
+	// namespace set is unchanged.
+	openshiftNamespaces := []string{}
 	for _, ns := range namespaces {
 		if strings.HasPrefix(ns.Name, "openshift-") {
-			protectedNamespaces = append(protectedNamespaces, ns.Name)
+			openshiftNamespaces = append(openshiftNamespaces, ns.Name)
 		}
 	}
-	return protectedNamespaces
+	slices.Sort(openshiftNamespaces)
+	return append(protectedNamespaces, openshiftNamespaces...)
 }
 
 func (c *TargetConfigReconciler) checkNamespaceMonitoringLabel() error {
