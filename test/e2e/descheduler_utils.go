@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -836,11 +837,17 @@ func validateDeschedulingPolicy(ctx context.Context, kubeClient *k8sclient.Clien
 	if err != nil {
 		return fmt.Errorf("failed to list namespaces: %w", err)
 	}
+	openshiftNamespaces := []string{}
 	for _, ns := range allNamespaces.Items {
 		if strings.HasPrefix(ns.Name, "openshift-") {
-			protectedNamespaces = append(protectedNamespaces, ns.Name)
+			openshiftNamespaces = append(openshiftNamespaces, ns.Name)
 		}
 	}
+	// The operator sorts the discovered names (the lister it reads is
+	// map-backed), so the expected list must use the same ordering for the
+	// ordered policy comparison below.
+	slices.Sort(openshiftNamespaces)
+	protectedNamespaces = append(protectedNamespaces, openshiftNamespaces...)
 
 	// Build expected policy once using profiles.BuildDeschedulingPolicy
 	expectedPolicy, err := profiles.BuildDeschedulingPolicy(kubeDescheduler, protectedNamespaces, "")
