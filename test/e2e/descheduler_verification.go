@@ -283,6 +283,12 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			testNamespaceExcludeFiltering(g.GinkgoTB(), ctx, kubeClient, deschClient)
 		})
 
+		// https://github.com/openshift/cluster-kube-descheduler-operator/issues/2979
+		g.It("should exclude openshift-* namespaces created after operator startup [Disruptive][Slow][Timeout:5m]", func() {
+			g.By("Testing late-created openshift-* namespace exclusion")
+			testLateCreatedOpenshiftNamespaceExclusion(g.GinkgoTB(), ctx, kubeClient, deschClient)
+		})
+
 		// OCP-76422
 		g.It("should validate LongLifecycle profile behavior [Disruptive][Slow][Timeout:5m]", func() {
 			g.By("Testing LongLifecycle profile behavior")
@@ -534,6 +540,37 @@ func testNamespaceExcludeFiltering(t testing.TB, ctx context.Context, kubeClient
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	klog.Infof("Namespace exclude filtering validated successfully")
+}
+
+// testLateCreatedOpenshiftNamespaceExclusion verifies that an openshift-*
+// namespace created after the operator pod started is added to the protected
+// namespace list without an operator restart. The expected policy is computed
+// from the live namespace list, so validateDeschedulingPolicy only passes
+// once the operator has observed the new namespace and regenerated the
+// policy ConfigMap.
+// https://github.com/openshift/cluster-kube-descheduler-operator/issues/2979
+func testLateCreatedOpenshiftNamespaceExclusion(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {
+	kubeDescheduler := newDefaultKubeDescheduler()
+	err := createAndValidateKubeDeschedulerCR(ctx, kubeClient, deschClient, kubeDescheduler, "default configuration")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	lateNamespace := "openshift-late-created-e2e"
+	g.By(fmt.Sprintf("Creating openshift-* namespace %q after the operator is running", lateNamespace))
+	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: lateNamespace},
+	}, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	defer func() {
+		_ = kubeClient.CoreV1().Namespaces().Delete(ctx, lateNamespace, metav1.DeleteOptions{})
+	}()
+
+	g.By("Validating the generated policy excludes the newly created openshift-* namespace")
+	err = validateDeschedulingPolicy(ctx, kubeClient, kubeDescheduler)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	klog.Infof("Late-created openshift-* namespace exclusion validated successfully")
 }
 
 func testProfileConflicts(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset, deschClient *deschclient.Clientset) {

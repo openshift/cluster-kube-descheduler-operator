@@ -83,7 +83,7 @@ type TargetConfigReconciler struct {
 	dynamicClient            dynamic.Interface
 	eventRecorder            events.Recorder
 	queue                    workqueue.RateLimitingInterface
-	protectedNamespaces      []string
+	namespaceInformerSynced  cache.InformerSynced
 	configSchedulerLister    configlistersv1.SchedulerLister
 	namespaceLister          corev1listers.NamespaceLister
 	nodeLister               corev1listers.NodeLister
@@ -105,19 +105,6 @@ func NewTargetConfigReconciler(
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	eventRecorder events.Recorder,
 ) *TargetConfigReconciler {
-	// make sure our list of excluded system namespaces is up to date
-	allNamespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		klog.ErrorS(err, "error listing namespaces")
-		return nil
-	}
-	protectedNamespaces := []string{"kube-system", "hypershift", "openshift"}
-	for _, ns := range allNamespaces.Items {
-		if strings.HasPrefix(ns.Name, "openshift-") {
-			protectedNamespaces = append(protectedNamespaces, ns.Name)
-		}
-	}
-
 	c := &TargetConfigReconciler{
 		ctx:                      ctx,
 		operatorClient:           operatorConfigClient,
@@ -126,7 +113,7 @@ func NewTargetConfigReconciler(
 		dynamicClient:            dynamicClient,
 		eventRecorder:            eventRecorder,
 		queue:                    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TargetConfigReconciler"),
-		protectedNamespaces:      protectedNamespaces,
+		namespaceInformerSynced:  coreInformers.Core().V1().Namespaces().Informer().HasSynced,
 		deschedulerImagePullSpec: deschedulerImagePullSpec,
 		softtainterImagePullSpec: softTainterImagePullSpec,
 		configSchedulerLister:    configInformer.Config().V1().Schedulers().Lister(),
@@ -144,7 +131,7 @@ func NewTargetConfigReconciler(
 	// Watch NetworkPolicies in the operator namespace so create/update/delete
 	// requeues immediately. Operand resources (including NetworkPolicies) live
 	// in the same namespace as the KubeDescheduler CR.
-	_, err = kubeInformersForNamespaces.InformersFor(operatorclient.OperatorNamespace).Networking().V1().NetworkPolicies().Informer().AddEventHandler(c.eventHandler())
+	_, err := kubeInformersForNamespaces.InformersFor(operatorclient.OperatorNamespace).Networking().V1().NetworkPolicies().Informer().AddEventHandler(c.eventHandler())
 	if err != nil {
 		klog.ErrorS(err, "error watching NetworkPolicies")
 		return nil
@@ -916,7 +903,7 @@ func (c *TargetConfigReconciler) manageConfigMap(descheduler *deschedulerv1.Kube
 		klog.InfoS("Using in-cluster Prometheus server")
 	}
 
-	policy, err := operatorprofiles.BuildDeschedulingPolicy(descheduler, c.protectedNamespaces, prometheusHost)
+	policy, err := operatorprofiles.BuildDeschedulingPolicy(descheduler, c.getProtectedNamespaces(), prometheusHost)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1172,6 +1159,13 @@ func (c *TargetConfigReconciler) Run(workers int, stopCh <-chan struct{}) {
 	klog.Infof("Starting TargetConfigReconciler")
 	defer klog.Infof("Shutting down TargetConfigReconciler")
 
+	// Wait for the namespace informer cache to sync before the first sync so
+	// the protected namespace list is complete from the start.
+	if !cache.WaitForCacheSync(stopCh, c.namespaceInformerSynced) {
+		klog.InfoS("could not wait for namespace cache to sync")
+		return
+	}
+
 	// doesn't matter what workers say, only start one.
 	go wait.Until(c.runWorker, time.Second, stopCh)
 
@@ -1209,6 +1203,29 @@ func (c *TargetConfigReconciler) eventHandler() cache.ResourceEventHandler {
 		UpdateFunc: func(old, new interface{}) { c.queue.Add(workQueueKey) },
 		DeleteFunc: func(obj interface{}) { c.queue.Add(workQueueKey) },
 	}
+}
+
+// getProtectedNamespaces returns the namespaces excluded from descheduling:
+// the base system namespaces plus every openshift-* namespace present in the
+// cluster. The list is recomputed on every sync (from the namespace lister)
+// instead of being frozen at operator startup, so openshift-* namespaces
+// created after the operator started (e.g. by optional operators like OADP)
+// are excluded as well. Namespace add/update/delete events requeue the sync,
+// keeping the list current.
+// https://github.com/openshift/cluster-kube-descheduler-operator/issues/2979
+func (c *TargetConfigReconciler) getProtectedNamespaces() []string {
+	protectedNamespaces := []string{"kube-system", "hypershift", "openshift"}
+	namespaces, err := c.namespaceLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "error listing namespaces from cache")
+		return protectedNamespaces
+	}
+	for _, ns := range namespaces {
+		if strings.HasPrefix(ns.Name, "openshift-") {
+			protectedNamespaces = append(protectedNamespaces, ns.Name)
+		}
+	}
+	return protectedNamespaces
 }
 
 func (c *TargetConfigReconciler) checkNamespaceMonitoringLabel() error {
