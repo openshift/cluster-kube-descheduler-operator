@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -167,6 +168,88 @@ func makeConfigMap(assetPath string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 		Data:     map[string]string{"policy.yaml": string(bindata.MustAsset(assetPath))},
+	}
+}
+
+func TestPrometheusRuleForDeschedulerUsesDeschedulingInterval(t *testing.T) {
+	interval := int32(42)
+	descheduler := buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+		spec.DeschedulingIntervalSeconds = &interval
+	})
+
+	rule, err := prometheusRuleForDescheduler(descheduler)
+	if err != nil {
+		t.Fatalf("expected Prometheus rule to render: %v", err)
+	}
+
+	groups, found, err := unstructured.NestedSlice(rule.Object, "spec", "groups")
+	if err != nil || !found {
+		t.Fatalf("expected rule groups: found=%t, err=%v", found, err)
+	}
+
+	var targetFitGroup map[string]interface{}
+	for _, group := range groups {
+		group, ok := group.(map[string]interface{})
+		if ok && group["name"] == "kubevirtTargetFitDampening.rules" {
+			targetFitGroup = group
+			break
+		}
+	}
+	if targetFitGroup == nil {
+		t.Fatal("expected target-fit dampening rule group")
+	}
+	if targetFitGroup["interval"] != "42s" {
+		t.Fatalf("expected target-fit group interval 42s, got %v", targetFitGroup["interval"])
+	}
+
+	rules, found, err := unstructured.NestedSlice(targetFitGroup, "rules")
+	if err != nil || !found {
+		t.Fatalf("expected target-fit rules: found=%t, err=%v", found, err)
+	}
+	expressions := make(map[string]string, len(rules))
+	for _, item := range rules {
+		rule, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected rule object, got %T", item)
+		}
+		record, _ := rule["record"].(string)
+		expr, _ := rule["expr"].(string)
+		expressions[record] = expr
+	}
+	if expr := expressions["descheduler:node:no_eligible_target_seen:interval"]; !strings.Contains(expr, "no_eligible_target") || !strings.Contains(expr, "[42s]") || !strings.Contains(strings.Join(strings.Fields(expr), ""), "label_replace(descheduler:nodeutilization:cpu:avg1m*0,'node',\"$1\",'instance','(.+)')") {
+		t.Fatalf("expected normalized per-node target-fit observation fallback with a 42s range, got %q", expr)
+	}
+	if expr := expressions["descheduler:node:no_eligible_target_count:10cycles"]; !strings.Contains(expr, "[420s]") {
+		t.Fatalf("expected dampening window to span ten descheduling intervals, got %q", expr)
+	}
+
+	var actuationPriority string
+	for _, group := range groups {
+		group, ok := group.(map[string]interface{})
+		if !ok || group["name"] != "recordingRules.rules" {
+			continue
+		}
+		rules, _, _ := unstructured.NestedSlice(group, "rules")
+		for _, item := range rules {
+			rule, ok := item.(map[string]interface{})
+			if ok && rule["record"] == "descheduler:node:actuation_priority:p66_5m" {
+				actuationPriority, _ = rule["expr"].(string)
+			}
+		}
+	}
+	if !strings.Contains(actuationPriority, "last_over_time") || !strings.Contains(actuationPriority, "target_availability_multiplier:10cycles[84s]") {
+		t.Fatalf("expected actuation priority to retain the multiplier for two descheduling intervals, got %q", actuationPriority)
+	}
+}
+
+func TestPrometheusRuleForDeschedulerRejectsInvalidInterval(t *testing.T) {
+	for _, interval := range []*int32{nil, utilptr.To[int32](0)} {
+		descheduler := buildKubeDeschedulerSpec(func(spec *deschedulerv1.KubeDeschedulerSpec) {
+			spec.DeschedulingIntervalSeconds = interval
+		})
+		if _, err := prometheusRuleForDescheduler(descheduler); err == nil {
+			t.Fatalf("expected interval %v to be rejected", interval)
+		}
 	}
 }
 
