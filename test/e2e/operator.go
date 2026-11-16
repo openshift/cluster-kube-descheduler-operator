@@ -15,12 +15,14 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -60,6 +62,8 @@ const (
 	softTainterClusterMonitoringViewClusterRoleBinding = "openshift-descheduler-softtainter-monitoring"
 	softTainterValidatingAdmissionPolicyName           = "openshift-descheduler-softtainter-vap"
 	softTainterValidatingAdmissionPolicyBindingName    = "openshift-descheduler-softtainter-vap-binding"
+	softTainterLabel                                   = "app=softtainter"
+	softTainterPriorityClassName                       = "e2e-softtainter-threshold"
 )
 
 var operatorConfigsAppliers = map[string]func(context.Context, *deschclient.Clientset) error{
@@ -409,6 +413,145 @@ func testSoftTainterControllerWithVAP(t testing.TB, ctx context.Context, kubeCli
 
 	tryRemovingTaintWithExpectedFailure(ctx, t, stClientset, tNode, &hardTaint)
 	klog.Infof("softtainter SA is not allowed to remove a hard taint")
+}
+
+// testSoftTainterControllerWithPriorityThreshold tests the soft tainter controller with a priority threshold class name.
+// This function works with both standard Go testing and Ginkgo.
+func testSoftTainterControllerWithPriorityThreshold(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	deschClient := GetDeschedulerClient()
+
+	// create a test priority class
+	priorityClass := &schedulingv1.PriorityClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: softTainterPriorityClassName,
+		},
+		Value: 1000000,
+	}
+	if _, err := kubeClient.SchedulingV1().PriorityClasses().Create(ctx, priorityClass, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatalf("Unable to create the test priority class: %v", err)
+	}
+	defer func() {
+		if err := kubeClient.SchedulingV1().PriorityClasses().Delete(ctx, softTainterPriorityClassName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			t.Fatalf("Unable to delete the test priority class: %v", err)
+		}
+	}()
+
+	cleanup := setupSoftTainterController(ctx, t, kubeClient, deschClient)
+	defer cleanup()
+
+	// impersonate the softtainter SA to verify it is allowed to read the priority class
+	saKubeconfig := os.Getenv("KUBECONFIG")
+	saConfig, err := clientcmd.BuildConfigFromFlags("", saKubeconfig)
+	if err != nil {
+		t.Fatalf("Unable to build config: %v", err)
+	}
+	saConfig.Impersonate = rest.ImpersonationConfig{
+		UserName: fmt.Sprintf("system:serviceaccount:%v:%v", operatorclient.OperatorNamespace, softTainterServiceAccountName),
+	}
+
+	stClientset, err := k8sclient.NewForConfig(saConfig)
+	if err != nil {
+		t.Fatalf("Unable to build client: %v", err)
+	}
+
+	if _, err := stClientset.SchedulingV1().PriorityClasses().Get(ctx, softTainterPriorityClassName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("softtainter SA is not allowed to read the priority class: %v", err)
+	}
+	klog.Infof("softtainter SA is allowed to read the priority class")
+
+	// record the restart count of the softtainter container before the update
+	stPod, err := waitForPodRunningByNamePrefix(ctx, kubeClient, operatorclient.OperatorNamespace, operatorclient.SoftTainterOperandName, "")
+	if err != nil {
+		t.Fatalf("Unable to wait for the softtainter pod to run")
+	}
+	restartCountBefore := int32(0)
+	for _, containerStatus := range stPod.Status.ContainerStatuses {
+		restartCountBefore += containerStatus.RestartCount
+	}
+
+	// update the descheduler CR to set the threshold priority class name
+	des, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Unable to get the descheduler CR: %v", err)
+	}
+	if des.Spec.ProfileCustomizations == nil {
+		des.Spec.ProfileCustomizations = &descv1.ProfileCustomizations{}
+	}
+	des.Spec.ProfileCustomizations.ThresholdPriorityClassName = softTainterPriorityClassName
+	if _, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, des, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("Unable to update the descheduler CR: %v", err)
+	}
+	klog.Infof("Descheduler operator is now configured with thresholdPriorityClassName")
+
+	// wait for the softtainter to pick up the updated policy and run stably
+	if err := waitForSoftTainterStability(ctx, kubeClient, 2*time.Minute, restartCountBefore); err != nil {
+		t.Fatalf("The softtainter pod did not run stably with thresholdPriorityClassName configured: %v", err)
+	}
+	klog.Infof("softtainter pod is running stably with thresholdPriorityClassName configured")
+}
+
+// waitForSoftTainterStability waits for the soft tainter pod to be running without
+// new container restarts for the specified duration
+func waitForSoftTainterStability(ctx context.Context, kubeClient *k8sclient.Clientset, duration time.Duration, restartCountBefore int32) error {
+	klog.Infof("Waiting for softtainter pod to run stably for %v", duration)
+
+	// increasing the duration in case the pod gets recreated during the waiting
+	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, duration+30*time.Second, false, func(ctx context.Context) (bool, error) {
+		podName, err := getPodByLabel(ctx, kubeClient, operatorclient.OperatorNamespace, softTainterLabel)
+		if err != nil {
+			klog.V(4).Infof("Failed to get softtainter pod: %v, retrying...", err)
+			return false, nil
+		}
+
+		pod, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
+			klog.V(4).Infof("Failed to get pod %s: %v, retrying...", podName, err)
+			return false, nil
+		}
+
+		if pod.Status.Phase != corev1.PodRunning {
+			klog.V(4).Infof("Pod %s is not running (phase: %s), waiting...", podName, pod.Status.Phase)
+			return false, nil
+		}
+
+		restartCount := int32(0)
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			restartCount += containerStatus.RestartCount
+			if containerStatus.State.Waiting != nil {
+				klog.V(4).Infof("Container %s is waiting: %s - %s",
+					containerStatus.Name,
+					containerStatus.State.Waiting.Reason,
+					containerStatus.State.Waiting.Message)
+				return false, nil
+			}
+			if containerStatus.State.Terminated != nil {
+				klog.V(4).Infof("Container %s is terminated: %s - %s",
+					containerStatus.Name,
+					containerStatus.State.Terminated.Reason,
+					containerStatus.State.Terminated.Message)
+				return false, nil
+			}
+		}
+		if restartCount > restartCountBefore {
+			klog.V(4).Infof("Container restarted %d times (baseline: %d)", restartCount, restartCountBefore)
+			return false, nil
+		}
+
+		podAge := time.Since(pod.CreationTimestamp.Time)
+		if podAge >= duration {
+			klog.Infof("Softtainter pod %s has been running stably for %v (age: %v)", podName, duration, podAge)
+			return true, nil
+		}
+
+		klog.V(4).Infof("Pod %s is stable but not old enough yet - age=%v, required=%v",
+			podName, podAge, duration)
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timeout waiting for softtainter pod to run stably for %v: %w", duration, err)
+	}
+	return nil
 }
 
 // testPodDescheduling tests that pods can be descheduled.
