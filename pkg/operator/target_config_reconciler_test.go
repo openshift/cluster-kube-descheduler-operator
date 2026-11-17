@@ -1006,6 +1006,53 @@ func TestSync(t *testing.T) {
 	}
 }
 
+// TestGetProtectedNamespaces verifies that the protected namespace list is
+// derived from the (live) namespace lister rather than a startup snapshot, so
+// openshift-* namespaces created after the operator started are excluded too.
+// https://github.com/openshift/cluster-kube-descheduler-operator/issues/2979
+func TestGetProtectedNamespaces(t *testing.T) {
+	fakeKubeClient := fake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-node-lease"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "openshift-kube-descheduler-operator"}},
+	)
+	coreInformers := coreinformers.NewSharedInformerFactory(fakeKubeClient, 10*time.Minute)
+	namespaceInformer := coreInformers.Core().V1().Namespaces().Informer()
+
+	seedNamespaces := []string{"default", "kube-node-lease", "openshift-kube-descheduler-operator"}
+	for _, name := range seedNamespaces {
+		if err := namespaceInformer.GetStore().Add(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
+			t.Fatalf("failed to seed namespace %q: %v", name, err)
+		}
+	}
+
+	c := &TargetConfigReconciler{
+		ctx:             context.TODO(),
+		kubeClient:      fakeKubeClient,
+		namespaceLister: coreInformers.Core().V1().Namespaces().Lister(),
+	}
+
+	protected := c.getProtectedNamespaces()
+	// openshift-* names are sorted so the generated policy is stable across
+	// syncs regardless of the lister's map iteration order.
+	expected := []string{"kube-system", "hypershift", "openshift", "openshift-kube-descheduler-operator"}
+	if diff := cmp.Diff(expected, protected); diff != "" {
+		t.Errorf("unexpected protected namespaces (-expected +actual):\n%s", diff)
+	}
+
+	// Simulate an openshift-* namespace created after the operator started:
+	// the namespace informer observes it, the sync is requeued, and the next
+	// getProtectedNamespaces call must pick it up without an operator restart.
+	if err := namespaceInformer.GetStore().Add(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "openshift-adp"}}); err != nil {
+		t.Fatalf("failed to add namespace openshift-adp: %v", err)
+	}
+	updated := c.getProtectedNamespaces()
+	expected = []string{"kube-system", "hypershift", "openshift", "openshift-adp", "openshift-kube-descheduler-operator"}
+	if diff := cmp.Diff(expected, updated); diff != "" {
+		t.Errorf("expected openshift-adp to be protected after creation (-expected +actual):\n%s", diff)
+	}
+}
+
 // A scheduler configuration lister
 type fakeSchedConfigLister struct {
 	Err   error
