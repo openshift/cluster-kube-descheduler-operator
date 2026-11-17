@@ -103,6 +103,19 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 			err = installOperatorWithSubscription(ctx, kubeClient, deschClient, dynamicClient, operatorclient.OperatorNamespace)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Ensure the operator namespace carries the cluster-monitoring label
+		g.By("Ensuring namespace has cluster-monitoring label")
+		if err := ensureNamespaceMonitoringLabel(ctx, kubeClient, operatorclient.OperatorNamespace); err != nil {
+			klog.Warningf("Failed to ensure monitoring label on namespace %s: %v", operatorclient.OperatorNamespace, err)
+		}
+
+		// Wait for the descheduler operand to run stably so Prometheus has time to
+		// discover the ServiceMonitor before the metrics tests start querying it.
+		g.By("Waiting for descheduler pod to stabilize")
+		if err := waitForOperandStability(ctx, kubeClient, 30*time.Second); err != nil {
+			klog.Warningf("Timeout waiting for operand stability: %v", err)
+		}
 	})
 
 	g.AfterAll(func() {
