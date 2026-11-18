@@ -14,7 +14,7 @@ import (
 //
 // KubeDeschedulerSpec defines the desired state of KubeDescheduler
 type KubeDeschedulerSpecApplyConfiguration struct {
-	operatorv1.OperatorSpecApplyConfiguration `json:",inline"`
+	operatorv1.OperatorSpecApplyConfiguration `json:""`
 	// Profiles sets which descheduler strategy profiles are enabled
 	Profiles []deschedulerv1.DeschedulerProfile `json:"profiles,omitempty"`
 	// DeschedulingIntervalSeconds is the number of seconds between descheduler runs
