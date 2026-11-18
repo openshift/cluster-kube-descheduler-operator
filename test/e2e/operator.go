@@ -1015,11 +1015,11 @@ func setupSoftTainterController(ctx context.Context, t testing.TB, kubeClient *k
 	prevDisablePSIcheck, foundDisablePSIcheck := os.LookupEnv(EXPERIMENTAL_DISABLE_PSI_CHECK)
 	if err := mockPSIEnv(ctx, kubeClient); err != nil {
 		runCleanups()
-		t.Fatalf("Failed mocking PSI path enviromental variable to the operator depoyment: %v", err)
+		t.Fatalf("Failed mocking PSI path environmental variable to the operator deployment: %v", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := unmockPSIEnv(ctx, kubeClient, prevDisablePSIcheck, foundDisablePSIcheck); err != nil {
-			t.Fatalf("Failed PSI path enviromental variable: %v", err)
+			t.Fatalf("Failed PSI path environmental variable: %v", err)
 		}
 	})
 
