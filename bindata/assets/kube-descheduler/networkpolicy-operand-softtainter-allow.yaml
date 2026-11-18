@@ -22,7 +22,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: softtainer
+      app: softtainter
   egress:
   - {}
   ingress:
