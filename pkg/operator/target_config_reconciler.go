@@ -560,7 +560,10 @@ func (c *TargetConfigReconciler) manageClusterMonitoringViewClusterRoleBinding(d
 }
 
 func (c *TargetConfigReconciler) managePrometheusRule(descheduler *deschedulerv1.KubeDescheduler) (*unstructured.Unstructured, bool, error) {
-	required := resourceread.ReadUnstructuredOrDie(bindata.MustAsset("assets/kube-descheduler/prometheusrule.yaml"))
+	required, err := prometheusRuleForDescheduler(descheduler)
+	if err != nil {
+		return nil, false, err
+	}
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1",
 		Kind:       "KubeDescheduler",
@@ -570,6 +573,26 @@ func (c *TargetConfigReconciler) managePrometheusRule(descheduler *deschedulerv1
 	required.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
 	controller.EnsureOwnerRef(required, ownerReference)
 	return resourceapply.ApplyKnownUnstructured(c.ctx, c.dynamicClient, c.eventRecorder, required)
+}
+
+func prometheusRuleForDescheduler(descheduler *deschedulerv1.KubeDescheduler) (*unstructured.Unstructured, error) {
+	if descheduler.Spec.DeschedulingIntervalSeconds == nil || *descheduler.Spec.DeschedulingIntervalSeconds <= 0 {
+		return nil, fmt.Errorf("descheduler should have an interval set and it should be greater than 0")
+	}
+
+	const (
+		intervalPlaceholder          = "${DESCHEDULING_INTERVAL_SECONDS}"
+		dampeningWindowPlaceholder   = "${TARGET_FIT_DAMPENING_WINDOW_SECONDS}"
+		dampeningLookbackPlaceholder = "${TARGET_FIT_DAMPENING_LOOKBACK_SECONDS}"
+		dampeningWindowIntervals     = 10
+		dampeningLookbackIntervals   = 2
+	)
+	intervalSeconds := int64(*descheduler.Spec.DeschedulingIntervalSeconds)
+	asset := string(bindata.MustAsset("assets/kube-descheduler/prometheusrule.yaml"))
+	asset = strings.ReplaceAll(asset, intervalPlaceholder, strconv.FormatInt(intervalSeconds, 10))
+	asset = strings.ReplaceAll(asset, dampeningWindowPlaceholder, strconv.FormatInt(intervalSeconds*dampeningWindowIntervals, 10))
+	asset = strings.ReplaceAll(asset, dampeningLookbackPlaceholder, strconv.FormatInt(intervalSeconds*dampeningLookbackIntervals, 10))
+	return resourceread.ReadUnstructuredOrDie([]byte(asset)), nil
 }
 
 func (c *TargetConfigReconciler) managePSIAlert(descheduler *deschedulerv1.KubeDescheduler, stEnabled bool) (*unstructured.Unstructured, bool, error) {
