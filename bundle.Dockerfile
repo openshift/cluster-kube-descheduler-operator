@@ -1,4 +1,4 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_golang_1.26 as builder
+FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.26-rhel9 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-descheduler-operator
 COPY . .
 
