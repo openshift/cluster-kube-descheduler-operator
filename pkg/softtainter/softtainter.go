@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/util/taints"
@@ -67,6 +68,7 @@ type softTainter struct {
 	promQuery                         string
 	promURL                           string
 	client                            client.Client
+	kubeClient                        clientset.Interface
 	resyncPeriod                      time.Duration
 	policyConfigFile                  string
 	nodeUtilizationFactory            func(promapi.Client, string) NodeUtilization
@@ -93,7 +95,7 @@ func (st *softTainter) Reconcile(ctx context.Context, request reconcile.Request)
 	des := desv1.KubeDescheduler{}
 
 	descheduler.SetupPlugins()
-	policy, err := descheduler.LoadPolicyConfig(st.policyConfigFile, nil, pluginregistry.PluginRegistry)
+	policy, err := descheduler.LoadPolicyConfig(st.policyConfigFile, st.kubeClient, pluginregistry.PluginRegistry)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -574,6 +576,11 @@ func RegisterReconciler(mgr manager.Manager, policyConfigFile string) error {
 	}
 	resyncPeriod := time.Duration(*des.Spec.DeschedulingIntervalSeconds) * time.Second
 
+	kubeClient, err := clientset.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return fmt.Errorf("unable to create a kubernetes clientset: %w", err)
+	}
+
 	// Create a new controller
 	c, err := controller.New(
 		"nodeclassification-controller",
@@ -581,7 +588,10 @@ func RegisterReconciler(mgr manager.Manager, policyConfigFile string) error {
 		controller.Options{
 			RateLimiter: TickLimitedControllerRateLimiter[reconcile.Request](resyncPeriod),
 			Reconciler: &softTainter{
-				client:                 mgr.GetClient(),
+				client: mgr.GetClient(),
+				// the typed clientset is needed by LoadPolicyConfig to resolve,
+				// for example, the thresholdPriorityClassName to its numeric value
+				kubeClient:             kubeClient,
 				resyncPeriod:           resyncPeriod,
 				policyConfigFile:       policyConfigFile,
 				nodeUtilizationFactory: newNodeUtilizationFactory,
