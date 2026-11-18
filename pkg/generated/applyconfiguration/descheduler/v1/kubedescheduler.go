@@ -16,7 +16,7 @@ import (
 //
 // KubeDescheduler is the Schema for the deschedulers API
 type KubeDeschedulerApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	// spec holds user settable values for configuration
 	Spec *KubeDeschedulerSpecApplyConfiguration `json:"spec,omitempty"`

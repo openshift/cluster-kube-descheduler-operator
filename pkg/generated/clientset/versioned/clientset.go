@@ -13,7 +13,7 @@ import (
 )
 
 type Interface interface {
-	Discovery() discovery.DiscoveryInterface
+	Discovery() discovery.DiscoveryInterfaces
 	KubedeschedulersV1() kubedeschedulersv1.KubedeschedulersV1Interface
 }
 
@@ -29,7 +29,7 @@ func (c *Clientset) KubedeschedulersV1() kubedeschedulersv1.KubedeschedulersV1In
 }
 
 // Discovery retrieves the DiscoveryClient
-func (c *Clientset) Discovery() discovery.DiscoveryInterface {
+func (c *Clientset) Discovery() discovery.DiscoveryInterfaces {
 	if c == nil {
 		return nil
 	}

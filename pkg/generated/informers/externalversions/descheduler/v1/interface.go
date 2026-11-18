@@ -9,7 +9,7 @@ import (
 // Interface provides access to all the informers in this group version.
 type Interface interface {
 	// KubeDeschedulers returns a KubeDeschedulerInformer.
-	KubeDeschedulers() KubeDeschedulerInformer
+	KubeDeschedulers() TypedKubeDeschedulerInformer
 }
 
 type version struct {
@@ -23,7 +23,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// KubeDeschedulers returns a KubeDeschedulerInformer.
-func (v *version) KubeDeschedulers() KubeDeschedulerInformer {
+// KubeDeschedulers returns a TypedKubeDeschedulerInformer.
+func (v *version) KubeDeschedulers() TypedKubeDeschedulerInformer {
 	return &kubeDeschedulerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
