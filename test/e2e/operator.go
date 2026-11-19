@@ -3,8 +3,8 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -15,12 +15,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -411,27 +414,96 @@ func testSoftTainterControllerWithVAP(t testing.TB, ctx context.Context, kubeCli
 	klog.Infof("softtainter SA is not allowed to remove a hard taint")
 }
 
-// testPodDescheduling tests that pods can be descheduled.
-// This function works with both standard Go testing and Ginkgo.
+// testPodDescheduling tests that the descheduler respects PodDisruptionBudget
+// constraints while evicting pods. This function works with both standard Go testing and Ginkgo.
 func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclient.Clientset) {
+	deschClient := GetDeschedulerClient()
+
 	testNamespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "e2e-testdescheduling"}}
 	if _, err := kubeClient.CoreV1().Namespaces().Create(ctx, testNamespace, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Unable to create ns %v", testNamespace.Name)
 	}
+	defer cleanupTestNamespace(t, ctx, kubeClient, testNamespace.Name)
+
+	// podUsesDryRun reports whether the operand pod was started for Predictive mode.
+	podUsesDryRun := func(pod *corev1.Pod) bool {
+		for _, container := range pod.Spec.Containers {
+			for _, arg := range container.Args {
+				if arg == "--dry-run=true" {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	readyDeschedulerPod := func(listCtx context.Context) (*corev1.Pod, error) {
+		pods, err := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).List(listCtx, metav1.ListOptions{LabelSelector: deschedulerLabel})
+		if err != nil {
+			return nil, err
+		}
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning || podUsesDryRun(pod) {
+				continue
+			}
+			// The Ready condition flips to False on a NotReady node even while the phase stays Running.
+			podReady := false
+			for _, condition := range pod.Status.Conditions {
+				if condition.Type == corev1.PodReady {
+					podReady = condition.Status == corev1.ConditionTrue
+					break
+				}
+			}
+			if !podReady {
+				continue
+			}
+			ready := true
+			for _, status := range pod.Status.ContainerStatuses {
+				if !status.Ready {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				return pod, nil
+			}
+		}
+		return nil, nil
+	}
+
+	// Create the PDB before the workload so evictions are budgeted from the moment pods exist.
+	minAvailable := intstr.FromInt(11)
+	pdbObj := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pdb-pods",
+			Namespace: testNamespace.Name,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable: &minAvailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "test-pdb-pods"},
+			},
+		},
+	}
+	if _, err := kubeClient.PolicyV1().PodDisruptionBudgets(testNamespace.Name).Create(ctx, pdbObj, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Unable to create PDB: %v", err)
+	}
+
 	deploymentObj := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testNamespace.Name,
-			Name:      "test-descheduler-operator-pod",
-			Labels:    map[string]string{"app": "test-descheduler-operator-pod"},
+			Name:      "test-pdb-pods",
+			Labels:    map[string]string{"app": "test-pdb-pods"},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: utilpointer.Int32(1),
+			Replicas: utilpointer.Int32(12),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test-descheduler-operator-pod"},
+				MatchLabels: map[string]string{"app": "test-pdb-pods"},
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "test-descheduler-operator-pod"},
+					Labels: map[string]string{"app": "test-pdb-pods"},
 				},
 				Spec: corev1.PodSpec{
 					SecurityContext: &corev1.PodSecurityContext{
@@ -458,40 +530,152 @@ func testPodDescheduling(t testing.TB, ctx context.Context, kubeClient *k8sclien
 			},
 		},
 	}
-	defer cleanupTestNamespace(t, ctx, kubeClient, testNamespace.Name)
 	if _, err := kubeClient.AppsV1().Deployments(testNamespace.Name).Create(ctx, deploymentObj, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("Unable to create a deployment: %v", err)
+		t.Fatalf("Unable to create deployment: %v", err)
 	}
 	defer kubeClient.AppsV1().Deployments(testNamespace.Name).Delete(ctx, deploymentObj.Name, metav1.DeleteOptions{})
 
-	waitForPodsRunning(ctx, t, kubeClient, map[string]string{"app": "test-descheduler-operator-pod"}, 1, testNamespace.Name)
+	waitForPodsRunning(ctx, t, kubeClient, map[string]string{"app": "test-pdb-pods"}, 12, testNamespace.Name)
 
-	podList, err := kubeClient.CoreV1().Pods(testNamespace.Name).List(ctx, metav1.ListOptions{})
-	initialPodNames := getPodNames(podList.Items)
-	t.Logf("Initial test pods: %v", initialPodNames)
+	// Snapshot the pods created by the deployment so the test can prove that the
+	// descheduler actually evicted one of them.
+	podList, err := kubeClient.CoreV1().Pods(testNamespace.Name).List(ctx, metav1.ListOptions{LabelSelector: "app=test-pdb-pods"})
 	if err != nil {
-		t.Fatalf("Unable to get pods: %v", err)
+		t.Fatalf("Unable to list test pods: %v", err)
+	}
+	originalPods := make(map[string]bool, len(podList.Items))
+	for _, pod := range podList.Items {
+		originalPods[pod.Name] = true
 	}
 
-	time.Sleep(40 * time.Second)
+	// Wait until the PDB controller has observed the budget and reports the single
+	// disruption this test needs.
+	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+		pdb, err := kubeClient.PolicyV1().PodDisruptionBudgets(testNamespace.Name).Get(ctx, pdbObj.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return pdb.Status.ObservedGeneration == pdb.Generation && pdb.Status.DisruptionsAllowed >= 1, nil
+	})
+	if err != nil {
+		t.Fatalf("Timeout waiting for PDB %s to allow one disruption: %v", pdbObj.Name, err)
+	}
+
+	// Predictive mode is a dry-run: the descheduler only logs the evictions it would
+	// perform. The CR has to be switched to Automatic for any eviction to happen.
+	kdCR, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Unable to get KubeDescheduler CR: %v", err)
+	}
+	originalMode := kdCR.Spec.Mode
+
+	// Register the restoration before the update so a failed Automatic update still restores the mode.
+	defer func() {
+		restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer restoreCancel()
+
+		err := wait.PollUntilContextTimeout(restoreCtx, 2*time.Second, 90*time.Second, true, func(ctx context.Context) (bool, error) {
+			current, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Get(ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+			if err != nil {
+				return false, nil
+			}
+			// Skip the write if the mode was never changed.
+			if current.Spec.Mode == originalMode {
+				return true, nil
+			}
+			current.Spec.Mode = originalMode
+			if _, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, current, metav1.UpdateOptions{}); err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			t.Errorf("Unable to restore KubeDescheduler mode to %q: %v", originalMode, err)
+		}
+	}()
+
+	kdCR.Spec.Mode = descv1.Automatic
+	if _, err := deschClient.KubedeschedulersV1().KubeDeschedulers(operatorclient.OperatorNamespace).Update(ctx, kdCR, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("Unable to patch descheduler mode to Automatic: %v", err)
+	}
+
+	// Wait for the deployment to serve the Automatic configuration before using its logs.
+	t.Logf("Waiting for the descheduler to run in Automatic mode...")
+	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		pod, err := readyDeschedulerPod(ctx)
+		return err == nil && pod != nil, nil
+	})
+	if err != nil {
+		t.Fatalf("Timeout waiting for a Ready descheduler pod running the Automatic mode: %v", err)
+	}
 
 	o.Eventually(func() bool {
-		klog.Infof("Listing pods...")
-		podList, err := kubeClient.CoreV1().Pods(testNamespace.Name).List(ctx, metav1.ListOptions{})
+		assertCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		t.Logf("Checking descheduler pod logs for a PDB-blocked eviction of a test pod")
+
+		deschedulerPod, err := readyDeschedulerPod(assertCtx)
+		if err != nil || deschedulerPod == nil {
+			return false
+		}
+
+		logOpts := &corev1.PodLogOptions{
+			Container: "openshift-descheduler",
+		}
+		req := kubeClient.CoreV1().Pods(operatorclient.OperatorNamespace).GetLogs(deschedulerPod.Name, logOpts)
+		logs, err := req.Stream(assertCtx)
+		if err != nil {
+			return false
+		}
+		defer logs.Close()
+
+		logBytes, err := io.ReadAll(logs)
+		if err != nil {
+			klog.Warningf("Failed to read all logs: %v", err)
+			return false
+		}
+		logContent := string(logBytes)
+
+		for _, line := range strings.Split(logContent, "\n") {
+			if !strings.Contains(line, "Error evicting pod") && !strings.Contains(line, "error evicting") {
+				continue
+			}
+			if !strings.Contains(line, "Cannot evict pod") && !strings.Contains(line, "disruption budget") {
+				continue
+			}
+			for podName := range originalPods {
+				if strings.Contains(line, podName) {
+					return true
+				}
+			}
+		}
+		return false
+	}).WithTimeout(3*time.Minute).WithPolling(10*time.Second).Should(o.BeTrue(), "Descheduler should log a PDB-blocked eviction for a test pod")
+
+	o.Eventually(func() bool {
+		assertCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		list, err := kubeClient.CoreV1().Pods(testNamespace.Name).List(assertCtx, metav1.ListOptions{LabelSelector: "app=test-pdb-pods"})
 		if err != nil {
 			klog.Errorf("Unable to get pods: %v", err)
 			return false
 		}
-		excludePodNames := getPodNames(podList.Items)
-		sort.Strings(excludePodNames)
-		t.Logf("Existing pods: %v", excludePodNames)
-		// validate no pods were deleted
-		if len(intersectStrings(initialPodNames, excludePodNames)) > 0 {
-			t.Logf("Not every pod was evicted")
-			return false
+		present := make(map[string]bool, len(list.Items))
+		for _, pod := range list.Items {
+			if pod.DeletionTimestamp == nil {
+				present[pod.Name] = true
+			}
 		}
-		return true
-	}).WithTimeout(3*time.Minute).WithPolling(1*time.Second).Should(o.BeTrue(), "error while waiting for pod")
+		for podName := range originalPods {
+			if !present[podName] {
+				t.Logf("Original pod %s was evicted", podName)
+				return true
+			}
+		}
+		return false
+	}).WithTimeout(2*time.Minute).WithPolling(5*time.Second).Should(o.BeTrue(), "At least one test pod should be evicted")
 }
 
 // testMetricsService tests that the metrics service exists and is properly configured.
@@ -605,29 +789,6 @@ func waitForPodRunningByNamePrefix(ctx context.Context, kubeClient *k8sclient.Cl
 		return false
 	}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(o.BeTrue())
 	return expectedPod, nil
-}
-
-func getPodNames(pods []v1.Pod) []string {
-	names := []string{}
-	for _, pod := range pods {
-		names = append(names, pod.Name)
-	}
-	return names
-}
-
-func intersectStrings(lista, listb []string) []string {
-	commonNames := []string{}
-
-	for _, stra := range lista {
-		for _, strb := range listb {
-			if stra == strb {
-				commonNames = append(commonNames, stra)
-				break
-			}
-		}
-	}
-
-	return commonNames
 }
 
 func waitForPodsRunning(ctx context.Context, t testing.TB, clientSet *k8sclient.Clientset, labelMap map[string]string, desireRunningPodNum int, namespace string) {
