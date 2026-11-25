@@ -14,12 +14,14 @@ import (
 	promapi "github.com/prometheus/client_golang/api"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/pointer"
 
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/apis/descheduler/v1"
@@ -33,8 +35,9 @@ import (
 )
 
 const (
-	pkgDirectory = "pkg/softtainter"
-	testFilesLoc = "testdata"
+	pkgDirectory          = "pkg/softtainter"
+	testFilesLoc          = "testdata"
+	testPriorityClassName = "test-priority-class"
 )
 
 type MockNodeUtilization struct {
@@ -116,6 +119,42 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			testfilename: "policy.yaml",
+		},
+		{
+			description: "3 nodes, no taints, 1 underutilized, 1 appropriately utilized, 1 overutilized, policy with priority threshold class name",
+			nodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, false, false, false),
+				buildTestNodeWithTaints("node2", true, false, false, false),
+				buildTestNodeWithTaints("node3", true, false, false, false),
+			},
+			expectednodes: []*corev1.Node{
+				buildTestNodeWithTaints("node1", true, false, false, false),
+				buildTestNodeWithTaints("node2", true, true, false, false),
+				buildTestNodeWithTaints("node3", true, true, true, false),
+			},
+			nodeUtilization: MockNodeUtilization{
+				mockResults: map[string]map[corev1.ResourceName]*resource.Quantity{
+					"node1": {"MetricResource": resource.NewQuantity(10, resource.BinarySI)},
+					"node2": {"MetricResource": resource.NewQuantity(50, resource.BinarySI)},
+					"node3": {"MetricResource": resource.NewQuantity(90, resource.BinarySI)},
+				},
+				mockErrors: nil,
+			},
+			kubedescheduler: deschedulerv1.KubeDescheduler{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: operatorclient.OperatorNamespace,
+					Name:      operatorclient.OperatorConfigName,
+				},
+				Spec: deschedulerv1.KubeDeschedulerSpec{
+					DeschedulingIntervalSeconds: pointer.Int32(30),
+					Mode:                        deschedulerv1.Automatic,
+					ProfileCustomizations: &deschedulerv1.ProfileCustomizations{
+						DevDeviationThresholds:     &deschedulerv1.LowDeviationThreshold,
+						ThresholdPriorityClassName: testPriorityClassName,
+					},
+				},
+			},
+			testfilename: "policyWithPriorityThreshold.yaml",
 		},
 		{
 			description: "3 nodes, wrong taints, 1 underutilized, 1 appropriately utilized, 1 overutilized",
@@ -428,8 +467,15 @@ func TestReconcile(t *testing.T) {
 				objects = append(objects, node)
 			}
 			cl := fake.NewClientBuilder().WithObjects(objects...).WithScheme(scheme).Build()
+			kubeClient := fakeclientset.NewSimpleClientset(&schedulingv1.PriorityClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testPriorityClassName,
+				},
+				Value: 1000000,
+			})
 			st := softTainter{
 				client:                 cl,
+				kubeClient:             kubeClient,
 				resyncPeriod:           60 * time.Second,
 				policyConfigFile:       path.Join(getTestFilesLocation(t), tc.testfilename),
 				nodeUtilizationFactory: tc.nodeUtilization.newNodeUtilizationFactory,

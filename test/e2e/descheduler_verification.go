@@ -212,6 +212,11 @@ var _ = g.Describe("[OTP][Operator][Serial] Descheduler Operator Functionality",
 		testSoftTainterControllerWithVAP(g.GinkgoTB(), ctx, kubeClient)
 	})
 
+	g.It("[OTP][Operator][Serial] should validate soft tainter controller with a priority threshold class name [Slow][Timeout:15m]", func() {
+		g.By("Testing soft tainter controller with a priority threshold class name")
+		testSoftTainterControllerWithPriorityThreshold(g.GinkgoTB(), ctx, kubeClient)
+	})
+
 	g.It("[OTP][Operator][Serial] should deschedule pods correctly [Disruptive][Slow][Timeout:15m]", func() {
 		g.By("Testing pod descheduling")
 		testPodDescheduling(g.GinkgoTB(), ctx, kubeClient)
