@@ -1,7 +1,7 @@
 all: build
 .PHONY: all
 
-# Version to use when bumping Dockerfile versions
+# Version to use when bumping Dockerfile versions 
 VERSION ?= 5.4.3
 
 # Include the library makefile
