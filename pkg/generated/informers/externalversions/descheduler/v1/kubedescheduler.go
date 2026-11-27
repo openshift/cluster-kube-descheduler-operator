@@ -12,16 +12,45 @@ import (
 	deschedulerv1 "github.com/openshift/cluster-kube-descheduler-operator/pkg/generated/listers/descheduler/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // KubeDeschedulerInformer provides access to a shared informer and lister for
-// KubeDeschedulers.
+// KubeDeschedulers. Prefer using the type-safe variant (see [TypedKubeDeschedulerInformer]).
 type KubeDeschedulerInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() deschedulerv1.KubeDeschedulerLister
 }
+
+// TypedKubeDeschedulerInformer provides access to a shared informer and lister for
+// KubeDeschedulers, including the type-safe TypedInformer variant.
+// It is a superset of KubeDeschedulerInformer.
+type TypedKubeDeschedulerInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() KubeDeschedulerIndexInformer
+	Lister() deschedulerv1.KubeDeschedulerLister
+}
+
+// KubeDeschedulerIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type KubeDeschedulerIndexInformer cache.TypedSharedIndexInformer[*apisdeschedulerv1.KubeDescheduler]
+
+// KubeDeschedulerHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for KubeDescheduler.
+type KubeDeschedulerHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisdeschedulerv1.KubeDescheduler]
+
+// KubeDeschedulerDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for KubeDescheduler.
+type KubeDeschedulerDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisdeschedulerv1.KubeDescheduler]
+
+// KubeDeschedulerFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for KubeDescheduler.
+type KubeDeschedulerFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisdeschedulerv1.KubeDescheduler]
+
+// KubeDeschedulerIndexers is a specialization of [cache.TypedIndexers] for KubeDescheduler.
+type KubeDeschedulerIndexers = cache.TypedIndexers[*apisdeschedulerv1.KubeDescheduler]
+
+// DeletedKubeDescheduler is a specialization of [cache.DeletedObject] for KubeDescheduler.
+type DeletedKubeDescheduler = cache.DeletedObject[*apisdeschedulerv1.KubeDescheduler]
 
 type kubeDeschedulerInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -32,55 +61,132 @@ type kubeDeschedulerInformer struct {
 // NewKubeDeschedulerInformer constructs a new informer for KubeDescheduler type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedKubeDeschedulerInformer]).
 func NewKubeDeschedulerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredKubeDeschedulerInformer(client, namespace, resyncPeriod, indexers, nil)
+	return NewKubeDeschedulerInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedKubeDeschedulerInformer constructs a new informer for KubeDescheduler type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedKubeDeschedulerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers KubeDeschedulerIndexers) KubeDeschedulerIndexInformer {
+	return NewTypedKubeDeschedulerInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredKubeDeschedulerInformer constructs a new informer for KubeDescheduler type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredKubeDeschedulerInformer]).
 func NewFilteredKubeDeschedulerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedKubeDeschedulerInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredKubeDeschedulerInformer constructs a new informer for KubeDescheduler type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredKubeDeschedulerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers KubeDeschedulerIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) KubeDeschedulerIndexInformer {
+	return NewTypedKubeDeschedulerInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewKubeDeschedulerInformerWithOptions constructs a new informer for KubeDescheduler type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedKubeDeschedulerInformerWithOptions]).
+func NewKubeDeschedulerInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedKubeDeschedulerInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedKubeDeschedulerInformerWithOptions constructs a new informer for KubeDescheduler type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedKubeDeschedulerInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) KubeDeschedulerIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "operator.openshift.io", Version: "v1", Resource: "kubedeschedulers"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apisdeschedulerv1.KubeDescheduler](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.KubedeschedulersV1().KubeDeschedulers(namespace).List(context.Background(), options)
+				return client.KubedeschedulersV1().KubeDeschedulers(namespace).List(context.Background(), opts)
 			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.KubedeschedulersV1().KubeDeschedulers(namespace).Watch(context.Background(), options)
+				return client.KubedeschedulersV1().KubeDeschedulers(namespace).Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.KubedeschedulersV1().KubeDeschedulers(namespace).List(ctx, options)
+				return client.KubedeschedulersV1().KubeDeschedulers(namespace).List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.KubedeschedulersV1().KubeDeschedulers(namespace).Watch(ctx, options)
+				return client.KubedeschedulersV1().KubeDeschedulers(namespace).Watch(ctx, opts)
 			},
 		}, client),
 		&apisdeschedulerv1.KubeDescheduler{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *kubeDeschedulerInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredKubeDeschedulerInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedKubeDeschedulerInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *kubeDeschedulerInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisdeschedulerv1.KubeDescheduler{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *kubeDeschedulerInformer) TypedInformer() KubeDeschedulerIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisdeschedulerv1.KubeDescheduler](f.factory.InformerFor(&apisdeschedulerv1.KubeDescheduler{}, f.defaultInformer))
 }
 
 func (f *kubeDeschedulerInformer) Lister() deschedulerv1.KubeDeschedulerLister {
 	return deschedulerv1.NewKubeDeschedulerLister(f.Informer().GetIndexer())
+}
+
+// ToTypedKubeDeschedulerInformer converts an untyped informer into a TypedKubeDeschedulerInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *KubeDescheduler. If that is not the case, calling type-safe methods of the returned
+// TypedKubeDeschedulerInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedKubeDeschedulerInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedKubeDeschedulerInformer(informer KubeDeschedulerInformer) TypedKubeDeschedulerInformer {
+	if informer, ok := informer.(TypedKubeDeschedulerInformer); ok {
+		return informer
+	}
+	return &kubeDeschedulerTypedInformerAdapter{informer}
+}
+
+type kubeDeschedulerTypedInformerAdapter struct {
+	KubeDeschedulerInformer
+}
+
+func (a *kubeDeschedulerTypedInformerAdapter) TypedInformer() KubeDeschedulerIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisdeschedulerv1.KubeDescheduler](a.Informer())
+}
+
+// ToKubeDeschedulerIndexInformer converts an untyped informer into a KubeDeschedulerIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *KubeDescheduler. If that is not the case, calling type-safe methods of the returned
+// KubeDeschedulerIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a KubeDeschedulerIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToKubeDeschedulerIndexInformer(informer cache.SharedIndexInformer) KubeDeschedulerIndexInformer {
+	if informer, ok := informer.(KubeDeschedulerIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisdeschedulerv1.KubeDescheduler](informer)
 }

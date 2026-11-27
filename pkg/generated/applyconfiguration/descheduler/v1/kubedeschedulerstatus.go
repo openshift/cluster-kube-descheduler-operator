@@ -11,7 +11,7 @@ import (
 //
 // KubeDeschedulerStatus defines the observed state of KubeDescheduler
 type KubeDeschedulerStatusApplyConfiguration struct {
-	operatorv1.OperatorStatusApplyConfiguration `json:",inline"`
+	operatorv1.OperatorStatusApplyConfiguration `json:""`
 }
 
 // KubeDeschedulerStatusApplyConfiguration constructs a declarative configuration of the KubeDeschedulerStatus type for use with
