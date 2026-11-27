@@ -43,6 +43,34 @@ Steps:
 2. Ensure the `image` spec in `deploy/05_deployment.yaml` refers to the operator image you pushed
 3. Run `oc create -f deploy/.`
 
+### Building index image from a bundle image
+
+This process is used for building index images from bundle images in production builds.
+
+**Prerequisites**: Log in to registry.redhat.io before building, as the Dockerfile and bundle.Dockerfile pull base images from there:
+   ```sh
+   podman login registry.redhat.io
+   ```
+
+1. Build and push the bundle image:
+   ```sh
+   export QUAY_USER=${your_quay_user_id}
+   export IMAGE_TAG=${your_image_tag}
+   # Build bundle image. Optionally specify --build-arg OPERATOR_IMAGE=<image>,
+   # --build-arg SOFTTAINER_IMAGE=<image> or --build-arg OPERAND_IMAGE=<image> to reference
+   # different images in the bundle; omitting them preserves the defaults.
+   podman build -t quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-bundle:${IMAGE_TAG} -f bundle.Dockerfile .
+   podman login quay.io -u ${QUAY_USER}
+   podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-bundle:${IMAGE_TAG}
+   ```
+
+1. Build the index image using `opm`:
+   ```sh
+   opm index add --bundles quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-bundle:${IMAGE_TAG} \
+     --tag quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
+   podman push quay.io/${QUAY_USER}/cluster-kube-descheduler-operator-index:${IMAGE_TAG}
+   ```
+
 ### OperatorHub install with custom index image
 
 1. Build a custom FBC (File-Based Catalog) via a PR against the `fbc` branch by extending either of the existing catalogs. Access the FBC pull Konflux job to get the FBC image.
