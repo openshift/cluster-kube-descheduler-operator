@@ -183,9 +183,68 @@ spec:
               0.01
             )
 
-        # Actuation Priority: Stable Distance x Cooldown
-        # If the node was recently touched, the distance is suppressed.
+        # Actuation Priority: Stable Distance x Cooldown x Target Availability.
+        # Nodes recently touched or unable to improve VM placement are
+        # deprioritized, allowing other sources to be considered. Retain the
+        # target-fit multiplier for two descheduling intervals so evaluation
+        # jitter or a brief Prometheus restart cannot drop it for one cycle.
         - record: descheduler:node:actuation_priority:p66_5m
           expr: |-
             descheduler:node:linear_amplified_ideal_point_positive_distance:k3:p66_5m
             * on(instance) descheduler:node:cooldown_multiplier:10m
+            * on(instance) (
+              last_over_time(
+                descheduler:node:target_availability_multiplier:10cycles[${TARGET_FIT_DAMPENING_LOOKBACK_SECONDS}s]
+              )
+              or on(instance)
+              (descheduler:nodeutilization:cpu:avg1m * 0 + 1)
+            )
+
+    # Evaluate this group once per configured descheduling interval. This turns
+    # raw per-VM blocks into at most one source-node observation per interval.
+    # Producer contract: KubevirtMigrationAware exposes
+    # descheduler_kubevirt_eviction_blocks_total with reason="no_eligible_target"
+    # and a source-node `node` label.
+    #
+    # The observation range must contain enough Prometheus scrapes for
+    # increase() to see a counter change. Very short descheduling intervals can
+    # therefore miss observations; the normal operator interval is much longer
+    # than the scrape interval.
+    - name: kubevirtTargetFitDampening.rules
+      interval: ${DESCHEDULING_INTERVAL_SECONDS}s
+      rules:
+        # Older KubeVirt plugin versions do not expose this metric; the
+        # fallback yields zero for every node in that case.
+        - record: descheduler:node:no_eligible_target_seen:interval
+          expr: |-
+            label_replace(
+              clamp_max(
+                sum by (node) (
+                  increase(descheduler_kubevirt_eviction_blocks_total{reason="no_eligible_target"}[${DESCHEDULING_INTERVAL_SECONDS}s])
+                ),
+                1
+              ),
+              'instance', "$1", 'node', '(.+)'
+            ) or on (instance)
+            label_replace(
+              descheduler:nodeutilization:cpu:avg1m * 0,
+              'node', "$1", 'instance', '(.+)'
+            )
+
+        # Count source-node observations over the last ten configured
+        # descheduling intervals. This is window-based rather than exactly
+        # phase-aligned with descheduler cycles.
+        - record: descheduler:node:no_eligible_target_count:10cycles
+          expr: |-
+            sum_over_time(
+              descheduler:node:no_eligible_target_seen:interval[${TARGET_FIT_DAMPENING_WINDOW_SECONDS}s]
+            )
+
+        # Each observed blocked interval reduces priority by 10%, capped at a
+        # 50% penalty so that a node with some movable VMs is not muted.
+        - record: descheduler:node:target_availability_multiplier:10cycles
+          expr: |-
+            clamp_min(
+              1 - (descheduler:node:no_eligible_target_count:10cycles * 0.10),
+              0.50
+            )
